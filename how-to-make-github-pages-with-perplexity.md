@@ -121,7 +121,11 @@ For single-file sites (all CSS and JS inlined), only `index.html` is needed.
 
 ## Step 5: Enable GitHub Pages
 
-1. Go to your repository → **Settings** → **Pages** (left sidebar)
+> **GitHub Pages isn't enabled automatically — you need to turn it on in your repo settings.**
+
+This is the one required manual step. Without it, your site will not be served even if `index.html` exists on the branch.
+
+1. Go to [Settings → Pages](https://github.com/jaakkokorhonen/uutisseuranta/settings/pages) in your repo
 2. Under **Source**, select **Deploy from a branch**
 3. Choose branch: `main`, folder: `/ (root)`
 4. Click **Save**
@@ -201,8 +205,9 @@ for this news tracker site. Include Finnish-language og:locale.
 3. Ask Perplexity to fix issues → update file
 4. Repeat until satisfied
 5. git add index.html && git commit -m "..." && git push
-6. GitHub Pages auto-deploys in ~2 minutes
-7. Visit https://jaakkokorhonen.github.io/uutisseuranta/
+6. Enable GitHub Pages: Settings → Pages → Deploy from branch → main / (root) → Save
+7. GitHub Pages auto-deploys in ~2 minutes
+8. Visit https://jaakkokorhonen.github.io/uutisseuranta/
 ```
 
 ---
