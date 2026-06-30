@@ -1,0 +1,22 @@
+name: Post-Deploy Smoke Test
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting 60 seconds for GitHub Pages deployment to complete..."
+          sleep 60
+
+      - name: Run Live Smoke Test
+        run: ./tests/live-smoke-test.sh
