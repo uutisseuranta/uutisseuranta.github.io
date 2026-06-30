@@ -1,0 +1,16 @@
+{
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Uutisseuranta",
+        "supportEmail": "jaakko.korhonen@gmail.com",
+        "authorizedRedirectUris": [
+          "https://uutisseuranta.net",
+          "https://uutisseuranta.github.io",
+          "https://uutisseuranta-net.firebaseapp.com",
+          "https://uutisseuranta-net.web.app"
+        ]
+      }
+    }
+  }
+}
