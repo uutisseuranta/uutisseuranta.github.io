@@ -74,7 +74,7 @@ Firebase SDK ladataan ES-moduuleina suoraan Googlen CDN:ltä ilman build-steppi�
 
 ### Periaatteet
 
-- **Kaikki testaus tapahtuu CI/CD-pipelinessa.** Ei erillistä monitorointia tuotannossa, ei erillisiä testiympäristöjä.
+- **Kaikki testaus tapahtuu CI/CD-pipelinessa.** Ei erillistä monitorointia tuotannossa, ei erillisiä testiymppäristöjä.
 - **Testit kirjoitetaan vanilla Bash + `curl` + standardit Unix-työkalut.** Ei testausframeworkeja (Playwright, Jest, Cypress tms.) koskaan.
 - **Pipeline on portti tuotantoon.** Kaikki testit ajetaan ennen tai välittömästi deployn jälkeen. Eppäonnistunut testi estää tai ilmoittaa ongelmasta.
 - **Yksinkertaisuus ennen kattavuutta.** Yksi luotettava smoke-testi on parempi kuin kymmenen haurasta yksikkötestiä.
@@ -123,15 +123,33 @@ Ei Netlifyä, ei Cloudflare Pagesia, ei muita hostingpalveluja. GitHub Pages rii
 
 ## Turvallisuus
 
-### Firebase Web API -avain
+### Firebase Web API -avain on tarkoituksellisesti julkinen
 
-Firebase Web API -avain on tarkoituksellisesti julkinen: se on näkyvissä `index.html`:ssä ja se on suunniteltu käytettäväksi selaimesta käsin. Tämä on Googlen dokumentoima normaali käytäntö Firebase Web SDK:lle.
+Firebase Web API -avain näkyy `index.html`:ssä selkotekstinä sekä GitHub-repositoriossa että sivuston tuotanto-HTML:ssä (`Ctrl+U`). Tämä on **tietoinen ja oikea päätös**, ei tietoturvaongelma.
 
-Turvallisuus varmistetaan Firebase-projektin puolella:
-- **Authorized domains** — vain sallitut domainit voivat käyttää Auth-palvelua
-- **Firebase Security Rules** — määritellään erikseen, kun tietokanta tai tallennus otetaan käyttöön
+Google dokumentoi eksplisiittisesti, että Firebase Web API -avain on tarkoitettu julkiseksi:
 
-Palvelinpuolen avaimet (ei tällä hetkellä käytössä) tallennetaan GitHub Secretseihin ja injektoidaan pipelinessa.
+> *"The API key for a Firebase Web App is actually included in the HTML of the web page. It's not considered sensitive."*
+> — [Firebase documentation](https://firebase.google.com/docs/projects/api-keys)
+
+Avain identifioi Firebase-projektin, mutta ei anna pääsyä dataan. Se vastaa toiminnaltaan Google Analytics Measurement ID:ä — näkyy kaikille, mutta yksinään hyödytön ilman oikeuksia.
+
+**Secrets-injektiota ei tehdä**, koska:
+1. Se tuo merkittävää kompleksisuutta (erillinen deploy-workflow, Pages Source -vaihto manuaalisesti, sed-korvauslogiikka)
+2. Se ei poista avainta tuotanto-HTML:stä — selain näkee sen joka tapauksessa
+3. Hyöty on nolla: avain on julkinen by design
+
+### Missä oikea turvallisuus on
+
+Turvallisuus varmistetaan Firebase-projektin puolella, ei avainten piilottamisella:
+
+- **Authorized Domains** — vain `uutisseuranta.net` ja `jaakkokorhonen.github.io` voivat käynnistää Auth-flown. Mikään muu domain ei voi käyttää avainta kirjautumiseen, vaikka se olisi näkyvissä.
+- **Firebase Security Rules** — määritellään erikseen, kun tietokanta tai tallennus otetaan käyttöön. Säännöt määrittävät kuka pääsee dataan — ei avain.
+- **API Key HTTP referrer -rajoitus** — Google Cloud Consolessa avain voidaan rajata hyväksymään pyynnöt vain tuotantodomain-URLista. Suositellaan lisätäväksi, kun projekti kasvaa.
+
+### Palvelinpuolen avaimet
+
+Palvelinpuolen avaimet (Firebase Admin SDK service account, kolmansien osapuolten API-avaimet) **ei koskaan `index.html`:ssä**. Ne tallennetaan GitHub Secretseihin ja injektoidaan pipelinessa. Tällä hetkellä projektissa ei ole palvelinpuolen avaimia.
 
 ### Content Security Policy
 
