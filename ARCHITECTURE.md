@@ -15,6 +15,7 @@ uutisseuranta/
 ├── app.js           ← sovelluksen logiikka (ei-Firebase)
 ├── firebase.json    ← Firebase-projektin konfiguraatio
 ├── ARCHITECTURE.md  ← tämä dokumentti
+├── patterns.md      ← D-CENT Pattern Lab -integraatio ja design guidelines
 ├── tests/           ← pipeline-testit (ks. Testausstrategia)
 └── .github/
     └── workflows/
@@ -22,6 +23,62 @@ uutisseuranta/
 ```
 
 Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemistoa. Sivusto on suoraan selaimessa ajettavaa HTML/CSS/JS:ää.
+
+**Dokumentaatiotiedostot sijaitsevat juuressa** – ei `docs/`-alikansioita. Kaikki `.md`-tiedostot ovat repositorion juuressa.
+
+---
+
+## Design Guidelines
+
+Nämä linjaukset ohjaavat kaikkia visuaalisia ja rakenteellisia päätöksiä. Yksityiskohtainen komponenttikirjasto on dokumentoitu `patterns.md`:ssä.
+
+### Atomic Design -rakenne
+
+UI-komponentit noudattavat Atomic Design -hierarkiaa:
+
+- **Atomit** — CSS-muuttujat, typografia, värit, napit, tagit (`style.css`)
+- **Molekyylit** — notifikaatiopalkki, hakukenttä, tagipari (`style.css` + `index.html`)
+- **Organismit** — navigaatio, uutiskortti, kirjautumismodaali (`index.html` + `app.js`)
+- **Templatet** — sivu-layoutit, grid-rakenteet (`index.html`)
+
+Kaikki komponentit elävät juuritason tiedostoissa – ei alikansioita, ei komponenttihakemistoa.
+
+### Värinkäyttö
+
+- **D-CENT-väri on aina hallitseva.** Primääriaksentti (`--color-primary`) esiintyy CTA-elementeissä, aktiivilinkissä ja semanttisissa tiloissa.
+- Enintään kaksi ei-neutraalia sävyä yhdessä näkymässä samanaikaisesti.
+- Väriä käytetään merkitykseen, ei koristeluun. Poikkeus: notifikaatiopalkin `border-left` on sallittu semanttisena tilaindikaattorina.
+- **Kielletty:** korttien `border-left` väripalkki, ikonit värillisissä ympyröissä, gradient-napit.
+
+### Typografia
+
+- Fontit ladataan **Fontshare CDN:ltä** (`api.fontshare.com`) – ei Google Fontsia.
+- Nestemäinen kirjasinkoko `clamp()`-funktiolla kaikissa tekstielementeissä.
+- Kehon teksti: `--text-base` (16 px). Napit: `--text-sm` (14 px). Minimialaraja: 12 px.
+- Otsikkofontit (`--font-display`) vain koossa `--text-xl` (24 px) tai suuremmissa.
+
+### Layoutperiaatteet
+
+- **Mobiili ensin (375 px).** Responsiivisuus `clamp()`- ja `@media`-pohjaisesti, ei JS:llä.
+- Prosateksti: `max-width: 72ch`. Datatiheä layout (stream, taulukot): koko leveys.
+- Sisäkkäinen `border-radius`: sisäelementti = ulompi säde − padding. Ei tasaista isokulmaista pyöristystä kaikkialla.
+- Varjot (`--shadow-sm/md/lg`) sävytetty pinnan lämpötilaan. Puhtaan mustan varjo on kielletty.
+- Siirtymäanimaatiot: `180ms cubic-bezier(0.16, 1, 0.3, 1)`. Ei välitöntä show/hide:ta.
+
+### Saavutettavuus
+
+- Semanttinen HTML pakollinen: `<header>`, `<nav>`, `<main>`, `<article>`, `<dialog>` jne.
+- Jokainen interaktiivinen elementti saavutettavissa näppäimistöllä. Fokus-indikaattori aina näkyvissä.
+- Kosketuskohteet vähintään 44 × 44 px.
+- Kontrastivaatimus WCAG AA: 4,5:1 kehon teksti, 3:1 suuri teksti.
+- `prefers-reduced-motion` kunnioitetaan – animaatiot poistetaan pyynnöstä.
+- Natiivi `<dialog>`-elementti kirjautumismodaalissa: hoitaa focus-loukon ja Escape-näppäimen ilman JS-kirjastoa.
+
+### Defensive UI
+
+- Jokainen latausvaiheen näkymä näyttää skeleton-lataajan, joka vastaa oikean sisällön rakennetta.
+- Tyhjä virta ei näytä tyhjää – näyttää ohjatun toimintakehotteen ("Lisää aiheita seurantaan").
+- Virhetilat inline-palautteena virheen vieressä, ei toast-ilmoituksina kriittisissä tapauksissa.
 
 ---
 
