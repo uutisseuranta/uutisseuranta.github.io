@@ -72,6 +72,68 @@ Kirjautunut käyttäjä avaa asetukset (avatarklikkaus → "Asetukset")
 - Teema aktivoituu ennen first-paint (skripti `<head>`:ssä, inline tai deferoitu)
 - Kirjautumattoman käyttäjan asetukset tallennetaan ilman UID-etuliitettä (`prefs_anon`)
 
+### Mahdollinen arkkitehtuurilaajennus: Firestore synkronointia varten
+
+Jos tavoitteeksi asetetaan **laitteiden välinen synkronointi**, Firestore on luonteva laajennus nykyisen Firebase Auth -toteutuksen päälle. Tällöin arkkitehtuurimalli olisi hybridinen:
+
+- **localStorage = nopea välimuisti käyttöliittymälle**
+- **Firestore = käyttäjäpreferenssien kanoninen lähde**
+
+#### Ehdotettu tietomalli
+
+```
+/users/{uid}/preferences/main
+  {
+    followedTags: ["teknologia", "ukraina", "tekoäly"],
+    theme: "dark",
+    updatedAt: <server timestamp>,
+    schemaVersion: 1
+  }
+```
+
+#### Synkronointiflow
+
+```
+Sovellus käynnistyy
+  └─ Firebase Auth ratkaisee kirjautumistilan
+       ├─ [Ei kirjautunut] käytä vain muistia + localStoragea
+       └─ [Kirjautunut]
+            ├─ Lue localStorage-välimuisti heti → UI renderöityy nopeasti
+            ├─ Hae Firestore-dokumentti taustalla
+            ├─ Vertaa updatedAt-arvoja
+            │    ├─ Firestore uudempi → korvaa localStorage + päivitä UI
+            │    └─ localStorage uudempi → kirjoita Firestoreen
+            └─ Kaikki myöhemmät muutokset:
+                 ├─ päivitä localStorage heti
+                 └─ debouncattu write Firestoreen (esim. 500 ms)
+```
+
+#### Tarvittavat Firestore Security Rules -säännöt
+
+```
+match /users/{userId}/preferences/{docId} {
+  allow read, write: if request.auth != null && request.auth.uid == userId;
+}
+```
+
+#### Mitä tämä muuttaisi arkkitehtuurissa
+
+- `ARCHITECTURE.md` pitäisi päivittää, koska nykyinen linjaus sallii Firebase-SDK:n vain Authenticationiin ja Analyticsiin
+- Projektiin tulisi uusi riippuvuus: `firebase-firestore.js`
+- Turvallisuus siirtyisi nyt eksplisiittisesti myös Firestore Rules -tasolle, ei vain Auth-domain-rajaukseen
+
+#### Hyödyt
+
+- Samat tagit ja teema näkyvät automaattisesti kaikilla laitteilla
+- Käyttäjän asetukset säilyvät myös selaimen localStorage-tyhjennyksen jälkeen
+- Google-kirjautuminen saa selkeän lisäarvon: synkronointi
+
+#### Haitat
+
+- Rikkoo nykyistä minimalistista arkkitehtuuria
+- Lisää uusi datakerros, tietomalli ja sääntöjen ylläpidon
+- Tuo kirjoitus-/lukulogiikan virhetilat (verkko poikki, quota, sääntövirhe)
+
 ---
 
 ## UP-12 · "Uutta seuraamissasi aiheissa" -ilmoitus
@@ -231,6 +293,29 @@ Jos tulevaisuudessa halutaan laajentaa autentikointia (esim. GitHub-kirjautumine
 
 ---
 
+## Teknologiavaihtoehdot laitteiden väliseen synkronointiin
+
+Laitteiden välinen synkronointi tarkoittaa, että käyttäjän tagit ja teema eivät ole enää pelkkä paikallinen selainasetus, vaan käyttäjäkohtainen pilvidata. Tähän on useita vaihtoehtoja.
+
+| Vaihtoehto | Miten toimisi | Hyödyt | Haitat | Sopivuus |
+|---|---|---|---|---|
+| **Firestore** | Firebase Auth UID → `/users/{uid}/preferences/main` | Luonteva integraatio nykyiseen Google-kirjautumiseen, reaaliaikainen SDK, helppo clientiltä | Rikkoo nykyistä arkkitehtuurilinjaa, vaatii Security Rulesit | **Paras jos hyväksytään Firebase-laajennus** |
+| **Supabase Postgres** | Google/OIDC tai oma auth-linkitys → `user_preferences`-taulu | Selkeä relaatiomalli, SQL, hyvä vendor neutrality | Uusi palvelu ja auth-integraatio, enemmän liikkuvia osia | Hyvä jos halutaan Firebase-riippuvuutta pienentää |
+| **Cloudflare Workers + KV / D1** | Selain kutsuu omaa edge-API:a, joka lukee/kirjoittaa käyttäjän asetukset | Pieni, nopea, sopii staattiselle sivulle | Vaatii oman backend-kerroksen ja token-validoinnin | Hyvä jos halutaan edge-arkkitehtuuri |
+| **GitHub Gist / Drive / JSON export** | Käyttäjä vie ja tuo asetukset itse tiedostona | Hyvin yksinkertainen, ei jatkuvaa backendia | Ei oikea automaattinen synkronointi | Sopii varmuuskopiointiin, ei ensisijaiseksi ratkaisuksi |
+
+### Firestore vs. muut vaihtoehdot
+
+**Firestore** on yksinkertaisin, koska projekti käyttää jo Firebase Authia. Sama `uid` voidaan käyttää suoraan dokumenttiavaimena, eikä erillistä session- tai token-välipalvelinta tarvita. Käytännössä lisäys on yksi uusi SDK-moduuli, yksi dokumenttimalli ja Security Rules -säännöt.
+
+**Supabase** on vahvin vaihtoehto, jos halutaan pitää käyttäjädata SQL-taulussa ja välttää Firebase-ekosysteemin laajentamista. Haitta on, että nykyinen auth on jo Firebase-pohjainen, joten joudutaan joko ajamaan kaksi identiteettijärjestelmää rinnakkain tai rakentamaan tokeninvaihtokerros.
+
+**Cloudflare Workers + KV/D1** sopii hyvin, jos halutaan pitää frontend staattisena mutta lisätä ohut oma backend. Tällöin selain lähettää pyynnön omalle Worker-endpointille, joka validoi käyttäjän identiteetin ja tallentaa asetukset KV:hen tai D1:een. Tämä on arkkitehtonisesti joustavampi, mutta toteutuksena raskaampi kuin Firestore.
+
+**Tiedostovienti/importti** ei oikeastaan ratkaise synkronointia, vaan varmuuskopioinnin. Se on hyvä täydentävä ominaisuus, mutta ei korvaa pilvisynkkaa.
+
+---
+
 ## Toteutusjärjestys (päivitetty)
 
 | Prioriteetti | Käyttötapaus | Tekninen riippuvuus | Firebase? |
@@ -241,6 +326,7 @@ Jos tulevaisuudessa halutaan laajentaa autentikointia (esim. GitHub-kirjautumine
 | 4 | UP-12 Uusien artikkelien merkki | localStorage + syötteen vertailu | Ei |
 | 5 | UP-14 Kontekstuaalinen vertailu | Client-side Jaccard | Ei |
 | 6 | UP-13 Profiilipaneeli | Firebase Auth `currentUser` | Auth (jo käytössä) |
+| 7 | UP-11 laajennus: pilvisynkronointi | Firestore tai vaihtoehtoinen backend | Vaatii päätöksen |
 
 ---
 
