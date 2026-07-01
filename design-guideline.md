@@ -156,30 +156,31 @@ Tämä redesign toteutetaan seuraavilla ehdoilla:
 
 ## Tiedostorakenne
 
-Kaikki staattiset tiedostot — HTML, CSS, JS, kuvat, ikonit, fontit — sijaitsevat **repositorion juuressa**. Erillistä `assets/`-kansiota ei käytetä.
+Projekti noudattaa tiukkaa **"ei alikansioita"** -periaatetta (ks. `ARCHITECTURE.md`). Ainoa poikkeus on GitHub Actions -työnkulkuja varten tarkoitettu `.github/`-hakemisto. Kaikki muut tiedostot — koodit, tyylit, skriptit, kuvat, fontit ja testit — sijaitsevat suoraan repositorion **juurihakemistossa**.
 
-Perustelu: projekti noudattaa “ei alikansioita” -periaatetta (ks. `ARCHITECTURE.md`). Kaikki tiedostot ovat tasaisesti juuressa, GitHub Pages servaa ne suoraan rootista, eikä polkuja tarvitse hallita erikseen.
+Tämä rakenne takaa sen, että tiedostojen väliset viittaukset ovat mahdollisimman yksinkertaisia ja vältytään polkujen hallinnan aiheuttamalta monimutkaisuudelta.
 
 Hyväksytty rakenne:
 ```
 uutisseuranta/
-├── index.html
-├── style.css
-├── app.js
-├── logo.svg        ← juuri, ei assets/logo.svg
-├── favicon.ico     ← juuri, ei assets/favicon.ico
-├── icon-*.svg      ← juuri, ei assets/icons/
-└── *.woff2         ← juuri, jos omia fontteja käytetään
+├── .github/
+│   └── workflows/
+│       └── post-deploy-test.yml
+├── index.html          ← pääsivu
+├── style.css           ← tyylimäärittelyt
+├── app.js              ← sovelluksen päälogiikka (ei-Firebase)
+├── prefs.js            ← preferenssien hallintamoduuli
+├── profile.js          ← profiilimodaalimoduuli
+├── live-smoke-test.sh  ← testiskripti
+├── firebase.json       ← Firebase-konfiguraatio
+├── ARCHITECTURE.md     ← arkkitehtuuridokumentti
+├── patterns.md         ← D-CENT-komponentit
+├── design-guideline.md ← tämä dokumentti
+├── logo.svg
+└── favicon.ico
 ```
 
-Kielletty:
-```
-uutisseuranta/
-└── assets/         ← älä luo tätä kansiota
-    ├── images/
-    ├── icons/
-    └── fonts/
-```
+Kaikkien alihakemistojen (kuten `js/`, `tests/`, `assets/`, `css/` tms.) luominen ja käyttö on kielletty.
 
 ## Toteutusperiaate repoa varten
 

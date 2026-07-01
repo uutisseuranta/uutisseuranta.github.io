@@ -25,22 +25,24 @@ Atomit määritellään `style.css`:ssä CSS-muuttujina ja yksittäisinä luokka
 
 ### Värit
 
-D-CENT-paletti ja projektin oma Nexus-pohjainen värimuuttujisto yhdistetään:
+D-CENT-paletti ja projektin omat värimuuttujat määritellään seuraavasti:
 
 ```css
 /* style.css */
 :root {
-  /* D-CENT primääriväri – hallitseva, kaikissa tiloissa */
-  --color-primary: #01696f;
-  --color-primary-hover: #0c4e54;
+  /* D-CENT primääriväri – hallitseva */
+  --color-primary: #007E84;
+  --color-primary-hover: #006368;
+  --color-primary-active: #00484c;
+  --color-primary-highlight: #e0f6f7;
 
   /* Pinnat */
-  --color-bg: #f7f6f2;
-  --color-surface: #f9f8f5;
+  --color-bg: #f4f3f0;
+  --color-surface: #f9f8f6;
 
   /* Teksti */
-  --color-text: #28251d;
-  --color-text-muted: #7a7974;
+  --color-text: #1a1917;
+  --color-text-muted: #706e6b;
 }
 ```
 
@@ -48,12 +50,13 @@ Sääntö: D-CENT-väri on aina hallitseva. Aksentteja käytetään vain CTA-ele
 
 ### Typografia
 
-```css
-/* Fontshare CDN – ei Google Fonts */
-@import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap');
+Projekti ei käytä ulkoisia fontti-CDN-palveluita (kuten Google Fonts tai Fontshare). Kaikki fontit ladataan paikallisesta järjestelmäfonttipinosta (system font stack), mikä parantaa suorituskykyä, tietoturvaa ja PWA- offline-yhteensopivuutta.
 
+```css
 :root {
-  --font-body: 'Satoshi', 'Helvetica Neue', sans-serif;
+  --font-body:    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  
   --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
   --text-lg:   clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
   --text-xl:   clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);

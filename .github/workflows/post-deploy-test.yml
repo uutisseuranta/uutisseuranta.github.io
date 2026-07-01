@@ -19,4 +19,4 @@ jobs:
           sleep 60
 
       - name: Run Live Smoke Test
-        run: ./tests/live-smoke-test.sh
+        run: ./live-smoke-test.sh
