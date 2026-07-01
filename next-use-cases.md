@@ -8,27 +8,38 @@ Ehdotukset on johdettu kahdesta lähteestä:
 
 D-CENT-mallit on suunniteltu osallistaviin kansalaispalveluihin, mutta niiden ydinrakenteet — suodatettu virta, ilmoitukset, profiili, asetukset — sopivat suoraan uutisaggregaattorin kontekstiin.
 
+**Arkkitehtuuriperiaate:** `ARCHITECTURE.md` rajaa Firebase-käytön vain Authenticationiin ja Analyticsiin. Kaikki persistointi, joka edellyttäisi Firestorea tai muuta Firebase-palvelua, merkitään tässä dokumentissa eksplisiittisesti **arkkitehtuuripäätöstä vaativaksi** ennen toteutusta.
+
 ---
 
 ## UP-10 · Henkilökohtainen uutisvirtanäkymä
 
 **D-CENT-malli:** `streams` (suodatettu sisältövirta)
 
-**Lähtötilanne:** Kirjautunut käyttäjä haluaa nähdä vain valitsemiensa aiheiden uutiset, ei kaikkia artikkeleita.
+**Lähtötilanne:** Käyttäjä haluaa seurata vain tiettyjä aiheita. Aiheet valitaan klikkaamalla artikkeleissa näkyviä tageja — ei erillisellä asetusnäkymällä.
 
 ```
-Kirjautunut käyttäjä avaa etusivun
-  └─ Järjestelmä tunnistaa kirjautumistilan (onAuthStateChanged)
-       └─ Lataa käyttäjän tallennetut aihe- ja lähdevalinnat
-            └─ Uutisvirtaan suodatetaan vain valitut kategoriat ja lähteet
-                 ├─ Tyhjä tila: "Et ole valinnut aiheita – siirry asetuksiin"
-                 └─ Virta: kortit järjestetään tuoreimmasta vanhimpaan
+Käyttäjä näkee uutiskortissa tagin (esim. "Teknologia", "EU-politiikka")
+  └─ Klikkaa tagia
+       ├─ [Anonyymi] Tag lisätään istuntokohtaiseen suodatinlistaan (JS-muistissa)
+       │    └─ Uutisvirtaan jää vain valitun tagin artikkelit
+       │         └─ Tagipallo syttyy aktiiviseksi navigaatiopalkissa
+       └─ [Kirjautunut] Sama + tag tallennetaan localStorage:iin UID:lla avainparina
+            └─ Seuraavalla sivulatauksen yhteydessä tagi palautetaan automaattisesti
 ```
+
+**Tekniset valinnat (ei Firestorea):**
+- Istuntokohtainen tila: JS-objekti muistissa (`selectedTags = new Set()`)
+- Kirjautuneelle persistointi: `localStorage.setItem('prefs_' + uid, JSON.stringify([...selectedTags]))`
+- Lukeminen: `onAuthStateChanged` → `localStorage.getItem('prefs_' + uid)` → suodatin käyttöön
+- localStorage on tuettava arkkitehtuuripäätös (ei Firestore); sisältö on vain käyttöliittymäpreferenssi, ei sensitiivistä dataa
 
 **Hyväksymiskriteerit:**
-- Anonyymi käyttäjä näkee oletusvirran (kaikki kategoriat)
-- Kirjautunut käyttäjä näkee personoidun virran
-- Virta päivittyy, kun käyttäjä muuttaa aihe- tai lähdevalintojaan asetuksissa
+- Tagiklikki suodattaa virran välittömästi ilman sivulatauksen (client-side filter)
+- Anonyymi käyttäjä menettää valinnat istunnon päättyessä
+- Kirjautunut käyttäjä näkee samat valinnat seuraavalla vierailulla (localStorage)
+- Useampi tagi on valittavissa samanaikaisesti (OR-logiikka)
+- "Nollaa suodattimet" -linkki palauttaa oletusvirran
 
 ---
 
@@ -36,95 +47,115 @@ Kirjautunut käyttäjä avaa etusivun
 
 **D-CENT-malli:** `settings` (käyttäjän preferenssinäkymä)
 
-**Lähtötilanne:** Kirjautunut käyttäjä haluaa hallita seurattavia aiheita, lähteitä ja käyttöliittymäasetuksia pysyvästi.
+**Lähtötilanne:** Kirjautunut käyttäjä haluaa hallita seurattavia tageja ja teema-asetusta pysyvästi.
+
+> ⚠️ **Arkkitehtuurihuomio:** Alkuperäinen ehdotus vaati Firestorea (`ARCHITECTURE.md` kieltää ilman eksplisiittistä päätöstä). Tässä versiossa persistointi toteutetaan **localStorage:lla** samoin kuin UP-10:ssä. Firestore harkitaan erikseen, jos käyttäjä haluaa synkronoida asetukset laitteiden välillä.
 
 ```
-Navigoi asetussivulle (esim. avatarklikkaus → "Asetukset")
-  └─ Asetussivu aukeaa, osiot:
-       ├─ Aihepiirit – valintaruudukko (Politiikka, Talous, Teknologia …)
-       ├─ Lähteet – lista medioista (Yle, HS, Kauppalehti …)
-       │    └─ Lähderivin vieressä artikkeli/pv-lukema
+Kirjautunut käyttäjä avaa asetukset (avatarklikkaus → "Asetukset")
+  └─ Asetuspaneeli (modal tai sivu) aukeaa
+       ├─ Seuratut tagit – aktiiviset tagit näkyvät listana, poistettavissa
        ├─ Näkymä – teemavalinta (vaalea/tumma/järjestelmä)
-       └─ Ilmoitukset – päivitysväli (reaaliaikainen / tunnin välein / päivittäin)
-  └─ Tallennetaan Firestore-dokumenttiin käyttäjäkohtaisesti
-       └─ Vahvistusviesti: "Asetukset tallennettu"
+       │    └─ Korvaa nykyisen istuntokohtaisen vaihdon
+       └─ "Tyhjennä kaikki asetukset" – poistaa localStorage-avaimen
+  └─ Tallennetaan välittömästi (ei erillistä Tallenna-painiketta)
+       └─ Pieni animoitu checkmark-vahvistus muutoksen kohdalla
 ```
+
+**Tekniset valinnat:**
+- Kaikki asetukset tallennetaan yhteen JSON-objektiin: `localStorage.setItem('prefs_' + uid, JSON.stringify({tags, theme}))`
+- Synkronointi laitteiden välillä: **ei toteuteta** tässä vaiheessa; vaatisi Firestoren ja arkkitehtuuripäätöksen
+- Teemavalinta: `data-theme`-attribuutti `<html>`-elementissä, luetaan käynnistyksessä ennen renderöintiä (ei välähdystä)
 
 **Hyväksymiskriteerit:**
-- Asetukset säilyvät istuntojen välillä (persistointi Firestoreen)
-- Teemavalinta korvaa nykyisen istuntokohtaisen vaihdon
-- Asetukset latautuvat sivulatauksen yhteydessä ennen virran renderöintiä
+- Asetukset säilyvät saman laitteen istuntojen välillä (localStorage)
+- Teema aktivoituu ennen first-paint (skripti `<head>`:ssä, inline tai deferoitu)
+- Kirjautumattoman käyttäjan asetukset tallennetaan ilman UID-etuliitettä (`prefs_anon`)
 
 ---
 
-## UP-12 · Ilmoitukset uusista artikkeleista
+## UP-12 · "Uutta seuraamissasi aiheissa" -ilmoitus
 
-**D-CENT-malli:** `notifications-list` (tapahtumavirran ilmoitusnäkymä)
+**D-CENT-malli:** `notifications-list`
 
-**Lähtötilanne:** Käyttäjä haluaa tietää, milloin seuraamiinsa aiheisiin ilmestyy uusia artikkeleita.
+**Lähtötilanne:** Käyttäjä haluaa tietää, onko hänen valitsemiinsa tageihin ilmestynyt uusia artikkeleita sivulatauksen jälkeen.
+
+> **Tekninen rajaus:** Tämä on **in-app-ilmoitus**, ei push-ilmoitus. Web Push API vaatii palvelinpuolen push-endpointin, mikä ei sovi arkkitehtuuriin (ei backendiä). Tässä toteutetaan kevyempi malli: sivuston sisäinen uusien artikkelien merkkaus.
 
 ```
-Käyttäjä on asettanut ilmoitukset asetuksissa
-  └─ Navigaatiopalkissa kellokuvake ilmoitusmerkin kanssa
-       └─ Klikkaus avaa ilmoituslistan (dropdown tai sivupaneeli)
-            ├─ Jokainen ilmoitus: lähde + otsikko + aika
-            ├─ "Merkitse luetuksi" yksittäiselle tai kaikille
-            └─ "Avaa artikkeli" → ulkoinen linkki
-  └─ Push-ilmoitus (selain) jos käyttäjä on antanut luvan
+Käyttäjällä on tageja valittuna (UP-10/UP-11)
+  └─ Käyttäjä palaa sivulle (uusi istunto tai sivulataus)
+       └─ Sovellus vertaa: nykyinen uutissyöte vs. edellisen käynnin "viimeisin artikkeli" per tagi
+            ├─ Uusia artikkeleita löytyy → navigaatiopalkin kellokuvakkeessa numero
+            │    └─ Klikkaus avaa "Uudet artikkelit" -paneeli
+            │         ├─ Ryhmitelty tageittain
+            │         └─ "Merkitse kaikki luetuksi" nollaa laskurin
+            └─ Ei uusia → kelloa ei näytetä
 ```
+
+**Tekniset valinnat:**
+- Viimeisin nähty artikkeli per tagi: `localStorage.setItem('seen_' + tag, latestArticleId)`
+- Vertailu tapahtuu `onAuthStateChanged`-callbackin jälkeen, kun uutissyöte on ladattu
+- Uutissyöte haetaan RSS/JSON-feedistä (sama mekanismi kuin nykyisin) — ei erillistä backendiä
+- Artikkelin tunniste: URL tai otsikon hash (deterministinen, ilman tietokantaa)
 
 **Hyväksymiskriteerit:**
-- Ilmoitusmerkki katoaa, kun kaikki on merkitty luetuksi
-- Ilmoitushistoria säilyy 7 päivää
-- Toimii ilman push-lupaa (in-app-ilmoitukset riittävät MVP:ssä)
+- Laskuri näkyy vain jos käyttäjällä on tageja valittuna
+- Toimii ilman kirjautumista (localStorage-pohjainen)
+- Ei vaadi push-lupaa, ei palvelinpuolta
 
 ---
 
 ## UP-13 · Käyttäjäprofiilisivu
 
-**D-CENT-malli:** `profile` (käyttäjän julkinen ja yksityinen profiili)
+**D-CENT-malli:** `profile`
 
-**Lähtötilanne:** Kirjautunut käyttäjä haluaa nähdä ja muokata omia tietojaan sekä seurantatilastojaan.
+**Lähtötilanne:** Kirjautunut käyttäjä haluaa nähdä omat tietonsa ja hallita tiliään.
+
+> ⚠️ **Arkkitehtuurihuomio:** Alkuperäinen ehdotus luki tilastoja Firestoresta. Alla oleva versio laskee kaiken localStorage-datasta.
 
 ```
 Klikkaa avatarikuvaa → "Profiili"
-  └─ Profiilisivu aukeaa
-       ├─ Google-profiilikuva ja nimi (vain luku, hallitaan Google-tilillä)
-       ├─ Seurantatilastot:
-       │    ├─ Seurattujen aiheiden määrä
-       │    ├─ Luettujen artikkelien määrä (tällä viikolla / yhteensä)
-       │    └─ Aktiivisin kategoria
-       └─ "Poista tili" -toiminto (Firebase Auth deleteUser)
+  └─ Profiilipaneeli aukeaa
+       ├─ Google-profiilikuva ja nimi (Firebase Auth currentUser.displayName / photoURL)
+       ├─ Seurantatilastot (lasketaan localStorage-datasta):
+       │    ├─ Seurattujen tagien määrä
+       │    └─ "Seurannan aloitettu" (Firebase Auth currentUser.metadata.creationTime)
+       └─ "Kirjaudu ulos" ja "Poista tili" (Firebase Auth deleteUser + localStorage-siivous)
 ```
 
 **Hyväksymiskriteerit:**
-- Profiilisivu on yksityinen (ei julkinen URL)
-- Tilastot lasketaan Firestoresta, ei lasketa asiakaspuolella
-- Tilin poisto poistaa myös käyttäjän Firestore-dokumentin
+- Profiilitiedot haetaan Firebase Auth `currentUser`-objektista — ei Firestorea
+- Tilin poisto siivoaa myös kaikki `prefs_` ja `seen_`-avaimet localStorage:sta
+- Paneeli ei lataa mitään ulkoista dataa
 
 ---
 
 ## UP-14 · Artikkelin kontekstuaalinen vertailu
 
-**D-CENT-malli:** `discussion` + `argumenting` (monilähteinen näkymä samasta aiheesta)
+**D-CENT-malli:** `discussion` + `argumenting`
 
-**Lähtötilanne:** Käyttäjä lukee uutista ja haluaa nähdä, miten muut mediat käsittelevät samaa aihetta.
+**Lähtötilanne:** Käyttäjä haluaa nähdä, miten muut mediat käsittelevät samaa aihetta kuin valittu artikkeli.
 
 ```
 Käyttäjä klikkaa uutiskorttia
-  └─ Artikkelin sivunäkymä aukeaa (in-app tai modal)
-       ├─ Pääartikkeli: otsikko, kappale, lähde, aikaleima
-       └─ "Muut mediat tästä aiheesta" -osio
-            ├─ 3–5 saman aiheen artikkelia eri lähteistä
-            │    └─ Lähde, otsikko, aikaleima, lyhyt katkelma
-            ├─ Vertailupalkki: kuinka moni media käsittelee aihetta
-            └─ "Avaa alkuperäinen" → ulkoinen linkki
+  └─ Artikkelimodal aukeaa
+       ├─ Pääartikkeli: otsikko, lähde, aikaleima, katkelma + "Lue alkuperäinen" -linkki
+       └─ "Sama aihe muualla" -osio
+            ├─ Suodatetaan jo ladatusta uutissyötteestä: otsikon avainsanat → muut kortit
+            │    └─ Algoritmi: tokenisoi otsikot, laske Jaccard-samankaltaisuus, threshold > 0.2
+            ├─ Näytetään 2–5 artikkelia eri lähteistä
+            └─ Jos alle 2 lähdettä löytyy → osio piilotetaan
 ```
 
+**Tekniset valinnat:**
+- Kaikki suodatus asiakaspuolella, jo ladatusta datasta (ei lisäpyyntöjä)
+- Jaccard-samankaltaisuus tokenisoiduille otsikoille (~10 rivin JS-funktio)
+- Ei NLP-kirjastoa, ei backendiä
+
 **Hyväksymiskriteerit:**
-- Aiheentunnistus perustuu avainsanoihin tai otsikon samankaltaisuuteen (cosine similarity / TF-IDF)
-- Näytetään vähintään 2 eri lähdettä, muutoin osiota ei näytetä
-- Toimii molemmille käyttäjärooleille (anonyymi ja kirjautunut)
+- Vertailu perustuu yksinomaan jo ladattuun syötteeseen (ei uusia verkkopyyntöjä)
+- Toimii molemmille käyttäjärooleille
 
 ---
 
@@ -135,61 +166,81 @@ Käyttäjä klikkaa uutiskorttia
 **Lähtötilanne:** Käyttäjä haluaa löytää tiettyä aihetta koskevat artikkelit avainsanalla.
 
 ```
-Klikkaa hakuikonipainike navigaatiossa (tai /haku-sivu)
-  └─ Hakukenttä aktivoituu
-       └─ Käyttäjä kirjoittaa hakusanan
-            └─ Haku suoritetaan (reaaliaikainen debounce 300ms)
-                 ├─ Tulokset: kortit hakusanan mukaan suodatettuna
-                 ├─ Hakusana korostetaan artikkeliotsikoissa
-                 ├─ Tyhjä tulos: "Ei tuloksia haulle '[x]'"
-                 └─ Hakuhistoria tallennetaan istuntoon (sessionStorage)
+Hakuikoni navigaatiossa → hakukenttä laajenee
+  └─ Käyttäjä kirjoittaa
+       └─ Debounce 200ms → client-side suodatus
+            ├─ Suodatuskohde: artikkelin otsikko + lähteen nimi + tagit
+            ├─ Hakusana korostetaan otsikoissa (<mark>-elementti)
+            ├─ Tyhjä tulos: "Ei tuloksia haulle '[x]'"
+            └─ ESC tai tyhjennys → palaa alkuperäiseen virtaan
 ```
 
+**Tekniset valinnat:**
+- Haku kohdistuu **muistissa olevaan** artikkelilistaan (sama JS-array, josta virta renderöidään)
+- Ei erillistä hakuindeksiä, ei verkkopyyntöjä hakuhetkellä
+- `String.prototype.toLowerCase().includes()` riittää MVP:hen — ei tarvita Fuse.js tai vastaavaa
+- `sessionStorage` ei käytetä hakuhistoriaan (ARCHITECTURE.md:n periaatteen mukaisesti yksinkertaisinta ensin)
+- Hakutila tallennetaan URL-hashiin: `#haku=ukraina` → jaettava linkki toimii
+
 **Hyväksymiskriteerit:**
-- Haku kohdistuu otsikkoon, lähteeseen ja kategoriaan
-- Hakuaika < 200ms asiakaspuolisessa suodatuksessa
-- Mobiilissa hakukenttä laajenee koko navigaatiopalkin leveyteen
+- Hakuaika < 50ms (client-side, muistissa)
+- Mobiilissa hakukenttä vie koko navigaatiopalkin leveydestä (ei pienoiskenttä)
+- Hash-parametri (`#haku=...`) luetaan sivulatauksen yhteydessä
 
 ---
 
-## UP-16 · Rekisteröityminen sähköpostilla
+## UP-16 · Kirjautuminen ja anonyymiys – design guideline
 
-**D-CENT-malli:** `registration` (käyttäjärekisteröintikaavio)
+> UP-16 "Rekisteröityminen sähköpostilla" on **poistettu** ehdotuksista. Suunnittelupäätös: kirjautuminen tapahtuu aina Google-tilillä. Ilman kirjautumista voi käyttää täysimääräisesti — kirjautuminen lisää vain persistoinnin.
 
-**Lähtötilanne:** Käyttäjä haluaa rekisteröityä ilman Google-tiliä.
+### Periaate: kirjautuminen on valinnaista, ei portti
+
+Palvelun käyttökynnys pidetään nollassa. Kirjautuminen ei avaa uusia sisältöjä — se ainoastaan tallentaa asetukset istuntojen välillä.
 
 ```
-Klikkaa "Kirjaudu" → valitsee "Rekisteröidy sähköpostilla"
-  └─ Rekisteröintilomake:
-       ├─ Sähköpostiosoite
-       ├─ Salasana (vahvuusmittari)
-       └─ Salasana uudelleen (vahvistus)
-  └─ Firebase Auth createUserWithEmailAndPassword
-       ├─ [Onnistuu] → vahvistussähköposti lähetetään (sendEmailVerification)
-       │    └─ Käyttäjä ohjataan etusivulle, banneri: "Vahvista sähköpostisi"
-       └─ [Virhe] → virheilmoitus (sähköposti käytössä / heikko salasana)
+Uutisvirtaan pääsee aina kirjautumatta
+  ├─ Anonyymi → täysi lukunäkymä, tagivalinnat vain tässä istunnossa
+  └─ Kirjautunut Google-tilillä → samat toiminnot + tagivalinnat muistetaan
 ```
 
-**Hyväksymiskriteerit:**
-- Sähköpostirekisteröinti on vaihtoehto, ei korvike Google-kirjautumiselle
-- Vahvistamaton tili näkee perusvirran mutta ei voi tallentaa asetuksia
-- Salasanavaatimus: väh. 8 merkkiä, yksi numero tai erikoismerkki
+### Miksi vain Google-kirjautuminen
+
+- **Ei salasanahallintaa** — Firebase Auth Google Sign-In on projektin ainoa auth-mekanismi; sähköposti+salasana toisi salasanavaatimukset, vahvistusmeilit ja unohtunut-salasana-flown ilman selkeää hyötyä
+- **Ei rekisteröitymisvaihetta** — käyttäjä joko kirjautuu Google-tilillä tai käyttää anonyymisti; välitilaa ei ole
+- **Yhdenmukaisuus** — kaikki "kirjautuminen"-näkymän koodi käsittelee yhtä auth-provideeria
+
+### UI-käytännöt
+
+| Tilanne | Toiminto |
+|---|---|
+| Anonyymi avaa etusivun | Ei pakotusta kirjautua; diskreetti "Kirjaudu tallentaaksesi valinnat" -linkki headerissa |
+| Anonyymi klikkaa "Tallenna" -tyyppistä toimintoa | Laukaisee kirjautumismodalin selityksellä: "Kirjaudu Google-tilillä, niin valinnat muistetaan" |
+| Kirjautunut käyttäjä | Avatar headerissa; ei kirjautumiskehotteita missään |
+| Kirjautuminen epäonnistuu (popup suljettu) | Virheilmoitus: "Kirjautuminen peruutettiin" — ei uudelleenohjausta |
+| Uloskirjautuminen | Asetukset säilyvät localStorage:ssa → palautuvat, jos sama käyttäjä kirjautuu uudelleen samalla laitteella |
+
+### Miksi ei sähköposti+salasana
+
+Sähköpostirekisteröinti lisää kompleksisuutta ilman mitattavaa hyötyä nykyisessä skaalassa:
+- vaatii vahvistusmeilin flown
+- vaatii "unohtunut salasana" -toiminnon
+- luo kaksi auth-codepathia (Google + email) kaikkeen jatkokehitykseen
+- palvelu toimii anonyymisti → kynnys kirjautumiseen ei ole ongelma ratkaistava rekisteröintiä helpottamalla
+
+Jos tulevaisuudessa halutaan laajentaa autentikointia (esim. GitHub-kirjautuminen tai magic link), tehdään siitä erillinen arkkitehtuuripäätös.
 
 ---
 
-## Toteutusjärjestys (suositus)
+## Toteutusjärjestys (päivitetty)
 
-D-CENT-periaatteen *"Simple"* mukaisesti — yksinkertaisin ensin, lisää vain mitattavan tarpeen perusteella:
-
-| Prioriteetti | Käyttötapaus | Perustelu |
-|---|---|---|
-| 1 | UP-11 Asetukset | Mahdollistaa UP-10:n ja teeman persistoinnin |
-| 2 | UP-10 Henkilökohtainen virta | Arvolupauksen ydinominaisuus |
-| 3 | UP-15 Hakutoiminto | Korkea käyttöarvo, asiakaspuolinen toteutus yksinkertainen |
-| 4 | UP-14 Kontekstuaalinen vertailu | Erottautumistekijä, vaatii backend-logiikan |
-| 5 | UP-12 Ilmoitukset | Sitouttava ominaisuus, vaatii Firestore-integraation |
-| 6 | UP-13 Profiilisivu | Tukee yllä olevia, pieni toteutustyö |
-| 7 | UP-16 Sähköpostirekisteröinti | Laajentaa käyttäjäkuntaa, Firebase Auth tukee suoraan |
+| Prioriteetti | Käyttötapaus | Tekninen riippuvuus | Firebase? |
+|---|---|---|---|
+| 1 | UP-10 Tagipohjainen suodatus | JS-muisti + localStorage | Ei |
+| 2 | UP-15 Hakutoiminto | Client-side, muistissa oleva lista | Ei |
+| 3 | UP-11 Asetuspaneeli | localStorage | Ei |
+| 4 | UP-12 Uusien artikkelien merkki | localStorage + syötteen vertailu | Ei |
+| 5 | UP-14 Kontekstuaalinen vertailu | Client-side Jaccard | Ei |
+| 6 | UP-13 Profiilipaneeli | Firebase Auth `currentUser` | Auth (jo käytössä) |
 
 ---
 
