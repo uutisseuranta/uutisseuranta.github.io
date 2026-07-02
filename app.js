@@ -66,60 +66,6 @@ document.querySelectorAll('.feed-item').forEach(el => {
   observer.observe(el);
 });
 
-// ---- ITERATION 1: JACCARD SIMILARITY (UP-13) ----
-function calculateJaccard(tagsA, tagsB) {
-  const setA = new Set(tagsA);
-  const setB = new Set(tagsB);
-  const intersection = new Set([...setA].filter(x => setB.has(x)));
-  const union = new Set([...setA, ...setB]);
-  if (union.size === 0) return 0;
-  return intersection.size / union.size;
-}
-
-function renderRelatedArticles() {
-  const items = Array.from(document.querySelectorAll('.feed-item'));
-  items.forEach(item => {
-    const id = item.getAttribute('data-id');
-    const tags = (item.getAttribute('data-tags') || '').split(',').map(t => t.trim()).filter(Boolean);
-    
-    // Etsi eniten samankaltaiset
-    const matches = items
-      .filter(other => other.getAttribute('data-id') !== id)
-      .map(other => {
-        const otherTags = (other.getAttribute('data-tags') || '').split(',').map(t => t.trim()).filter(Boolean);
-        const score = calculateJaccard(tags, otherTags);
-        return { element: other, score };
-      })
-      .filter(m => m.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    // Poista vanha liittyvien osio jos on
-    item.querySelector('.related-articles')?.remove();
-
-    if (matches.length > 0) {
-      const div = document.createElement('div');
-      div.className = 'related-articles';
-      div.innerHTML = `<h4 class="related-articles__title">Liittyvät aiheet (Jaccard)</h4>`;
-      matches.slice(0, 2).forEach(m => {
-        const title = m.element.querySelector('.feed-item__title').textContent;
-        const scorePct = Math.round(m.score * 100);
-        const link = document.createElement('span');
-        link.className = 'related-article-link';
-        link.textContent = `🔗 ${title} (${scorePct}% samankaltaisuus)`;
-        link.style.cursor = 'pointer';
-        link.addEventListener('click', (e) => {
-          e.stopPropagation();
-          m.element.scrollIntoView({ behavior: 'smooth' });
-          m.element.style.outline = '2px solid var(--color-primary)';
-          setTimeout(() => m.element.style.outline = '', 2000);
-        });
-        div.appendChild(link);
-      });
-      item.appendChild(div);
-    }
-  });
-}
-
 // ---- ITERATION 1: FILTER & SEARCH LOGIC (UP-9, UP-14, UP-11) ----
 const searchInput = document.getElementById('search-input');
 const btnClearSearch = document.getElementById('btn-clear-search');
@@ -284,8 +230,6 @@ onAuthStateChanged(auth, async (user) => {
     await loadPrefs();
   }
   
-  // Renderöi Jaccard-samankaltaisuudet heti latauksen jälkeen
-  renderRelatedArticles();
   filterFeed();
 });
 
