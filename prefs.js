@@ -6,6 +6,12 @@
  * localStorage  → nopea paikallinen välimuisti, UI piirtyy heti ilman verkkoviivettä
  * Firestore     → kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset kaikille laitteille
  *
+ * PWA-offline-tuki (edelleen, PWA-offline-tuella):
+ *   Firestore IndexedDB-persistointi (enableIndexedDbPersistence) mahdollistaa sen,
+ *   että kirjautunut käyttäjä voi lukea ja kirjoittaa preferenssejä myös offline-tilassa.
+ *   Service Worker (SW) huolehtii staattisten resurssien välimuistista; tämä moduuli
+ *   huolehtii datan offline-pysyvyydestä. Yhdessä ne muodostavat täyden PWA-offline-kokemuksen.
+ *
  * Kirjautumaton käyttäjä: vain localStorage (avain "prefs_anonymous")
  * Kirjautunut käyttäjä:   localStorage + Firestore molemmat
  *
@@ -64,7 +70,11 @@ export function initPrefs(app, uid) {
   _prefs = { ...DEFAULT_PREFS };
 
   if (uid) {
-    // Otetaan Firestore offline-persistointi käyttöön kirjautuneelle käyttäjälle
+    // Otetaan Firestore offline-persistointi käyttöön kirjautuneelle käyttäjälle.
+    // Tämä on myös PWA-tuen edellytys: enableIndexedDbPersistence tallentaa
+    // Firestore-datan selaimen IndexedDB:hen, jolloin preferenssit ovat luettavissa
+    // ja kirjoitettavissa myös silloin kun verkkoyhteyttä ei ole (esim. SW-cache-tila).
+    // Kutsu tehdään heti autentikoinnin jälkeen — ennen ensimmäistäkään getDoc/setDoc-kutsua.
     _db = getFirestore(app);
     enableIndexedDbPersistence(_db).catch((err) => {
       if (err.code === 'failed-precondition') {
@@ -247,8 +257,17 @@ async function _writeFirestore(prefs) {
 }
 
 /**
- * Aikatauluttaa Firestore-kirjoituksen 500 ms viiveellä.
- * Estää liiallisia kirjoituksia nopeasti peräkkäisten päivitysten (esim. napin räpyttely) yhteydessä.
+ * Aikatauluttaa Firestore-kirjoituksen 500 ms viiveellä (debounce).
+ *
+ * Tarkoitus — räpyttely (rapid successive clicks / päivitykset):
+ *   Käyttäjä voi klikata Follow/Unfollow-nappia tai vaihtaa teemaa useita kertoja
+ *   peräkkäin lyhyen ajan sisällä. Ilman debouncea jokainen updatePrefs()-kutsu
+ *   laukaisisi oman Firestore-kirjoituksen → turhia kirjoituksia, quota-kulutusta
+ *   ja mahdollisia race conditioneja.
+ *
+ *   Debounce-logiikka: clearTimeout nollaa edellisen ajastimen aina uuden päivityksen
+ *   saapuessa. Firestore-kirjoitus tapahtuu vasta kun päivityksiä ei tule 500 ms:ään.
+ *   localStorage kirjoitetaan silti välittömästi jokaisella päivityksellä (offline-tuki).
  */
 function _scheduleFirestore() {
   clearTimeout(_debounceTimer);
