@@ -151,6 +151,10 @@ Laajat tai monimutkaiset kokonaisuudet voidaan aloittaa avaamalla luonnos-Pull R
 - PR voi aluksi olla toiminnallisesti tyhjä tai sisältää vain alustavan runkoehdotuksen.
 - Avoimet arkkitehtuurikysymykset ja toteutusvaihtoehdot kirjataan suoraan Pull Requestin kommenteiksi, jolloin niihin on helpompi vastata ja niistä voidaan keskustella suoraan koodikontekstissa ennen varsinaista toteutusta.
 
+### Koodin laadun ja tietoturvan valvonta (Ruff)
+- Taustapalveluissa (Python) koodin tyylin, laadun (isort, pycodestyle) ja tietoturvan (bandit) valvonnassa käytetään **Ruff**-työkalua.
+- Ruff on konfiguroitu juuritason `pyproject.toml`-tiedostossa ja sen tarkistukset ajetaan osana automaattista CI/CD-pipelinea jokaisen koodipushin yhteydessä.
+
 ---
 
 ## Muutosten tekeminen
