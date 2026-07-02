@@ -86,35 +86,71 @@
         <h2 class="section-title">Päivän uutisvirtaesimerkki</h2>
         <p class="section-desc">Näin uutisseuranta näyttää koostettuna uutisvirran eri lähteistä.</p>
       </div>
+      
+      <!-- Iteration 1: Feed Controls (UP-9, UP-14) -->
+      <div class="feed-controls">
+        <div class="feed-search-wrap">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" class="feed-search" placeholder="Hae uutisotsikoista tai tägeistä..." aria-label="Hae uutisia">
+          <button id="btn-clear-search" class="btn-clear-search" aria-label="Tyhjennä haku" style="display:none;">&times;</button>
+        </div>
+        
+        <div id="filter-bar" class="filter-bar" style="display:none;">
+          <span class="filter-bar__label">Aktiiviset aiheet:</span>
+          <div id="active-filters" class="active-filters"></div>
+          <button id="btn-clear-filters" class="btn-clear-filters-link">Tyhjennä suodattimet</button>
+        </div>
+      </div>
       <div class="feed-grid">
-        <a href="#" class="feed-item feed-item--lead">
+        <div class="feed-item feed-item--lead" data-id="politics-1" data-tags="politiikka,budjetti,talous">
           <img src="https://picsum.photos/seed/news-politics-fi/800/450" alt="Uutiskuva politiikasta" width="800" height="450" loading="lazy" class="feed-item__image">
           <div class="feed-item__category cat-politics"><span class="category-dot"></span>Politiikka</div>
           <h3 class="feed-item__title">Hallitus julkaisee uuden talousarvion – leikkaukset koskevat useita ministeriöitä</h3>
           <p class="feed-item__excerpt">Hallitus on sopinut ensi vuoden talousarviosta pitkällisten neuvottelujen jälkeen. Budjetti sisältää useita säästöjä sosiaaliturvaan ja koulutukseen, mutta panostaa puolustukseen.</p>
+          
+          <div class="feed-item__tags">
+            <span class="feed-item__tag-btn" data-tag="politiikka">#politiikka</span>
+            <span class="feed-item__tag-btn" data-tag="budjetti">#budjetti</span>
+            <span class="feed-item__tag-btn" data-tag="talous">#talous</span>
+          </div>
+          
           <div class="feed-item__meta">
             <span class="feed-item__source">Yle Uutiset</span>
             <span class="feed-item__time">2 t sitten</span>
           </div>
-        </a>
-        <a href="#" class="feed-item feed-item--small">
+        </div>
+        <div class="feed-item feed-item--small" data-id="tech-1" data-tags="teknologia,rahoitus,tekoäly">
           <div class="feed-item__category cat-tech"><span class="category-dot"></span>Teknologia</div>
           <h3 class="feed-item__title">Suomalainen tekoäly-startup kerää 20 miljoonan euron rahoituskierroksen</h3>
           <p class="feed-item__excerpt">Helsinkiläinen startup on kerännyt merkittävän rahoituksen eurooppalaisilta pääomasijoittajilta.</p>
+          
+          <div class="feed-item__tags">
+            <span class="feed-item__tag-btn" data-tag="teknologia">#teknologia</span>
+            <span class="feed-item__tag-btn" data-tag="tekoäly">#tekoäly</span>
+            <span class="feed-item__tag-btn" data-tag="rahoitus">#rahoitus</span>
+          </div>
+          
           <div class="feed-item__meta">
             <span class="feed-item__source">Kauppalehti</span>
             <span class="feed-item__time">4 t sitten</span>
           </div>
-        </a>
-        <a href="#" class="feed-item feed-item--small">
+        </div>
+        <div class="feed-item feed-item--small" data-id="economy-1" data-tags="talous,pörssi,energia">
           <div class="feed-item__category cat-economy"><span class="category-dot"></span>Talous</div>
           <h3 class="feed-item__title">Helsingin pörssi nousi selvästi – energia-ala vetää vahvasti</h3>
           <p class="feed-item__excerpt">Nasdaq Helsinki sulkeutui positiivisesti, kun energiasektori nousi enemmän kuin kaksi prosenttia.</p>
+          
+          <div class="feed-item__tags">
+            <span class="feed-item__tag-btn" data-tag="talous">#talous</span>
+            <span class="feed-item__tag-btn" data-tag="pörssi">#pörssi</span>
+            <span class="feed-item__tag-btn" data-tag="energia">#energia</span>
+          </div>
+          
           <div class="feed-item__meta">
             <span class="feed-item__source">Helsingin Sanomat</span>
             <span class="feed-item__time">1 t sitten</span>
           </div>
-        </a>
+        </div>
       </div>
     </div>
   </section>
@@ -181,11 +217,14 @@
   <script>
     (function(){
       const t=document.querySelector('[data-theme-toggle]'),r=document.documentElement;
-      let d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+      // Issue #10: Lue teematila localStorage-välimuistista välähdyksen estämiseksi
+      let d=localStorage.getItem('selected_theme') || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
       r.setAttribute('data-theme',d);
       if(t) t.addEventListener('click',()=>{
         d=d==='dark'?'light':'dark';
         r.setAttribute('data-theme',d);
+        // Tallenna heti localStorageen
+        localStorage.setItem('selected_theme', d);
         t.setAttribute('aria-label','Vaihda '+(d==='dark'?'vaaleaan':'tummaan')+' teemaan');
         t.innerHTML=d==='dark'
           ?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
