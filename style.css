@@ -1,22 +1,6 @@
-@font-face {
-  font-family: 'Mulish';
-  src: local('Mulish'), local('Muli'), url('./mulish-regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Mulish';
-  src: local('Mulish Bold'), local('Muli Bold'), url('./mulish-bold.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* =========================================================
    ART DIRECTION: Finnish minimalism, editorial news feel
-   Palette: Cool slate neutrals, D-CENT teal accent (civic tech)
+   Palette: Cool slate neutrals, Uutisseuranta teal accent (civic tech)
    Typography: System font stack (sans-serif)
    Density: Spacious editorial
    ========================================================= */
@@ -41,7 +25,7 @@
   --color-surface-offset:   #edecea;
   --color-divider:          #e0dedd;
   --color-border:           #d4d2cf;
-  --color-text:             #222222;
+  --color-text:             #1a1917;
   --color-text-muted:       #706e6b;
   --color-text-faint:       #b0afad;
   --color-text-inverse:     #f9f8f6;
@@ -59,8 +43,8 @@
   --shadow-md: 0 4px 12px oklch(0.2 0.01 80 / 0.08);
   --shadow-lg: 0 12px 32px oklch(0.2 0.01 80 / 0.12);
   --content-narrow: 640px; --content-default: 960px; --content-wide: 1200px;
-  --font-display: 'Mulish', 'Muli', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-body: 'Mulish', 'Muli', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 [data-theme="dark"] {
@@ -486,11 +470,3 @@ button { cursor: pointer; background: none; border: none; }
   border: none; cursor: pointer;
 }
 .modal__close:hover { background: var(--color-divider); color: var(--color-text); }
-
-/* Highlighted text, intro to longer text, blockquotes: 20px (1.25em) bold */
-.highlighted-text,
-.intro,
-blockquote {
-  font-size: 1.25em; /* 20px if base is 16px */
-  font-weight: 700;
-}
