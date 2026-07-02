@@ -13,7 +13,7 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 |---|---|---|---|---|---|
 | 2026-07-03 | Hybrid localStorage + Firestore preferensseille | localStorage: nopeus ja offline-tuki, UI piirtyy ilman verkkoviivettä. Firestore: kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset SSO-tunnuksen mukana kaikille laitteille. Pelkkä localStorage ei riitä monilaite-käyttöön; pelkkä Firestore olisi hidas. | Pelkkä localStorage (nopea mutta ei monilaite) / Pelkkä Firestore (monilaite mutta hidas) | Jos Firestore poistetaan käytöstä tai siirrytään toiseen backendiin | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
 | 2026-07-03 | Firebase SDK versio pinnattu `10.12.0`, SRI ei käytössä (tietoinen päätös) | Googlen CDN on luotettu lähde; SRI-hashin ylläpito jokaisen SDK-päivityksen yhteydessä lisää operatiivista taakkaa. Hyväksytty riski tässä vaiheessa. | SRI-hash käytössä | Jos projekti kasvaa tai tietoturvavaatimukset tiukkenevat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
-| 2026-07-03 | Analytics käytössä vain suostumuksen jälkeen (Google Consent Mode v2) | EU ePrivacy + GDPR vaatii suostumuksen ennen analytiikkaa | Analytics aina päällä | Jos lainsointivaatimukset muuttuvat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
+| 2026-07-03 | Analytics käytössä vain suostumuksen jälkeen (Google Consent Mode v2) | EU ePrivacy + GDPR vaatii suostumuksen ennen analytiikkaa | Analytics aina päällä | Jos lainsäädäntövaatimukset muuttuvat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
 | 2026-07-02 | SCREAMING_SNAKE_CASE sopimusdokumenteille | Yhtenäinen nimeäminen kaikkien repojen välillä; erottaa sopimukset ops-tiedostoista | kebab-case kaikille | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | Cross-repo -linkit absoluuttisina GitHub-URL:eina | Relatiiviset polut eivät toimi GitHubissa cross-repo | Relatiiviset polut | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | AS2-first, ei täyttä ActivityPub | ActivityPub vaatii Actor-endpointit ja federaation; AS2 riittää | Täysi ActivityPub | Jos tarvitaan federoitu verkosto | [#26](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/26) |
@@ -47,7 +47,7 @@ Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemi
 
 ### `prefs.js` vs. `profile.js` — omistajuusraja
 
-Niää on kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään, mutta niillä on eri vastuualueet:
+Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään, mutta niillä on eri vastuualueet:
 
 | Moduuli | Vastuualue | Ei vastaa |
 |---|---|---|
@@ -84,7 +84,7 @@ Niää on kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään, m
 - **Build-työkalut** (Webpack, Vite, Rollup, Parcel, tms.) — ei build-steppiä.
 - **Erillinen monitorointipalvelu** (Datadog, Sentry, tms.) — laatu varmistetaan pipelinessa ennen tuotantoa.
 - **PR preview -ympäristöt** (Netlify, Cloudflare Pages, tms.) — pipeline testaa ennen mergeä, erillisiä preview-ympäristöjä ei tarvita.
-- **Ulkoiset fontti-CDN:t** (Google Fonts, Fontshare, Adobe Fonts, tms.) — fonttilatauksista ei saa syntyä kolmannen osapuolen verkkopyyntjöjä.
+- **Ulkoiset fontti-CDN:t** (Google Fonts, Fontshare, Adobe Fonts, tms.) — fonttilatauksista ei saa syntyä kolmannen osapuolen verkkopyyntöjä.
 
 ---
 
@@ -119,9 +119,9 @@ Seuraavat edge caset on käsitelty eksplisiittisesti `prefs.js`:ssä:
 
 | Tilanne | Käsittelytapa |
 |---|---|
-| Käyttäjä on offline, yritetään lukea preferenssejä | `localStorage` palvelee arvot synkronisesti — Firestore-lataus skipatään hiljaisesti |
+| Käyttäjä on offline, yritetään lukea preferenssejä | `localStorage` palvelee arvot synkronisesti — Firestore-lataus skipataan hiljaisesti |
 | Käyttäjä on offline, yritetään kirjoittaa preferenssejä | `localStorage` kirjoitetaan välittömästi; Firestore-kirjoitus jonottuu IndexedDB:hen ja synkronoidaan kun yhteys palautuu |
-| `localStorage` on täynnä tai yksityistila estaa kirjoittamisen | `_writeLocal()` epäonnistuu hiljaisesti (try/catch ilman `console.error`) — UI toimii muistissa olevilla arvoilla |
+| `localStorage` on täynnä tai yksityistila estää kirjoittamisen | `_writeLocal()` epäonnistuu hiljaisesti (try/catch ilman `console.error`) — UI toimii muistissa olevilla arvoilla |
 | Firebase SDK:n lataus epäonnistuu (CDN-häiriö) | Sivusto latautuu ilman Firebase-toimintoja; kirjautuminen ei onnistu mutta staattinen sisältö toimii normaalisti |
 
 Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
@@ -198,7 +198,7 @@ gtag('consent', 'default', {
 
 ### Periaatteet
 
-- **Kaikki testaus tapahtuu CI/CD-pipelinessa.** Ei erillistä monitorointia tuotannossa, ei erillisiä testiymmäristöjä.
+- **Kaikki testaus tapahtuu CI/CD-pipelinessa.** Ei erillistä monitorointia tuotannossa, ei erillisiä testiympäristöjä.
 - **Testit kirjoitetaan vanilla Bash + `curl` + standardit Unix-työkalut.** Ei testausframeworkeja koskaan.
 - **Pipeline on portti tuotantoon.** Kaikki testit ajetaan ennen tai välittömästi deployn jälkeen.
 - **Yksinkertaisuus ennen kattavuutta.** Yksi luotettava smoke-testi on parempi kuin kymmenen haurasta yksikkötestiä.
@@ -246,11 +246,11 @@ Ei Netlifyä, ei Cloudflare Pagesia, ei muita hostingpalveluja.
 
 ### Firebase Web API -avain on tarkoituksellisesti julkinen
 
-Firebase Web API -avain näkyy `index.html`:ssä selkotekstinsi. Tämä on tietoinen päätös — Google dokumentoi eksplisiittisesti, että avain on tarkoitettu julkiseksi. Turvallisuus varmistetaan Firebase-projektin puolella (Authorized Domains, Security Rules) — ks. Firebase Security Rules -rakenne yllä.
+Firebase Web API -avain näkyy `index.html`:ssä selkotekstinä. Tämä on tietoinen päätös — Google dokumentoi eksplisiittisesti, että avain on tarkoitettu julkiseksi. Turvallisuus varmistetaan Firebase-projektin puolella (Authorized Domains, Security Rules) — ks. Firebase Security Rules -rakenne yllä.
 
 ### Content Security Policy
 
-CSP määritellään `<meta http-equiv="Content-Security-Policy">`-tagilla `index.html`:ssä rajoittamaan sallitut skriptihteet.
+CSP määritellään `<meta http-equiv="Content-Security-Policy">`-tagilla `index.html`:ssä rajoittamaan sallitut skriptilähteet.
 
 Nykyinen CSP sallii vähintään:
 - `script-src`: `https://www.gstatic.com` (Firebase SDK CDN)
@@ -264,18 +264,23 @@ CSP:n täydellinen määrittely kirjataan osaksi [#28](https://github.com/uutiss
 ## Suunnittelu- ja kehityskäytännöt
 
 ### Teknologiavalintojen ensisijaisuusperiaate
+
 Projektissa suositaan riippuvuuksien minimoimiseksi ja järjestelmän pitkäikäisyyden takaamiseksi seuraavaa järjestystä teknologiavalinnoissa:
+
 1. **Ensisijaisesti:** Avoimet standardit (kuten ActivityStreams 2.0, WCAG 2.1 AA, standardit web-rajapinnat).
 2. **Toissijaisesti:** Standardoidut, de facto standardoidut tai puhtaat "vanilla"-teknologiat (kuten Vanilla JS, Vanilla CSS, `localStorage`, natiivi selainpersistointi).
 
-Tämä periaate vähentää ulkopuolisten kirjastojen ja build-työkalujen tarvetta ja pitää koodikannan helposti ylläpidetävänä.
+Tämä periaate vähentää ulkopuolisten kirjastojen ja build-työkalujen tarvetta ja pitää koodikannan helposti ylläpidettävänä.
 
 ### Luonnos-Pull Requestit (Draft PR) ja kysymykset kontekstissa
+
 Laajat tai monimutkaiset kokonaisuudet voidaan aloittaa avaamalla luonnos-Pull Request (Draft PR).
+
 - PR voi aluksi olla toiminnallisesti tyhjä tai sisältää vain alustavan runkoehdotuksen.
 - Avoimet arkkitehtuurikysymykset ja toteutusvaihtoehdot kirjataan suoraan Pull Requestin kommenteiksi, jolloin niihin on helpompi vastata ja niistä voidaan keskustella suoraan koodikontekstissa ennen varsinaista toteutusta.
 
 ### Koodin laadun ja tietoturvan valvonta (Ruff)
+
 - Taustapalveluissa (Python) koodin tyylin, laadun (isort, pycodestyle) ja tietoturvan (bandit) valvonnassa käytetään **Ruff**-työkalua.
 - Ruff on konfiguroitu juuritason `pyproject.toml`-tiedostossa ja sen tarkistukset ajetaan osana automaattista CI/CD-pipelinea jokaisen koodipushin yhteydessä.
 

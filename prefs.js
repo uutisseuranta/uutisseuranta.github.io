@@ -6,7 +6,7 @@
  * localStorage  → nopea paikallinen välimuisti, UI piirtyy heti ilman verkkoviivettä
  * Firestore     → kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset kaikille laitteille
  *
- * PWA-offline-tuki (edelleen, PWA-offline-tuella):
+ * PWA-offline-tuki:
  *   Firestore IndexedDB-persistointi (enableIndexedDbPersistence) mahdollistaa sen,
  *   että kirjautunut käyttäjä voi lukea ja kirjoittaa preferenssejä myös offline-tilassa.
  *   Service Worker (SW) huolehtii staattisten resurssien välimuistista; tämä moduuli
@@ -41,8 +41,11 @@ import {
   enableIndexedDbPersistence,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
+// Tietomallin versio — kasvata kun DEFAULT_PREFS:iin lisätään kenttiä.
+// _migrate() käyttää tätä arvoa taaksepäin yhteensopivuuden varmistamiseksi.
 export const SCHEMA_VERSION = 1;
 
+/** Oletusarvoinen preferenssirakenne. Toimii myös migraation pohjana. */
 const DEFAULT_PREFS = {
   followedTags: [],
   theme: 'system',
@@ -50,10 +53,23 @@ const DEFAULT_PREFS = {
   schemaVersion: SCHEMA_VERSION,
 };
 
+// ── Moduulin tila ─────────────────────────────────────────────────
+// Kaikki muuttujat ovat moduulin yksityisiä — ulkopuolelta käytetään
+// vain alla olevaa julkista API:ta.
+
+/** Firestore-instanssi. null = kirjautumaton tai Firestore ei käytössä. */
 let _db = null;
+
+/** Kirjautuneen käyttäjän uid. null = anonyymi käyttäjä. */
 let _uid = null;
+
+/** Debounce-ajastin Firestore-kirjoituksille. Ks. _scheduleFirestore(). */
 let _debounceTimer = null;
+
+/** Muistissa olevat preferenssit — aina ajantasainen kopio. */
 let _prefs = { ...DEFAULT_PREFS };
+
+/** Rekisteröidyt muutoskuuntelijat. Ks. onPrefsChange(). */
 let _listeners = [];
 
 // ── Julkinen API ─────────────────────────────────────────────────
@@ -61,6 +77,7 @@ let _listeners = [];
 /**
  * Alusta moduuli.
  * Kutsutaan aina kun autentikointitila muuttuu (kirjautuminen / uloskirjautuminen).
+ * Nollaa muistissa olevan tilan ja asettaa Firestore-instanssin kirjautuneelle käyttäjälle.
  *
  * @param {import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js').FirebaseApp} app - Firebase-sovellus
  * @param {string|null} uid - Kirjautuneen käyttäjän uid, tai null
@@ -71,27 +88,26 @@ export function initPrefs(app, uid) {
 
   if (uid) {
     // Otetaan Firestore offline-persistointi käyttöön kirjautuneelle käyttäjälle.
-    // Tämä on myös PWA-tuen edellytys: enableIndexedDbPersistence tallentaa
-    // Firestore-datan selaimen IndexedDB:hen, jolloin preferenssit ovat luettavissa
-    // ja kirjoitettavissa myös silloin kun verkkoyhteyttä ei ole (esim. SW-cache-tila).
+    // enableIndexedDbPersistence tallentaa Firestore-datan selaimen IndexedDB:hen,
+    // jolloin preferenssit ovat luettavissa ja kirjoitettavissa myös offline-tilassa.
     // Kutsu tehdään heti autentikoinnin jälkeen — ennen ensimmäistäkään getDoc/setDoc-kutsua.
     _db = getFirestore(app);
     enableIndexedDbPersistence(_db).catch((err) => {
       if (err.code === 'failed-precondition') {
-        // Useampi välilehti auki — offline toimii vain yhdellä
+        // Useampi välilehti auki samanaikaisesti — offline-persistointi toimii vain yhdellä.
         console.warn('[prefs] Firestore-offline ei käytössä (useampi välilehti auki).');
       } else if (err.code === 'unimplemented') {
-        // Selain ei tue IndexedDB:tä
+        // Selain (esim. vanha Safari) ei tue IndexedDB:tä.
         console.warn('[prefs] Selain ei tue Firestore-offline-tallennusta.');
       }
     });
   } else {
-    // Kirjautumaton käyttäjä: vain localStorage, ei Firestorea
+    // Kirjautumaton käyttäjä: vain localStorage käytössä, ei Firestore-yhteyttä.
     _db = null;
   }
 }
 
-/** Palauttaa nykyiset preferenssit (synkroninen). */
+/** Palauttaa nykyiset preferenssit (synkroninen, ei sivuvaikutuksia). */
 export function getPrefs() {
   return { ..._prefs };
 }
@@ -99,24 +115,26 @@ export function getPrefs() {
 /**
  * Lataa preferenssit käynnistyksessä tai kirjautumistilan muuttuessa.
  * 1) Lue localStorage → päivitä UI heti
- * 2) Lue Firestore (vain kirjautunut) → korvaa jos uudempi
+ * 2) Lue Firestore (vain kirjautunut) → korvaa jos palvelimen versio on uudempi
+ *
+ * Virhe Firestore-haussa ei kaada sovellusta — paikalliset tiedot riittävät.
  */
 export async function loadPrefs() {
   _prefs = _readLocal() ?? { ...DEFAULT_PREFS };
   _notify();
 
-  // Kirjautumaton käyttäjä: ei Firestore-latausta
+  // Kirjautumaton käyttäjä tai Firestore ei alustettu: ei Firestore-latausta.
   if (!_db || !_uid) return;
 
   try {
     const snap = await getDoc(_prefsRef());
     if (!snap.exists()) {
-      // Ensimmäinen kirjautuminen tällä tilillä: tallennetaan paikallinen tila Firestoreen
+      // Ensimmäinen kirjautuminen tällä tilillä: tallennetaan paikallinen tila Firestoreen.
       await _writeFirestore(_prefs);
       return;
     }
     const remote = snap.data();
-    // Vertaillaan aikaleimoja: käytetään uudempaa
+    // Vertaillaan aikaleimoja millisekunteina — käytetään uudempaa versiota.
     const remoteTs = remote.updatedAt?.toMillis?.() ?? 0;
     const localTs = _prefs.updatedAt ?? 0;
     if (remoteTs >= localTs) {
@@ -125,7 +143,7 @@ export async function loadPrefs() {
       _notify();
     }
   } catch (err) {
-    // Verkkovirhe tms. — paikallinen tila riittää
+    // Verkkovirhe, autentikointiongelma tms. — paikallinen tila riittää.
     console.warn('[prefs] Firestore-lataus epäonnistui, käytetään paikallista:', err);
   }
 }
@@ -214,7 +232,10 @@ function _prefsRef() {
   return doc(_db, 'users', _uid, 'preferences', 'main');
 }
 
-/** Muodostaa localStorage-avaimen uid:n perusteella. */
+/**
+ * Muodostaa localStorage-avaimen uid:n perusteella.
+ * Anonyymilla käyttäjällä avain on "prefs_anonymous".
+ */
 function _storageKey() {
   return `prefs_${_uid ?? 'anonymous'}`;
 }
@@ -226,7 +247,8 @@ function _readLocal() {
     if (!raw) return null;
     return _migrate(JSON.parse(raw));
   } catch {
-    // JSON-parsaus tai localStorage epäonnistui (yksityistila, vioittunut data)
+    // JSON-parsaus epäonnistui (vioittunut data) tai localStorage ei ole käytettävissä
+    // (yksityistila, QuotaExceededError). Palautetaan null → käytetään oletusarvoja.
     return null;
   }
 }
@@ -236,13 +258,15 @@ function _writeLocal(prefs) {
   try {
     localStorage.setItem(_storageKey(), JSON.stringify(prefs));
   } catch {
-    // Voi epäonnistua yksityistilassa tai kun tallennustila on täynnä
+    // Voi epäonnistua yksityistilassa tai kun tallennustila on täynnä.
+    // UI jatkaa toimintaa muistissa olevilla arvoilla.
   }
 }
 
 /**
  * Kirjoittaa preferenssit Firestoreen.
- * Käytetään merge:true jotta rinnakkaiset kirjoitukset eri kentille eivät ylikirjoita toisiaan.
+ * merge:true estää rinnakkaisten kirjoitusten ylikirjoittamasta toisiaan —
+ * esim. jos eri laite päivitti vain theme-kentän, followedTags säilyy.
  */
 async function _writeFirestore(prefs) {
   if (!_db || !_uid) return;
@@ -259,13 +283,13 @@ async function _writeFirestore(prefs) {
 /**
  * Aikatauluttaa Firestore-kirjoituksen 500 ms viiveellä (debounce).
  *
- * Tarkoitus — räpyttely (rapid successive clicks / päivitykset):
+ * Ongelma jota ratkoo — räpyttely (rapid successive updates):
  *   Käyttäjä voi klikata Follow/Unfollow-nappia tai vaihtaa teemaa useita kertoja
  *   peräkkäin lyhyen ajan sisällä. Ilman debouncea jokainen updatePrefs()-kutsu
  *   laukaisisi oman Firestore-kirjoituksen → turhia kirjoituksia, quota-kulutusta
  *   ja mahdollisia race conditioneja.
  *
- *   Debounce-logiikka: clearTimeout nollaa edellisen ajastimen aina uuden päivityksen
+ *   Toimintaperiaate: clearTimeout nollaa edellisen ajastimen aina uuden päivityksen
  *   saapuessa. Firestore-kirjoitus tapahtuu vasta kun päivityksiä ei tule 500 ms:ään.
  *   localStorage kirjoitetaan silti välittömästi jokaisella päivityksellä (offline-tuki).
  */
@@ -274,7 +298,11 @@ function _scheduleFirestore() {
   _debounceTimer = setTimeout(() => _writeFirestore(_prefs), 500);
 }
 
-/** Ilmoittaa kaikille rekisteröidyille kuuntelijoille preferenssien muutoksesta. */
+/**
+ * Ilmoittaa kaikille rekisteröidyille kuuntelijoille preferenssien muutoksesta.
+ * Ottaa snapshot muistissa olevista preferensseistä ennen kuuntelijoiden kutsumista
+ * — näin kuuntelija ei voi vahingossa muuttaa jaettua tilaa.
+ */
 function _notify() {
   const snapshot = { ..._prefs };
   _listeners.forEach(fn => fn(snapshot));
@@ -283,6 +311,9 @@ function _notify() {
 /**
  * Päivittää vanhan rakenteen uuteen skeemaan täyttämällä puuttuvat kentät.
  * Varmistaa taaksepäin yhteensopivuuden kun tietomalliin lisätään kenttiä.
+ *
+ * Esimerkki: jos käyttäjällä on tallennettu v0-rakenne ilman theme-kenttää,
+ * _migrate() lisää sen oletusarvolla ('system').
  *
  * @param {object} stored - localStorage:sta tai Firestoresta luettu raakaobjekti
  * @returns {typeof DEFAULT_PREFS}
