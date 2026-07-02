@@ -1,10 +1,22 @@
-# LICENSES.md — Uutisseuranta Frontend Avoimen Lähdekoodin Riippuvuudet
+# LICENSES.md — Uutisseuranta Frontend: Lisenssit ja ylläpito
 
-Tämä dokumentti listaa kaikki uutisseuranta-sovelluksen frontend-toteutuksessa käytetyt avoimen lähdekoodin kolmannen osapuolen ohjelmistokomponentit, niiden lisenssit, ylläpidon tilan sekä vastuutahot.
+Tämä dokumentti kattaa (1) uutisseuranta-sovelluksen oman lisenssin ja ylläpitäjän sekä (2) kaikki kolmannen osapuolen avoimen lähdekoodin riippuvuudet niiden lisensseineen.
 
 ---
 
-## Riippuvuustaulukko
+## Tämä ohjelmisto
+
+| | |
+|---|---|
+| **Ohjelmisto** | Uutisseuranta |
+| **Lisenssi** | MIT License |
+| **Tekijänoikeus** | © 2024– Jaakko Korhonen |
+| **Ylläpitäjä** | Jaakko Korhonen ([@jaakkokorhonen](https://github.com/jaakkokorhonen)) |
+| **Lisenssin kokonaisteksti** | [LICENSE](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/LICENSE) |
+
+---
+
+## Kolmannen osapuolen riippuvuudet
 
 | Komponentti | Lisenssi | Ylläpidon tila | Vastuutaho (Maa) |
 |---|---|---|---|
@@ -16,10 +28,13 @@ Tämä dokumentti listaa kaikki uutisseuranta-sovelluksen frontend-toteutuksessa
 
 ## Lisenssien kokonaistekstit
 
-### 1. SIL Open Font License 1.1 (OFL-1.1)
+### 1. MIT License
+Uutisseuranta-sovellus on lisensoitu MIT-lisenssillä. Ohjelmistoa saa käyttää, kopioida, muokata ja jakaa vapaasti, kunhan alkuperäinen tekijänoikeusilmoitus säilytetään.
+
+### 2. SIL Open Font License 1.1 (OFL-1.1)
 Comfortaa- ja Mulish-fontit on lisensoitu SIL Open Font License 1.1 -lisenssillä.
 Fontteja voidaan käyttää, muokata ja jakaa vapaasti osana ohjelmistoja, kunhan niitä ei myydä erikseen sellaisenaan.
 
-### 2. Apache License 2.0 (Apache-2.0)
+### 3. Apache License 2.0 (Apache-2.0)
 Firebase Web SDK on lisensoitu Apache License 2.0 -lisenssillä.
 Maksuton käyttö, jakelu ja muokkaaminen on sallittu. Alkuperäinen tekijänoikeusilmoitus on säilytettävä.

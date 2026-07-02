@@ -11,6 +11,7 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 
 | Päivämäärä | Päätös | Perustelu | Vaihtoehto jota harkittiin | Revisit-kriteeri | Issue |
 |---|---|---|---|---|---|
+| 2026-07-03 | Hybrid localStorage + Firestore preferensseille | localStorage: nopeus ja offline-tuki, UI piirtyy ilman verkkoviivettä. Firestore: kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset SSO-tunnuksen mukana kaikille laitteille. Pelkkä localStorage ei riitä monilaite-käyttöön; pelkkä Firestore olisi hidas. | Pelkkä localStorage (nopea mutta ei monilaite) / Pelkkä Firestore (monilaite mutta hidas) | Jos Firestore poistetaan käytöstä tai siirrytään toiseen backendiin | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
 | 2026-07-02 | SCREAMING_SNAKE_CASE sopimusdokumenteille | Yhtenäinen nimeäminen kaikkien repojen välillä; erottaa sopimukset ops-tiedostoista | kebab-case kaikille | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | Cross-repo -linkit absoluuttisina GitHub-URL:eina | Relatiiviset polut eivät toimi GitHubissa cross-repo | Relatiiviset polut | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | AS2-first, ei täyttä ActivityPub | ActivityPub vaatii Actor-endpointit ja federaation; AS2 riittää | Täysi ActivityPub | Jos tarvitaan federoitu verkosto | [#26](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/26) |
@@ -30,7 +31,7 @@ uutisseuranta/
 ├── index.html          ← pääsivu
 ├── style.css           ← kaikki tyylimäärittelyt
 ├── app.js              ← sovelluksen päälogiikka (ei-Firebase)
-├── prefs.js            ← preferenssien hallintamoduuli
+├── prefs.js            ← preferenssien hallintamoduuli (hybrid localStorage + Firestore)
 ├── profile.js          ← profiilimodaalimoduuli
 ├── live-smoke-test.sh  ← pipeline-testiskripti
 ├── firebase.json       ← Firebase-projektin konfiguraatio
@@ -85,12 +86,14 @@ Preferenssien tallennus on toteutettu kaksitasoisena:
 | Taso | Teknologia | Tarkoitus |
 |---|---|---|
 | 1. (nopea) | `localStorage` | Paikallinen välimuisti — UI piirtyy ilman verkkoviivettä, toimii offline |
-| 2. (kanoninen) | Firestore | Laitteiden välinen synkronointi kirjautuneille käyttäjille |
+| 2. (kanoninen) | Firestore | Laitteiden välinen synkronointi kirjautuneille käyttäjille SSO-tunnuksen mukana |
 
 - **Kirjautumaton käyttäjä:** vain `localStorage` (avain `prefs_anonymous`)
 - **Kirjautunut käyttäjä:** localStorage + Firestore molemmat
 - **Kirjoitusjärjestys:** ensin `localStorage` välittömästi → sitten Firestore 500 ms debounce-viiveellä
-- **Lukujärjestys käynnistyksessä:** ensin `localStorage` (synkroninen) → sitten Firestore (asynkroninen, korvaa jos uudempi)
+- **Lukujärjestys käynnistyksessä:** ensin `localStorage` (synkroninen, UI piirtyy heti) → sitten Firestore (asynkroninen, korvaa jos palvelimen tila on uudempi)
+
+Toteutus: `prefs.js`
 
 Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
 
@@ -100,6 +103,7 @@ Firebase SDK ladataan ES-moduuleina suoraan Googlen CDN:ltä ilman build-steppi�
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, ... } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js';
+  import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 </script>
 ```
 
@@ -160,7 +164,7 @@ Projektissa suositaan riippuvuuksien minimoimiseksi ja järjestelmän pitkäikä
 Tämä periaate vähentää ulkopuolisten kirjastojen ja build-työkalujen tarvetta ja pitää koodikannan helposti ylläpidettävänä.
 
 ### Luonnos-Pull Requestit (Draft PR) ja kysymykset kontekstissa
-Laajat tai monimutkaiset kokonaisuudet voidaan aloittaa avaamalla luonnos-Pull Request (Draft PR). 
+Laajat tai monimutkaiset kokonaisuudet voidaan aloittaa avaamalla luonnos-Pull Request (Draft PR).
 - PR voi aluksi olla toiminnallisesti tyhjä tai sisältää vain alustavan runkoehdotuksen.
 - Avoimet arkkitehtuurikysymykset ja toteutusvaihtoehdot kirjataan suoraan Pull Requestin kommenteiksi, jolloin niihin on helpompi vastata ja niistä voidaan keskustella suoraan koodikontekstissa ennen varsinaista toteutusta.
 
@@ -172,7 +176,7 @@ Laajat tai monimutkaiset kokonaisuudet voidaan aloittaa avaamalla luonnos-Pull R
 
 ## Muutosten tekeminen
 
-Kaikki muutokset tehdään **pull requestina**. Suora push `main`-haaraa on sallittu vain dokumentaatiomuutoksille.
+Kaikki muutokset tehdään **pull requestina**. Suora push `main`-haaraan on sallittu vain dokumentaatiomuutoksille.
 
 PR:n otsikko noudattaa [Conventional Commits](https://www.conventionalcommits.org/) -käytäntöä:
 - `feat:` — uusi ominaisuus
