@@ -14,6 +14,7 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 | 2026-07-03 | Hybrid localStorage + Firestore preferensseille | localStorage: nopeus ja offline-tuki, UI piirtyy ilman verkkoviivettä. Firestore: kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset SSO-tunnuksen mukana kaikille laitteille. Pelkkä localStorage ei riitä monilaite-käyttöön; pelkkä Firestore olisi hidas. | Pelkkä localStorage (nopea mutta ei monilaite) / Pelkkä Firestore (monilaite mutta hidas) | Jos Firestore poistetaan käytöstä tai siirrytään toiseen backendiin | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
 | 2026-07-03 | Firebase SDK versio pinnattu `10.12.0`, SRI ei käytössä (tietoinen päätös) | Googlen CDN on luotettu lähde; SRI-hashin ylläpito jokaisen SDK-päivityksen yhteydessä lisää operatiivista taakkaa. Hyväksytty riski tässä vaiheessa. | SRI-hash käytössä | Jos projekti kasvaa tai tietoturvavaatimukset tiukkenevat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
 | 2026-07-03 | Analytics käytössä vain suostumuksen jälkeen (Google Consent Mode v2) | EU ePrivacy + GDPR vaatii suostumuksen ennen analytiikkaa | Analytics aina päällä | Jos lainsäädäntövaatimukset muuttuvat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
+| 2026-07-03 | `enableIndexedDbPersistence` → tullaan siirtymään `initializeFirestore` + `persistentLocalCache` | `enableIndexedDbPersistence` on merkitty `@deprecated` Firebase SDK 10.x:ssä. Toimii vielä, mutta migraatio tehdään iteraatio 3:ssa. | Jatketaan `enableIndexedDbPersistence`:lla | SDK 10.x EOL tai breaking change | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
 | 2026-07-02 | SCREAMING_SNAKE_CASE sopimusdokumenteille | Yhtenäinen nimeäminen kaikkien repojen välillä; erottaa sopimukset ops-tiedostoista | kebab-case kaikille | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | Cross-repo -linkit absoluuttisina GitHub-URL:eina | Relatiiviset polut eivät toimi GitHubissa cross-repo | Relatiiviset polut | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | AS2-first, ei täyttä ActivityPub | ActivityPub vaatii Actor-endpointit ja federaation; AS2 riittää | Täysi ActivityPub | Jos tarvitaan federoitu verkosto | [#26](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/26) |
@@ -109,7 +110,11 @@ Preferenssien tallennus on toteutettu kaksitasoisena:
 - **Kirjautunut käyttäjä:** localStorage + Firestore molemmat
 - **Kirjoitusjärjestys:** ensin `localStorage` välittömästi → sitten Firestore 500 ms debounce-viiveellä
 - **Lukujärjestys käynnistyksessä:** ensin `localStorage` (synkroninen, UI piirtyy heti) → sitten Firestore (asynkroninen, korvaa jos palvelimen tila on uudempi)
-- **PWA-käyttö:** Firestore `enableIndexedDbPersistence` mahdollistaa preferenssien luvun ja kirjoituksen myös offline-tilassa. Service Worker huolehtii staattisista resursseista; `prefs.js` huolehtii datan offline-pysyvyydestä. Yhdessä ne muodostavat täyden PWA-offline-kokemuksen.
+- **PWA-käyttö:** Firestore IndexedDB-persistointi mahdollistaa preferenssien luvun ja kirjoituksen myös offline-tilassa. Service Worker huolehtii staattisista resursseista; `prefs.js` huolehtii datan offline-pysyvyydestä. Yhdessä ne muodostavat täyden PWA-offline-kokemuksen.
+
+> **⚠️ Deprecaatiohuomio:** `enableIndexedDbPersistence()` on merkitty `@deprecated` Firebase SDK 10.x:ssä.
+> Suositeltava korvaaja on `initializeFirestore(app, { localCache: persistentLocalCache() })`.
+> Migraatio on suunniteltu iteraatio 3:een — tähän asti toiminnallisuus säilyy ennallaan.
 
 Toteutus: `prefs.js`
 
@@ -123,6 +128,7 @@ Seuraavat edge caset on käsitelty eksplisiittisesti `prefs.js`:ssä:
 | Käyttäjä on offline, yritetään kirjoittaa preferenssejä | `localStorage` kirjoitetaan välittömästi; Firestore-kirjoitus jonottuu IndexedDB:hen ja synkronoidaan kun yhteys palautuu |
 | `localStorage` on täynnä tai yksityistila estää kirjoittamisen | `_writeLocal()` epäonnistuu hiljaisesti (try/catch ilman `console.error`) — UI toimii muistissa olevilla arvoilla |
 | Firebase SDK:n lataus epäonnistuu (CDN-häiriö) | Sivusto latautuu ilman Firebase-toimintoja; kirjautuminen ei onnistu mutta staattinen sisältö toimii normaalisti |
+| `followedTags` on väärää tyyppiä (esim. merkkijono JSON-korruption vuoksi) | `_migrate()` normalisoi arvon taulukoksi — `followTag()` / `unfollowTag()` eivät hajoa |
 
 Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
 
@@ -190,7 +196,10 @@ gtag('consent', 'default', {
 });
 ```
 
-> **Huom:** Suostumusmekanismin UI-toteutus on osa iteraatio 3:n laajuutta. Iteraatio 2:ssa Analytics on käytössä ilman consent-banneria. Riski kirjattu tähän tietoisena välivaiheena.
+> **⚠️ Tietoinen välivaihe — ePrivacy-riski:** Suostumusmekanismin UI-toteutus on osa iteraatio 3:n laajuutta.
+> Iteraatio 2:ssa Analytics on käytössä ilman consent-banneria — tämä tarkoittaa, että ePrivacy-direktiiviä
+> rikotaan heti kun ensimmäinen EU-käyttäjä lataa sivun. Riski on hyväksytty tietoisesti koska tuotanto ei
+> ole vielä julkinen laajalle yleisölle. **Revisit-kriteeri: ennen julkista lanseerausta.**
 
 ---
 
