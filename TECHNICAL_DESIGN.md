@@ -72,13 +72,14 @@ Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemi
 
 ## Firebase-rajaus
 
-Firebase-SDK:ta käytetään **ainoastaan** kolmessa tarkoituksessa:
+Firebase-SDK:ta käytetään **ainoastaan** kahdessa tarkoituksessa:
 
 1. **Authentication** (`firebase-auth`) — Google Sign-In, kirjautumistilan seuranta, uloskirjautuminen.
 2. **Analytics** (`firebase-analytics`) — automaattinen käyttödatan keruu, linkitetty GA4-propertyyn.
-3. **Database** (`firebase-firestore`) — käyttäjäpreferenssien (seuratut tagit) synkronointi laitteiden välillä offline-tuella.
 
-Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting, funktiot jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
+Kaikki sovelluksen tilan persistointi (kuten käyttäjän teema-asetukset, seuratut tagit ja luetut uutiset) toteutetaan **paikallisesti selaimen `localStorage`-rajapinnan avulla** arkkitehtuuripäätöksen mukaisesti (ei Firestore-tietokantaa).
+
+Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
 
 Firebase SDK ladataan ES-moduuleina suoraan Googlen CDN:ltä ilman build-steppiä:
 ```html
@@ -86,7 +87,6 @@ Firebase SDK ladataan ES-moduuleina suoraan Googlen CDN:ltä ilman build-steppi�
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, ... } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js';
-  import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 </script>
 ```
 
@@ -137,9 +137,25 @@ CSP määritellään `<meta http-equiv="Content-Security-Policy">`-tagilla `inde
 
 ---
 
+## Suunnittelu- ja kehityskäytännöt
+
+### Teknologiavalintojen ensisijaisuusperiaate
+Projektissa suositaan riippuvuuksien minimoimiseksi ja järjestelmän pitkäikäisyyden takaamiseksi seuraavaa järjestystä teknologiavalinnoissa:
+1. **Ensisijaisesti:** Avoimet standardit (kuten ActivityStreams 2.0, WCAG 2.1 AA, standardit web-rajapinnat).
+2. **Toissijaisesti:** Standardoidut, de facto standardoidut tai puhtaat "vanilla"-teknologiat (kuten Vanilla JS, Vanilla CSS, `localStorage`, natiivi selainpersistointi).
+
+Tämä periaate vähentää ulkopuolisten kirjastojen ja build-työkalujen tarvetta ja pitää koodikannan helposti ylläpidettävänä.
+
+### Luonnos-Pull Requestit (Draft PR) ja kysymykset kontekstissa
+Laajat tai monimutkaiset kokonaisuudet voidaan aloittaa avaamalla luonnos-Pull Request (Draft PR). 
+- PR voi aluksi olla toiminnallisesti tyhjä tai sisältää vain alustavan runkoehdotuksen.
+- Avoimet arkkitehtuurikysymykset ja toteutusvaihtoehdot kirjataan suoraan Pull Requestin kommenteiksi, jolloin niihin on helpompi vastata ja niistä voidaan keskustella suoraan koodikontekstissa ennen varsinaista toteutusta.
+
+---
+
 ## Muutosten tekeminen
 
-Kaikki muutokset tehdään **pull requestina**. Suora push `main`-haaraan on sallittu vain dokumentaatiomuutoksille.
+Kaikki muutokset tehdään **pull requestina**. Suora push `main`-haaraa on sallittu vain dokumentaatiomuutoksille.
 
 PR:n otsikko noudattaa [Conventional Commits](https://www.conventionalcommits.org/) -käytäntöä:
 - `feat:` — uusi ominaisuus
