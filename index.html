@@ -201,7 +201,7 @@
     FIREBASE – KÄYTTÖRAJAUS
     =========================================================
     Tässä projektissa Firebase-SDK:ta käytetään AINOASTAAN
-    kahteen tarkoitukseen:
+    kolmeen tarkoitukseen:
 
       1. Authentication (firebase-auth)
          – Google Sign-In -kirjautuminen (signInWithPopup)
@@ -214,9 +214,11 @@
          – Linkitetty Google Analytics 4 -propertyyn
            (measurementId: G-9J9T62LY57)
 
-    Käyttäjäpreferenssit (seuratut tagit, teema) tallennetaan
-    paikallisesti selaimen localStorage:hen (arkkitehtuuripäätös).
-    Firestore-synkronointia ei käytetä.
+      3. Database (firebase-firestore)
+         – Kirjautuneen käyttäjän asetusten (seuratut tagit,
+           teema) synkronointi laitteiden välillä
+         – localStorage toimii nopeana paikallisena välimuistina
+           (UI piirtyy heti), Firestore on kanoninen lähde
 
     Kaikki muu toiminnallisuus (uutisten haku, tallennus,
     hosting jne.) toteutetaan muilla teknologioilla,

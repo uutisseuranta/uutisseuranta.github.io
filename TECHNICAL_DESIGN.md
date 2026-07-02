@@ -72,12 +72,25 @@ Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemi
 
 ## Firebase-rajaus
 
-Firebase-SDK:ta käytetään **ainoastaan** kahdessa tarkoituksessa:
+Firebase-SDK:ta käytetään **ainoastaan** kolmessa tarkoituksessa:
 
 1. **Authentication** (`firebase-auth`) — Google Sign-In, kirjautumistilan seuranta, uloskirjautuminen.
 2. **Analytics** (`firebase-analytics`) — automaattinen käyttödatan keruu, linkitetty GA4-propertyyn.
+3. **Database** (`firebase-firestore`) — kirjautuneen käyttäjän asetusten (seuratut tagit, teema) synkronointi laitteiden välillä.
 
-Kaikki sovelluksen tilan persistointi (kuten käyttäjän teema-asetukset, seuratut tagit ja luetut uutiset) toteutetaan **paikallisesti selaimen `localStorage`-rajapinnan avulla** arkkitehtuuripäätöksen mukaisesti (ei Firestore-tietokantaa).
+### Persistointimalli: Hybrid localStorage + Firestore
+
+Preferenssien tallennus on toteutettu kaksitasoisena:
+
+| Taso | Teknologia | Tarkoitus |
+|---|---|---|
+| 1. (nopea) | `localStorage` | Paikallinen välimuisti — UI piirtyy ilman verkkoviivettä, toimii offline |
+| 2. (kanoninen) | Firestore | Laitteiden välinen synkronointi kirjautuneille käyttäjille |
+
+- **Kirjautumaton käyttäjä:** vain `localStorage` (avain `prefs_anonymous`)
+- **Kirjautunut käyttäjä:** localStorage + Firestore molemmat
+- **Kirjoitusjärjestys:** ensin `localStorage` välittömästi → sitten Firestore 500 ms debounce-viiveellä
+- **Lukujärjestys käynnistyksessä:** ensin `localStorage` (synkroninen) → sitten Firestore (asynkroninen, korvaa jos uudempi)
 
 Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
 
