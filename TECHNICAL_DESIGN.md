@@ -1,0 +1,149 @@
+# TECHNICAL_DESIGN.md — Uutisseuranta tekniset linjaukset
+
+> **TECHNICAL_DESIGN.md** sisältää miten normatiiviset vaatimukset toteutetaan
+> tässä projektissa. Ulkoiset normatiiviset vaatimukset ovat STANDARDS.md:ssä.
+
+Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuuripäätökset. Kaikki uudet ominaisuudet ja muutokset noudattavat näitä periaatteita, ellei yksittäisestä poikkeuksesta erikseen päätetä.
+
+---
+
+## Muutoshistoria
+
+| Päivämäärä | Päätös | Perustelu | Vaihtoehto jota harkittiin | Revisit-kriteeri | Issue |
+|---|---|---|---|---|---|
+| 2026-07-02 | SCREAMING_SNAKE_CASE sopimusdokumenteille | Yhtenäinen nimeäminen kaikkien repojen välillä; erottaa sopimukset ops-tiedostoista | kebab-case kaikille | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
+| 2026-07-02 | Cross-repo -linkit absoluuttisina GitHub-URL:eina | Relatiiviset polut eivät toimi GitHubissa cross-repo | Relatiiviset polut | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
+| 2026-07-02 | AS2-first, ei täyttä ActivityPub | ActivityPub vaatii Actor-endpointit ja federaation; AS2 riittää | Täysi ActivityPub | Jos tarvitaan federoitu verkosto | [#26](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/26) |
+| 2026-07-02 | Ei audience targeting -kenttiä | Kaikki objektit julkisia; kentät lisäisivät monimutkaisuutta ilman hyötyä | to/cc/bcc-kentät | Jos tarvitaan kohdennettua jakelua | [#26](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/26) |
+
+---
+
+## Tiedostorakenne
+
+Kaikki tiedostot sijaitsevat repositorion **juurihakemistossa**. Alikansioita ei käytetä (poikkeuksena `.github/workflows/`-hakemisto työnkulkujen määrittelyyn). GitHub Pages deployaa suoraan rootista.
+
+```
+uutisseuranta/
+├── .github/
+│   └── workflows/
+│       └── post-deploy-test.yml
+├── index.html          ← pääsivu
+├── style.css           ← kaikki tyylimäärittelyt
+├── app.js              ← sovelluksen päälogiikka (ei-Firebase)
+├── prefs.js            ← preferenssien hallintamoduuli
+├── profile.js          ← profiilimodaalimoduuli
+├── live-smoke-test.sh  ← pipeline-testiskripti
+├── firebase.json       ← Firebase-projektin konfiguraatio
+├── TECHNICAL_DESIGN.md ← tämä dokumentti
+└── patterns.md         ← D-CENT-komponentit
+```
+
+Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemistoa. Sivusto on suoraan selaimessa ajettavaa HTML/CSS/JS:ää.
+
+**Dokumentaatiotiedostot sijaitsevat juuressa** – ei `docs/`-alikansioita. Kaikki `.md`-tiedostot ovat repositorion juuressa.
+
+---
+
+## Teknologiavalinnat
+
+### Sallitut teknologiat
+
+| Kerros | Teknologia | Perustelu |
+|---|---|---|
+| Rakenne | HTML5, semanttiset elementit | Standardi, ei riippuvuuksia |
+| Tyyli | CSS (vanilla), CSS-muuttujat, `clamp()` | Standardi, ei preprosessoria |
+| Logiikka | JavaScript (vanilla ES-moduulit) | Standardi, ei frameworkia |
+| Autentikointi | Firebase Authentication | Ks. Firebase-rajaus |
+| Analytiikka | Firebase Analytics + GA4 | Ks. Firebase-rajaus |
+| Fontit | Järjestelmäfonttipino tai `@font-face` + `local()` | Ei CDN-riippuvuuksia, avoimen standardin ratkaisu |
+| Testit | Bash + `curl` + standardit Unix-työkalut | Ks. Testausstrategia |
+
+### Kielletyt teknologiat
+
+- **Testausframeworkit** (Playwright, Puppeteer, Jest, Vitest, Cypress, tms.) — ei käytetä koskaan. Testit kirjoitetaan vanilla Bash/curl-pohjaisesti avoimen standardin työkaluilla.
+- **JavaScript-frameworkit** (React, Vue, Angular, Svelte, tms.) — ei tarvita staattiselle sivulle.
+- **CSS-preprosessorit** (Sass, Less, PostCSS) — moderni vanilla CSS riittää.
+- **Build-työkalut** (Webpack, Vite, Rollup, Parcel, tms.) — ei build-steppiä.
+- **Erillinen monitorointipalvelu** (Datadog, Sentry, tms.) — laatu varmistetaan pipelinessa ennen tuotantoa.
+- **PR preview -ympäristöt** (Netlify, Cloudflare Pages, tms.) — pipeline testaa ennen mergeä, erillisiä preview-ympäristöjä ei tarvita.
+- **Ulkoiset fontti-CDN:t** (Google Fonts, Fontshare, Adobe Fonts, tms.) — fonttilatauksista ei saa syntyä kolmannen osapuolen verkkopyyntöjä.
+
+---
+
+## Firebase-rajaus
+
+Firebase-SDK:ta käytetään **ainoastaan** kolmessa tarkoituksessa:
+
+1. **Authentication** (`firebase-auth`) — Google Sign-In, kirjautumistilan seuranta, uloskirjautuminen.
+2. **Analytics** (`firebase-analytics`) — automaattinen käyttödatan keruu, linkitetty GA4-propertyyn.
+3. **Database** (`firebase-firestore`) — käyttäjäpreferenssien (seuratut tagit) synkronointi laitteiden välillä offline-tuella.
+
+Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting, funktiot jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
+
+Firebase SDK ladataan ES-moduuleina suoraan Googlen CDN:ltä ilman build-steppiä:
+```html
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, ... } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js';
+  import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+</script>
+```
+
+---
+
+## Testausstrategia
+
+### Periaatteet
+
+- **Kaikki testaus tapahtuu CI/CD-pipelinessa.** Ei erillistä monitorointia tuotannossa, ei erillisiä testiympäristöjä.
+- **Testit kirjoitetaan vanilla Bash + `curl` + standardit Unix-työkalut.** Ei testausframeworkeja koskaan.
+- **Pipeline on portti tuotantoon.** Kaikki testit ajetaan ennen tai välittömästi deployn jälkeen.
+- **Yksinkertaisuus ennen kattavuutta.** Yksi luotettava smoke-testi on parempi kuin kymmenen haurasta yksikkötestiä.
+
+### Pipeline-rakenne
+
+```
+push → main
+  └─ GitHub Pages deploy (automaattinen)
+       └─ Odota deployn valmistuminen (Pages API -pollaus)
+            └─ Aja live-smoke-test.sh
+                 ├─ OK  → sivu on tuotannossa
+                 └─ ERR → GitHub Actions -ilmoitus, korjaa ja pushaa uudelleen
+```
+
+---
+
+## Deployment
+
+Sivusto deployataan **GitHub Pagesille** suoraan `main`-haarasta. Deploy tapahtuu automaattisesti jokaisen `main`-pushin jälkeen.
+
+- Tuotanto-URL: `https://uutisseuranta.net`
+- GitHub Pages -URL: `https://jaakkokorhonen.github.io/uutisseuranta`
+
+Ei Netlifyä, ei Cloudflare Pagesia, ei muita hostingpalveluja.
+
+---
+
+## Turvallisuus
+
+### Firebase Web API -avain on tarkoituksellisesti julkinen
+
+Firebase Web API -avain näkyy `index.html`:ssä selkotekstinä. Tämä on tietoinen päätös — Google dokumentoi eksplisiittisesti, että avain on tarkoitettu julkiseksi. Turvallisuus varmistetaan Firebase-projektin puolella (Authorized Domains, Security Rules).
+
+### Content Security Policy
+
+CSP määritellään `<meta http-equiv="Content-Security-Policy">`-tagilla `index.html`:ssä rajoittamaan sallitut skriptilähteet.
+
+---
+
+## Muutosten tekeminen
+
+Kaikki muutokset tehdään **pull requestina**. Suora push `main`-haaraan on sallittu vain dokumentaatiomuutoksille.
+
+PR:n otsikko noudattaa [Conventional Commits](https://www.conventionalcommits.org/) -käytäntöä:
+- `feat:` — uusi ominaisuus
+- `fix:` — bugikorjaus
+- `docs:` — dokumentaatiomuutos
+- `refactor:` — koodin rakennemuutos ilman toiminnallisuusmuutosta
+- `chore:` — ylläpito (riippuvuudet, konfiguraatio)
