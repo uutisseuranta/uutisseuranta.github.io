@@ -20,7 +20,7 @@ uutisseuranta/
 ├── profile.js          ← profiilimodaalimoduuli
 ├── live-smoke-test.sh  ← pipeline-testiskripti
 ├── firebase.json       ← Firebase-projektin konfiguraatio
-├── ARCHITECTURE.md     ← tämä dokumentti
+├── TECHNICAL_DESIGN.md ← tämä dokumentti
 └── patterns.md         ← D-CENT-komponentit
 ```
 
@@ -233,6 +233,22 @@ Palvelinpuolen avaimet (Firebase Admin SDK service account, kolmansien osapuolte
 ### Content Security Policy
 
 CSP määritellään `<meta http-equiv="Content-Security-Policy">`-tagilla `index.html`:ssä rajoittamaan sallitut skriptilähteet.
+
+---
+
+## Release-prosessi ja automaatio
+
+Kaikki käyttöliittymän muutokset ja julkaisut viedään läpi täysin automatisoidun julkaisuprosessin (release-prosessi) kautta. Ylläpito (ops) ei tee manuaalisia muutoksia palvelinympäristöön tai GitHub Pages -asetuksiin.
+
+### CI/CD-työnkulku (GitHub Actions)
+
+1. **Kehitys ja testaus:** 
+   - Muutokset kehitetään omassa haarassa ja integroidaan `main`-haaraan Pull Requestin kautta.
+2. **Automaattinen julkaisu (Deploy):**
+   - Push `main`-haaraan käynnistää automaattisen julkaisun GitHub Pagesiin (`pages build and deployment` workflow).
+   - Työnkulku tarkistaa koodin oikeellisuuden ja siirtää staattiset tiedostot (`index.html`, `style.css`, `app.js`, `prefs.js`, `profile.js`) tuotantoympäristöön `https://uutisseuranta.github.io/`.
+3. **Julkaisun jälkeinen laadunvarmistus (Post-deploy smoke tests):**
+   - Heti onnistuneen deployn jälkeen käynnistyy `post-deploy-test.yml`-työnkulku, joka ajaa `/live-smoke-test.sh`-savutestin tuotanto-URL-osoitetta vasten. Testi varmistaa sivuston latautuvan oikein ja vastaavan HTTP 200 OK -tilakoodilla.
 
 ---
 
