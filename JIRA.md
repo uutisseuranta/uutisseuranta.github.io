@@ -13,7 +13,7 @@ GitHub Actions (jira-webhook-relay.yml)
       ↓  POST + X-Automation-Webhook-Token header
 Jira Automation Incoming Webhook
       ↓
-Create Work Item (Jira)
+Create / transition / comment work item (Jira)
 ```
 
 Workflow on tallennettu: `.github/workflows/jira-webhook-relay.yml`
@@ -62,13 +62,61 @@ Workflow on tallennettu: `.github/workflows/jira-webhook-relay.yml`
 
 ---
 
-## Sääntö 2: GitHub issue closed → Sulje Jira-tiketti (TODO)
+## JSON import -huomiot ✅
 
-## Sääntö 3: GitHub issue reopened → Avaa Jira-tiketti uudelleen (TODO)
+Jira hyväksyy vain JSONin, joka vastaa **Export rules** -rakennetta.
 
-## Sääntö 4: GitHub issue labeled → Lisää label Jira-tikettiin (TODO)
+### Havaittu virhe
 
-## Sääntö 5: GitHub issue comment → Lisää kommentti Jira-tikettiin (TODO)
+Aiempi import epäonnistui virheellä:
+
+```text
+IllegalStateException: Component for type ComponentTypeKey{component=CONDITION, type='jira.condition.webhook.compare'} no longer exists.
+```
+
+### Johtopäätös
+
+`jira.condition.webhook.compare` **ei ole enää tuettu importattava komponenttityyppi**.
+
+### Korjaus
+
+Sääntöjen JSON-versiossa käytetään sen sijaan ehtona:
+
+- `jira.condition.if`
+
+eli triggeriin ei lisätä webhook-specific compare-conditioneja.
+
+---
+
+## Sääntö 2: GitHub issue closed → Sulje Jira-tiketti (JSON v2 valmis)
+
+Toteutuslogiikka:
+
+1. Incoming webhook
+2. If `{{webhookData.action}} == closed`
+3. Lookup JQL: `project = US AND cf[10072] = {{webhookData.issue.number}}`
+4. Transition: `Done`
+
+## Sääntö 3: GitHub issue reopened → Avaa Jira-tiketti uudelleen (JSON v2 valmis)
+
+1. Incoming webhook
+2. If `{{webhookData.action}} == reopened`
+3. Lookup JQL: `project = US AND cf[10072] = {{webhookData.issue.number}}`
+4. Transition: `To Do`
+
+## Sääntö 4: GitHub issue labeled → Lisää label Jira-tikettiin (JSON v2 valmis, testattava)
+
+1. Incoming webhook
+2. If `{{webhookData.action}} == labeled`
+3. Lookup JQL
+4. Edit issue → add label `{{webhookData.label.name}}`
+
+## Sääntö 5: GitHub issue comment → Lisää kommentti Jira-tikettiin (JSON v2 valmis)
+
+1. Incoming webhook
+2. If `{{webhookData.action}} == created`
+3. Lookup JQL
+4. Add comment with GitHub käyttäjä + kommenttilinkki
 
 ## Sääntö 6: Jira status muutos → Päivitä GitHub issue (TODO)
 
@@ -131,3 +179,4 @@ curl -X POST \
 | `No issues from the webhook` | Trigger-asetus väärä | Vaihda "No work items from the webhook" |
 | `The project or issue type wasn't set` | Space/issuetype "Copy from trigger" | Aseta kiinteät arvot dropdownista |
 | `Fields ignored: customfield_...` | Kenttä ei ole projektissa | Lisää kenttä Project settings → Fields |
+| `Component ... no longer exists` | JSON sisältää vanhan/poistetun component type:n | Käytä export-rakennetta ja `jira.condition.if` |
