@@ -20,7 +20,9 @@ Workflow on tallennettu: `.github/workflows/jira-webhook-relay.yml`
 
 ---
 
-## Jira Automation — Sääntö 1: GitHub issue opened → Luo Jira-tiketti
+## Sääntö 1: GitHub issue opened → Luo Jira-tiketti ✅
+
+**Tila:** TOIMII — tiketti US-6 luotu onnistuneesti 3.7.2026
 
 ### Webhook-endpoint
 
@@ -36,27 +38,32 @@ Token: 4aed5c2e19b6532368342c136e1f7211ce709f50 (X-Automation-Webhook-Token head
 | Tyyppi | Incoming webhook |
 | Work item criteria | **No work items from the webhook** |
 
-> ⚠️ **Tärkeää:** Valitse "No work items from the webhook" — ei "Issues provided in webhook body".
+> ⚠️ Valitse "No work items from the webhook" — ei "Issues provided in webhook body".
 > "Issues provided" odottaa Jira-issuen keyä payloadissa, mutta tässä luodaan
 > uusi issue GitHub-datasta.
 
-### Create Work Item -toiminto
+### Create work item -toiminto
 
 | Kenttä | Arvo | Huomio |
 |--------|------|--------|
-| Project | `US` (kiinteä) | **Ei** "Copy from trigger" |
-| Work item type | `Task` (kiinteä) | **Ei** "Copy from trigger" |
+| Space | `Uutisseuranta (US)` (kiinteä) | **Ei** "Copy from trigger" |
+| Issue type | `Story` (kiinteä) | **Ei** "Copy from trigger" |
 | Summary | `{{webhookData.issue.title}}` | GitHub-issuen otsikko |
 | Description | `{{webhookData.issue.body}}` | GitHub-issuen kuvaus |
-| customfield_10071 | `{{webhookData.repository.name}}` | Repon nimi |
-| customfield_10072 | `{{webhookData.issue.number}}` | GitHub issue numero |
-| customfield_10073 | `{{webhookData.issue.html_url}}` | GitHub issue URL |
 
-> ⚠️ **"The project or issue type wasn't set" -virhe** syntyy jos Project tai
-> Work item type on asetettu "Copy from trigger" -tilaan. Vaihda molemmat
-> kiinteiksi arvoiksi dropdown-valikosta.
+### Custom fields (TODO)
 
-### Advanced fields (JSON)
+Kentät customfield_10071, customfield_10072, customfield_10073 eivät ole
+vielä käytössä projektissa — Jira ohittaa ne varoituksella:
+`"The set fields may be unavailable for this project/type. Fields ignored"`
+
+Näiden lisäämiseksi:
+1. Jira → Project settings → Fields
+2. Lisää kentät: `github_repo`, `github_issue_number`, `github_issue_url`
+3. Selvitä oikeat customfield-ID:t (voi vaihdella instanssista)
+4. Päivitä Advanced fields -JSON säännössä
+
+### Advanced fields (JSON) — kun customfieldit on lisätty
 
 ```json
 {
@@ -93,11 +100,11 @@ jobs:
           JIRA_WEBHOOK_TOKEN: 4aed5c2e19b6532368342c136e1f7211ce709f50
           JIRA_WEBHOOK_URL: https://api-private.atlassian.com/automation/webhooks/jira/a/042ceae5-c99b-4174-9d44-46a2d26e9c05/019f288b-703a-7e52-bd20-d9cb4f5cb560
         run: |
-          echo '${{ toJson(github.event) }}' | \\
-          curl -X POST \\
-            "$JIRA_WEBHOOK_URL" \\
-            -H "Content-Type: application/json" \\
-            -H "X-Automation-Webhook-Token: $JIRA_WEBHOOK_TOKEN" \\
+          echo '${{ toJson(github.event) }}' | \
+          curl -X POST \
+            "$JIRA_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Automation-Webhook-Token: $JIRA_WEBHOOK_TOKEN" \
             --data-binary @-
 ```
 
@@ -108,7 +115,6 @@ jobs:
 ### Curl-testi manuaalisesti
 
 ```bash
-# Testaa että Jira vastaanottaa webhookin (pitää palauttaa HTTP 200)
 curl -X POST \
   "https://api-private.atlassian.com/automation/webhooks/jira/a/042ceae5-c99b-4174-9d44-46a2d26e9c05/019f288b-703a-7e52-bd20-d9cb4f5cb560" \
   -H "Content-Type: application/json" \
@@ -122,20 +128,14 @@ curl -X POST \
 |-------|-----|--------|
 | `Missing token` (400) | Token query-parametrina eikä headerissa | Käytä `X-Automation-Webhook-Token` headeria |
 | `No issues from the webhook` | Trigger-asetus väärä | Vaihda "No work items from the webhook" |
-| `The project or issue type wasn't set` | Project/issuetype "Copy from trigger" | Aseta kiinteät arvot dropdownista |
-
-### Audit log
-
-Jira Automation audit log:
-`Project settings → Automation → Audit log`
-
-Klikkaa yksittäinen suoritus auki nähdäksesi tarkan virheen triggerin ja
-jokaisen toiminnon tasolla.
+| `The project or issue type wasn't set` | Space/issuetype "Copy from trigger" | Aseta kiinteät arvot dropdownista |
+| `Fields ignored: customfield_...` | Kenttä ei ole projektissa | Lisää kenttä Project settings → Fields |
 
 ---
 
 ## Seuraavat säännöt (TODO)
 
+- [x] Sääntö 1: GitHub issue opened → Luo Jira-tiketti ✅
 - [ ] Sääntö 2: GitHub issue closed → Sulje Jira-tiketti
 - [ ] Sääntö 3: GitHub issue reopened → Avaa Jira-tiketti uudelleen
 - [ ] Sääntö 4: GitHub issue labeled → Lisää label Jira-tikettiin
