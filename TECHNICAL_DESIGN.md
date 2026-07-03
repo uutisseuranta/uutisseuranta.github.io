@@ -40,7 +40,7 @@ uutisseuranta/
 ├── live-smoke-test.sh  ← pipeline-testiskripti
 ├── firebase.json       ← Firebase-projektin konfiguraatio
 ├── TECHNICAL_DESIGN.md ← tämä dokumentti
-└── patterns.md         ← D-CENT UI -komponenttikuvaukset (viittaa patterns-repoon)
+└── patterns.md         ← UI-komponenttikuvaukset (viittaa patterns-repoon)
 ```
 
 Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemistoa. Sivusto on suoraan selaimessa ajettavaa HTML/CSS/JS:ää.
@@ -60,7 +60,7 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 
 ### `patterns.md` — mikä se on?
 
-`patterns.md` on luettelo D-CENT UI -komponenteista, joita tämä sovellus kuluttaa [`patterns`-reposta](https://github.com/uutisseuranta/patterns). Se dokumentoi minkä komponenttien CSS-luokat ovat käytössä tässä sovelluksessa ja mistä ne ladataan. Se ei ole normatiivinen määrittely — normatiivinen määrittely on `patterns`-repon `TECHNICAL_DESIGN.md`:ssä.
+`patterns.md` on luettelo UI-komponenteista, joita tämä sovellus kuluttaa [`patterns`-reposta](https://github.com/uutisseuranta/patterns). Se dokumentoi minkä komponenttien CSS-luokat ovat käytössä tässä sovelluksessa ja mistä ne ladataan. Se ei ole normatiivinen määrittely — normatiivinen määrittely on `patterns`-repon `TECHNICAL_DESIGN.md`:ssä.
 
 ---
 
@@ -341,7 +341,7 @@ def query_activities(actor: str = None, object_id: str = None) -> list:
 
 ---
 
-### Bash (`live-smoke-test.sh`, `rss_fetch_job.sh`, `unit-test.sh`, `lib/fetch_helpers.sh`)
+### Bash (`live-smoke-test.sh`, `rss_fetch_job.sh`, `unit-test.sh`, `fetch_helpers.sh`)
 
 Käytetään `#`-rivikommentteja.
 
@@ -391,7 +391,7 @@ Seuraavat kommentit ovat kiellettyjä kaikissa kielissä, koska ne lisäävät m
 | Päivämäärä- tai tekijämerkinnät | Kuuluu git blame:lle | `// Muutettu 2026-07-03 jaakko` |
 | Tautologiset osiokommentit | Nimi ei kerro mitään | `/* Functions */`, `/* Variables */` |
 
-**TODO-merkinnät** kirjoitetaan aina tikettinumerolla: `// TODO [#27]: siirrä lib/fetch_helpers.sh`
+**TODO-merkinnät** kirjoitetaan aina tikettinumerolla: `// TODO [#27]: siirrä fetch_helpers.sh`
 
 ---
 
@@ -433,23 +433,23 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 
 ### Iteraatio 3 — Scope
 
-> **Suunniteltu:** 2026-07-03 | **Arviointijakso:** 2026-07-03 – 2026-07-17
+> **Suunniteltu:** 2026-07-03
 
 #### Teema 1: Rajapintaintegraatio ja dynaaminen uutisvirta (Core MVP)
 
 | # | Repo | Tiketti | Kuvaus |
 |---|---|---|---|
-| 1 | `uutisseuranta.github.io` | [#12](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/12) | Uutisten dynaaminen tulostaminen etusivulle — Activity Streams 2.0 -formaatissa BigQuerystä haettu uutisvirta renderoidaan frontend-sivulle |
+| 1 | `uutisseuranta.github.io` | [#12](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/12) | Uutisten dynaaminen tulostaminen etusivulle — Activity Streams 2.0 -formaatissa `query-api`-palvelun kautta haettu uutisvirta renderoidaan frontend-sivulle |
 | 2 | `patterns` | [#24](https://github.com/uutisseuranta/patterns/issues/24) | Vaihe 2 — Molecules + Organisms: lisää komponentit index.html-visualisointiin |
-| 3 | `patterns` | [#40](https://github.com/uutisseuranta/patterns/issues/40) | feat: lisää AS2 `@context` ja `id` semanttiset `data-*`-attribuutit artikkelikortille (JavaScript lukee `dataset.as2Id` käyttäjäinteraktioihin) |
+| 3 | `patterns` | [#40](https://github.com/uutisseuranta/patterns/issues/40) | feat: lisää AS2 `@context` ja `id` semanttiset `data-*`-attribuutit artikkelikortille — attribuuttinimet noudattavat W3C AS2 -schemaa ([activitystreams-core](https://www.w3.org/TR/activitystreams-core/)); JavaScript lukee `dataset`-rajapinnan kautta käyttäjäinteraktioihin |
 
 #### Teema 2: Käyttäjävuorovaikutus (Like / Dislike & Agree / Disagree)
 
 | # | Repo | Tiketti | Kuvaus |
 |---|---|---|---|
-| 4 | `bq-activitystreams` | [#33](https://github.com/uutisseuranta/bq-activitystreams/issues/33) | feat: vastaanota Like/Dislike-aktiviteetit BigQueryhin ja laske Agree+Disagree-summalaskurit per artikkeli (query-API palauttaa aggregoidun JSON-vasteen) |
-| 5 | `uutisseuranta.github.io` | [#20](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/20) | feat: näytä AS2 Like/Dislike-aktiviteetit Agree/Disagree-nimisillä UI:ssa — sama data, eri näyttönimi (frontend meppaa, ei erillistä AS2-tyyppiä) |
-| 6 | `uutisseuranta.github.io` | [#21](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/21) | feat: käyttäjäprofiilin Agree/Disagree-jakaumagrafiikka — toteutus SVG-palkki- tai ympyräkaaviona, ei ulkoista kirjastoa |
+| 4 | `bq-activitystreams` | [#33](https://github.com/uutisseuranta/bq-activitystreams/issues/33) | feat: vastaanota Like/Dislike-aktiviteetit BigQueryhin ja laske Agree+Disagree-summalaskurit per artikkeli — backend palauttaa valmiiksi lasketut `agreeCount` + `disagreeCount` -kentät aggregoidussa JSON-vasteessa |
+| 5 | `uutisseuranta.github.io` | [#20](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/20) | feat: näytä AS2 Like/Dislike-aktiviteetit Agree/Disagree-nimisillä UI:ssa — sama data, eri näyttönimi (tekninen AS2-kenttä on Like/Dislike, displayname käyttöliittymässä on Agree/Disagree — Samaa mieltä / Eri mieltä; frontend meppaa, ei erillistä AS2-tyyppiä) |
+| 6 | `uutisseuranta.github.io` | [#21](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/21) | feat: käyttäjäprofiilin Agree/Disagree-jakaumagrafiikka — toteutus referenssitoteutuksen mukaan (ks. [patterns-repo](https://github.com/uutisseuranta/patterns)), ei ulkoista kirjastoa |
 
 #### Teema 3: Laadunvalvonta, testaus ja vakauttaminen (QA & Refactoring)
 
@@ -457,13 +457,14 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 |---|---|---|---|
 | 7 | `patterns` | [#55](https://github.com/uutisseuranta/patterns/issues/55) | chore: ota käyttöön W3C Markup Validator- ja Stylelint-työkalut GitHub Actions PR-tarkistuksena (virheet katkaisevat PR-mergen automaattisesti) |
 | 8 | `patterns` | [#56](https://github.com/uutisseuranta/patterns/issues/56) | style.css rakenteellistaminen: jaottelu osioihin kommenteilla (reset → typography → layout → components → utilities) |
-| 9 | `bq-activitystreams` | [#27](https://github.com/uutisseuranta/bq-activitystreams/issues/27) | Testing: jaettu logiikka `lib/fetch_helpers.sh`-moduliinsa — sekä `rss_fetch_job.sh` että `unit-test.sh` importtaavat sieltä (ei suoraa riippuvuutta tuotantokoodista testeihin) |
+| 9 | `bq-activitystreams` | [#27](https://github.com/uutisseuranta/bq-activitystreams/issues/27) | Testing: jaettu logiikka `fetch_helpers.sh`-tiedostoon repositorion juureen — sekä `rss_fetch_job.sh` että `unit-test.sh` importtaavat sieltä (ei suoraa riippuvuutta tuotantokoodista testeihin; ei `lib/`-hakemistoa, juuressa läpinäkyvyyden maksimoimiseksi) |
 | 10 | `bq-activitystreams` | [#28](https://github.com/uutisseuranta/bq-activitystreams/issues/28) | Testing: Laajenna write-api:n yksikkötestejä — kattaa happy path (Create, Like, Update) ja virhetilanteet (duplikaatti-Like 409, puuttuva actor 400, luvaton kirjoitus 403) |
-| 11 | `bq-activitystreams` | [#29](https://github.com/uutisseuranta/bq-activitystreams/issues/29) | Testing: Lisää yksikkötestit query-api:lle — suodatus actor/object_id:llä, aikarajaus, sivutus, tyhjä tulos ([]), full-table scan -esto |
+| 11 | `bq-activitystreams` | [#29](https://github.com/uutisseuranta/bq-activitystreams/issues/29) | Testing: Lisää yksikkötestit query-api:lle — suodatus actor/object_id:llä, aikarajaus, sivutus, tyhjä tulos ([]), full-table scan -esto; kattaa myös `agreeCount`/`disagreeCount` -aggregointilogiikan |
 | 12 | `bq-activitystreams` | [#30](https://github.com/uutisseuranta/bq-activitystreams/issues/30) | Testing: Lisää yksikkötestit og-scraperille — käytetään `unittest.mock.patch` HTTP-kutsujen mockaukseen, ei oikeita verkkopyyntöjä CI:ssä |
 
 #### Backlogiin siirretty (Iteraatio 4+)
 
+<!-- Siirron perustelut kommentoidaan TECHNICAL_DESIGN.md ## Koodin kommentointi -osion mukaan -->
 - `uutisseuranta.github.io` [#2](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/2): UP-9: Henkilökohtainen uutisvirtanäkymä (tagipohjainen suodatus)
 - `uutisseuranta.github.io` [#7](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/7): UP-14: Hakutoiminto (client-side haku)
 - `uutisseuranta.github.io` [#8](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/8): UP-15: Kirjautumisen ja anonyymiyskäytäntöjen yhtenäistäminen
@@ -474,11 +475,9 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 
 ## Incidents
 
-### 2026-06-xx — style.css korruptoitumisincident
+### 2026-07-03 — style.css korruptoitumisincident
 
-- **Mitä tapahtui:** [täydennä lyhyt kuvaus — milloin, missä yhteydessä, mikä meni rikki]
-- **Juurisyy:** Tiedostoon tehtiin konfliktiin päättynyt merge tai manuaalimuokkaus ilman selkeää rakennetta — osioiden rajat olivat epäselviä
-- **Lessons learned:** CSS-tiedosto jaotellaan osioihin kommenteilla ennen seuraavaa iteraatiota jotta muutosalueet ovat yksiselitteisiä
-- **Korjaava toimenpide:** [patterns#56](https://github.com/uutisseuranta/patterns/issues/56) — style.css rakenteellistaminen
-
-> Täydennä päivämäärä ja tapahtumakuvaus ennen mergausta.
+- **Mitä tapahtui:** style.css korruptoitui web-agentin käytön yhteydessä verkkohäiriön vuoksi
+- **Juurisyy:** Verkkohäiriö web-agentissa keskeytti kirjoitusoperaation — ei liity koodin rakenteeseen tai kehitysprosessiin
+- **Lessons learned:** Ei sovellettavia oppeja; satunnainen infrastruktuurihäiriö
+- **Korjaava toimenpide:** [patterns#56](https://github.com/uutisseuranta/patterns/issues/56) — style.css rakenteellistaminen (tehty ennaltaehkäisevästi)
