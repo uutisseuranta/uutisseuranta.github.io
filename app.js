@@ -1,3 +1,24 @@
+/**
+ * app.js – Sovelluksen juurimoduuli
+ *
+ * Vastaa:
+ *   - Firebase-alustuksesta ja autentikoinnista (Google Sign-In)
+ *   - Kirjautumismodaalin auki/kiinni-logiikasta
+ *   - Auth-tilan muutoksiin reagoinnista:
+ *       kirjautunut  → initPrefs(app, uid), initProfileModal(user), loadPrefs()
+ *       kirjautunut ulos → initPrefs(app, null), loadPrefs()
+ *
+ * Arkkitehtuuriraja:
+ *   Tämä moduuli omistaa Firebase Auth -yhteyden.
+ *   Preferenssien persistointi (Firestore + localStorage) on delegoitu prefs.js:lle.
+ *   Profiilimodaalin UI on delegoitu profile.js:lle.
+ *   app.js ei lue eikä kirjoita preferenssejä suoraan.
+ *
+ * Riippuvuudet:
+ *   – prefs.js  (initPrefs, loadPrefs)
+ *   – profile.js (initProfileModal, openProfileModal)
+ *   – Firebase Auth, Analytics (CDN)
+ */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js';
