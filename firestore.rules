@@ -4,6 +4,21 @@ service cloud.firestore {
 
     // Käyttäjä saa lukea ja kirjoittaa vain oman UID:nsä alla olevat dokumentit.
     // Autentikoitumaton pääsy on kielletty kaikissa tapauksissa.
+    //
+    // Miksi {document=**} eikä täsmäpolku /users/{uid}/preferences/main ?
+    // ─────────────────────────────────────────────────────────────────────
+    // {document=**} on rekursiivinen wildcard: se kattaa sekä suorat dokumentit
+    // (/users/{uid}/preferences/main) että mahdolliset tulevat alakokoelmat
+    // (/users/{uid}/preferences/notifications/... tms.) yhdellä säännöllä.
+    //
+    // Täsmäpolku (/users/{uid}/preferences/main) olisi tiukempi — sallisi
+    // vain juuri sen yhden dokumentin — mutta vaatisi rules-muutoksen aina
+    // kun preferenssirakennetta laajennetaan.
+    //
+    // Revisit-kriteeri: jos /users/{uid}/ alle lisätään muita kokoelmia
+    // (esim. /users/{uid}/sessions/), tiukennetaan polku vastaamaan vain
+    // /users/{uid}/preferences/{document=**} jotta eri resurssit saavat
+    // omat, eriytetyt sääntönsä.
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }

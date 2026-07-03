@@ -210,16 +210,18 @@
 
       2. Analytics (firebase-analytics)
          – Automaattinen käyttödatan keruu (sivulataukset,
-           sessiot, käyttäjämäärät)
-         – Linkitetty Google Analytics 4 -propertyyn
+           sessiot, käyttäjämäärät).
+         – Linkitetty Google Analytics 4 -propertyyn.
            (measurementId: G-9J9T62LY57)
 
       3. Database (firebase-firestore)
-         – Käyttäjäpreferenssien (seuratut tagit) synkronointi
-           laitteiden välillä offline-tuella
+         – Kirjautuneen käyttäjän asetusten (seuratut tagit,
+           teema) synkronointi laitteiden välillä offline-tuella.
+         – localStorage toimii nopeana paikallisena välimuistina
+           (UI piirtyy heti), Firestore on kanoninen lähde.
 
     Kaikki muu toiminnallisuus (uutisten haku, tallennus,
-    hosting, funktiot, jne.) toteutetaan muilla teknologioilla,
+    hosting jne.) toteutetaan muilla teknologioilla,
     jos ja kun siitä erikseen päätetään. Firebase-SDK:n
     laajentaminen uusiin palveluihin vaatii eksplisiittisen
     arkkitehtuuripäätöksen ennen toteutusta.
