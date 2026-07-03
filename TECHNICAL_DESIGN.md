@@ -90,6 +90,16 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 
 ---
 
+## Suunnittelu- ja kehityskäytännöt
+
+### Luonnos-Pull Requestit (Draft PR) ja alkudeploy (Skeletal Deploy)
+
+Monimutkaiset tai uudet ominaisuudet aloitetaan viemällä kevyt runko, tyhjät API-rajapinnat ja koodikommentit (Draft PR tai alkudeploy) arvioitavaksi ennen varsinaisen toiminnallisuuden toteutusta.
+- Tämä mahdollistaa arkkitehtuurin, arkkitehtuurirajojen ja koodin kommentoinnin katselmoinnin aikaisessa vaiheessa ennen laajempaa koodaamista.
+- Avoimet arkkitehtuurikysymykset jätetään Pull Requestin kommenteiksi koodikontekstiin, jolloin niistä päättäminen tapahtuu luontevasti suoraan GitHubissa.
+
+---
+
 ## Firebase-rajaus
 
 Firebase-SDK:ta käytetään **ainoastaan** kolmessa tarkoituksessa:
