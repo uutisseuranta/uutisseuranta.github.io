@@ -439,17 +439,17 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 
 | # | Repo | Tiketti | Kuvaus |
 |---|---|---|---|
-| 1 | `uutisseuranta.github.io` | [#12](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/12) | Uutisten dynaaminen tulostaminen etusivulle — Activity Streams 2.0 -formaatissa BigQuerystä haettu uutisvirta renderoidaan frontend-sivulle |
+| 1 | `uutisseuranta.github.io` | [#12](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/12) | Uutisten dynaaminen tulostaminen etusivulle — Activity Streams 2.0 -formaatissa query-api-rajapinnasta haettu uutisvirta renderoidaan frontend-sivulle |
 | 2 | `patterns` | [#24](https://github.com/uutisseuranta/patterns/issues/24) | Vaihe 2 — Molecules + Organisms: lisää komponentit index.html-visualisointiin |
-| 3 | `patterns` | [#40](https://github.com/uutisseuranta/patterns/issues/40) | feat: lisää AS2 `@context` ja `id` semanttiset `data-*`-attribuutit artikkelikortille (JavaScript lukee `dataset.as2Id` käyttäjäinteraktioihin) |
+| 3 | `patterns` | [#40](https://github.com/uutisseuranta/patterns/issues/40) | feat: lisää AS2 `@context` ja `id` semanttiset `data-as2-id` -attribuutit artikkelikortille (JavaScript lukee `dataset.as2Id` käyttäjäinteraktioihin) |
 
 #### Teema 2: Käyttäjävuorovaikutus (Like / Dislike & Agree / Disagree)
 
 | # | Repo | Tiketti | Kuvaus |
 |---|---|---|---|
-| 4 | `bq-activitystreams` | [#33](https://github.com/uutisseuranta/bq-activitystreams/issues/33) | feat: vastaanota Like/Dislike-aktiviteetit BigQueryhin ja laske Agree+Disagree-summalaskurit per artikkeli (query-API palauttaa aggregoidun JSON-vasteen) |
+| 4 | `bq-activitystreams` | [#33](https://github.com/uutisseuranta/bq-activitystreams/issues/33) | feat: vastaanota Like/Dislike-aktiviteetit BigQueryhin ja laske Agree+Disagree-summalaskurit per artikkeli (query-api suorittaa aggregointilaskennan BigQueryssa ja palauttaa valmiit laskurit JSON-vasteessa) |
 | 5 | `uutisseuranta.github.io` | [#20](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/20) | feat: näytä AS2 Like/Dislike-aktiviteetit Agree/Disagree-nimisillä UI:ssa — sama data, eri näyttönimi (frontend meppaa, ei erillistä AS2-tyyppiä) |
-| 6 | `uutisseuranta.github.io` | [#21](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/21) | feat: käyttäjäprofiilin Agree/Disagree-jakaumagrafiikka — toteutus SVG-palkki- tai ympyräkaaviona, ei ulkoista kirjastoa |
+| 6 | `uutisseuranta.github.io` | [#21](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/21) | feat: käyttäjäprofiilin Agree/Disagree-jakaumagrafiikka — toteutus vaakasuuntaisena HTML/CSS-SVG-prosenttipalkkina, ei ulkoista kirjastoa |
 
 #### Teema 3: Laadunvalvonta, testaus ja vakauttaminen (QA & Refactoring)
 
@@ -457,9 +457,9 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 |---|---|---|---|
 | 7 | `patterns` | [#55](https://github.com/uutisseuranta/patterns/issues/55) | chore: ota käyttöön W3C Markup Validator- ja Stylelint-työkalut GitHub Actions PR-tarkistuksena (virheet katkaisevat PR-mergen automaattisesti) |
 | 8 | `patterns` | [#56](https://github.com/uutisseuranta/patterns/issues/56) | style.css rakenteellistaminen: jaottelu osioihin kommenteilla (reset → typography → layout → components → utilities) |
-| 9 | `bq-activitystreams` | [#27](https://github.com/uutisseuranta/bq-activitystreams/issues/27) | Testing: jaettu logiikka `lib/fetch_helpers.sh`-moduliinsa — sekä `rss_fetch_job.sh` että `unit-test.sh` importtaavat sieltä (ei suoraa riippuvuutta tuotantokoodista testeihin) |
-| 10 | `bq-activitystreams` | [#28](https://github.com/uutisseuranta/bq-activitystreams/issues/28) | Testing: Laajenna write-api:n yksikkötestejä — kattaa happy path (Create, Like, Update) ja virhetilanteet (duplikaatti-Like 409, puuttuva actor 400, luvaton kirjoitus 403) |
-| 11 | `bq-activitystreams` | [#29](https://github.com/uutisseuranta/bq-activitystreams/issues/29) | Testing: Lisää yksikkötestit query-api:lle — suodatus actor/object_id:llä, aikarajaus, sivutus, tyhjä tulos ([]), full-table scan -esto |
+| 9 | `bq-activitystreams` | [#27](https://github.com/uutisseuranta/bq-activitystreams/issues/27) | Testing: jaettu logiikka `src/shared/fetch_helpers.sh`-moduliinsa — sekä `rss_fetch_job.sh` että `unit-test.sh` importtaavat sieltä (ei suoraa riippuvuutta tuotantokoodista testeihin) |
+| 10 | `bq-activitystreams` | [#28](https://github.com/uutisseuranta/bq-activitystreams/issues/28) | Testing: Laajenna write-api:n yksikkötestejä — kattaa happy path (Create, Like, Update) ja virhetilanteet (duplikaatti-Like 409, puuttuva actor 400, luvaton kirjoitus 403, tunnistautumaton pyyntö 401) |
+| 11 | `bq-activitystreams` | [#29](https://github.com/uutisseuranta/bq-activitystreams/issues/29) | Testing: Lisää yksikkötestit query-api:lle — suodatus actor/object_id:llä, aikarajaus, sivutus, tyhjä tulos ([]), full-table scan -esto (aikaleima/partitiopakotus) |
 | 12 | `bq-activitystreams` | [#30](https://github.com/uutisseuranta/bq-activitystreams/issues/30) | Testing: Lisää yksikkötestit og-scraperille — käytetään `unittest.mock.patch` HTTP-kutsujen mockaukseen, ei oikeita verkkopyyntöjä CI:ssä |
 
 #### Backlogiin siirretty (Iteraatio 4+)
@@ -474,11 +474,9 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 
 ## Incidents
 
-### 2026-06-xx — style.css korruptoitumisincident
+### 2026-06-25 — style.css korruptoitumisincident
 
-- **Mitä tapahtui:** [täydennä lyhyt kuvaus — milloin, missä yhteydessä, mikä meni rikki]
-- **Juurisyy:** Tiedostoon tehtiin konfliktiin päättynyt merge tai manuaalimuokkaus ilman selkeää rakennetta — osioiden rajat olivat epäselviä
-- **Lessons learned:** CSS-tiedosto jaotellaan osioihin kommenteilla ennen seuraavaa iteraatiota jotta muutosalueet ovat yksiselitteisiä
-- **Korjaava toimenpide:** [patterns#56](https://github.com/uutisseuranta/patterns/issues/56) — style.css rakenteellistaminen
-
-> Täydennä päivämäärä ja tapahtumakuvaus ennen mergausta.
+- **Mitä tapahtui:** CSS-tyylitiedosto `style.css` ylikirjoittui automaattisen AI-agenttimuokkauksen yhteydessä siten, että suurin osa tiedostosta hävisi ja vain osa korvaavasta sisällöstä tallentui.
+- **Juurisyy:** CSS-tiedostolla ei ollut selkeää rakennetta tai osiojakoa. Edellisen kerran konflikti ratkaistiin manuaalisesti, jolloin osien rajat olivat epäselviä. Tiedoston koko oli kasvanut liian suureksi monoliitiksi ilman ylläpidettävää arkkitehtuuria.
+- **Lessons learned:** Tyylitiedostot on jaettava selkeisiin kommentoituihin lohkoihin heti projektin alussa ja otettava käyttöön automaattiset syntaksi- ja tyylivalidoinnit (Stylelint), jotka estävät korruptoituneiden koodien pushaamisen päähaaraan.
+- **Korjaava toimenpide:** [patterns#56](https://github.com/uutisseuranta/patterns/issues/56) — style.css rakenteellistaminen ja [patterns#55](https://github.com/uutisseuranta/patterns/issues/55) — automaattisten validointityökalujen integrointi CI-putkeen.
