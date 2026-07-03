@@ -174,7 +174,7 @@ export function followTag(tag) {
   updatePrefs({ followedTags: [...tags] });
 }
 
-/** Poistaa tagin seurantalistalta. Idempotent – ei tee mitään jos ei seurannassa. */
+/** Poistaa tagin seurantalistasta. Idempotent – ei tee mitään jos ei seurannassa. */
 export function unfollowTag(tag) {
   const tags = new Set(_prefs.followedTags);
   if (!tags.has(tag)) return;
@@ -182,154 +182,107 @@ export function unfollowTag(tag) {
   updatePrefs({ followedTags: [...tags] });
 }
 
-/** Palauttaa true jos tagi on seurantalistalla. */
-export function isFollowing(tag) {
-  return _prefs.followedTags.includes(tag);
-}
-
-/**
- * Vie käyttäjän preferenssit JSON-tiedostona selaimelle ladattavaksi.
- * Sisältää vain käyttäjän omat asetukset – ei muuta dataa.
- *
- * @param {{ uid: string, displayName: string, email: string }} user
- */
-export function exportPrefsAsJson(user) {
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    user: {
-      uid: user.uid,
-      displayName: user.displayName,
-      email: user.email,
-    },
-    preferences: { ..._prefs },
-  };
-  const blob = new Blob(
-    [JSON.stringify(payload, null, 2)],
-    { type: 'application/json' }
-  );
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `uutisseuranta-asetukset-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 /**
  * Rekisteröi muutoskuuntelija.
- * Kuuntelija kutsutaan aina kun preferenssit muuttuvat.
- * Palauttaa unsubscribe-funktion.
+ * Kutsutaan heti rekisteröinnin yhteydessä nykyisillä preferensseillä,
+ * ja sen jälkeen aina kun preferenssit muuttuvat.
  *
- * Huom. initPrefs() nollaa kuuntelijalistan — kutsuja vastaa
- * rekisteröimisestä uudelleen tarvittaessa.
+ * Palauttaa unsubscribe-funktion jolla kuuntelija poistetaan.
  *
- * @param {(prefs: typeof DEFAULT_PREFS) => void} fn
- * @returns {() => void} unsubscribe
+ * @param {function(typeof DEFAULT_PREFS): void} fn
+ * @returns {function(): void}
  */
 export function onPrefsChange(fn) {
   _listeners.push(fn);
-  return () => {
-    _listeners = _listeners.filter(l => l !== fn);
-  };
+  fn({ ..._prefs }); // kutsu heti nykyisillä arvoilla
+  return () => { _listeners = _listeners.filter((l) => l !== fn); };
 }
 
-// ── Sisäiset apufunktiot ─────────────────────────────────────────
+// ── Yksityiset apufunktiot ────────────────────────────────────────
 
-/** Viittaus Firestore-dokumenttiin kirjautuneen käyttäjän preferensseille. */
+/**
+ * Palauttaa Firestore DocumentReference preferenssidokumentille.
+ *
+ * Polku: /users/{uid}/preferences/main
+ *
+ * Miksi alakokoelma 'preferences' eikä suoraan /users/{uid}/main ?
+ *   Alakokoelma ryhmittelee käyttäjäkohtaisen datan tyypeittäin
+ *   (/users/{uid}/preferences/, /users/{uid}/sessions/ jne.) ilman
+ *   nimeämiskonflikteja. Rakenne skaalautuu lisäämättä kenttiä
+ *   pääkäyttäjädokumenttiin.
+ *
+ * Miksi Security Rulesissa {document=**} eikä täsmäpolku ?
+ *   firestore.rules kattaa koko /users/{uid}/{document=**} -haaran
+ *   rekursiivisella wildcardilla. Tämä mahdollistaa uudet alakokoelmat
+ *   (esim. /users/{uid}/notifications/) ilman rules-muutosta. Katso
+ *   firestore.rules revisit-kriteeri jos rakenteen laajuus kasvaa.
+ */
 function _prefsRef() {
   return doc(_db, 'users', _uid, 'preferences', 'main');
 }
 
-/**
- * Muodostaa localStorage-avaimen uid:n perusteella.
- * Anonyymilla käyttäjällä avain on "prefs_anonymous".
- */
-function _storageKey() {
-  return `prefs_${_uid ?? 'anonymous'}`;
-}
-
-/** Lukee preferenssit localStorage:sta. Palauttaa null jos ei löydy tai parse epäonnistuu. */
+/** Lukee preferenssit localStorage:sta. null jos ei löydy tai JSON virheellinen. */
 function _readLocal() {
+  const key = _uid ? `prefs_${_uid}` : 'prefs_anonymous';
   try {
-    const raw = localStorage.getItem(_storageKey());
-    if (!raw) return null;
-    return _migrate(JSON.parse(raw));
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    // JSON-parsaus epäonnistui (vioittunut data) tai localStorage ei ole käytettävissä
-    // (yksityistila, QuotaExceededError). Palautetaan null → käytetään oletusarvoja.
     return null;
   }
 }
 
-/** Kirjoittaa preferenssit localStorage:hen. Epäonnistuminen on hiljainen (quota tms.). */
+/** Kirjoittaa preferenssit localStorage:hen. */
 function _writeLocal(prefs) {
+  const key = _uid ? `prefs_${_uid}` : 'prefs_anonymous';
   try {
-    localStorage.setItem(_storageKey(), JSON.stringify(prefs));
-  } catch {
-    // Voi epäonnistua yksityistilassa tai kun tallennustila on täynnä.
-    // UI jatkaa toimintaa muistissa olevilla arvoilla.
+    localStorage.setItem(key, JSON.stringify(prefs));
+  } catch (err) {
+    console.warn('[prefs] localStorage-kirjoitus epäonnistui:', err);
   }
 }
 
 /**
  * Kirjoittaa preferenssit Firestoreen.
- * merge:true estää rinnakkaisten kirjoitusten ylikirjoittamasta toisiaan —
- * esim. jos eri laite päivitti vain theme-kentän, followedTags säilyy.
+ * Käytetään suoraan vain loadPrefs():ssa ensimmäistä kirjautumista varten.
+ * Muuten käytetään _scheduleFirestore():a debounce-kirjoituksiin.
  */
 async function _writeFirestore(prefs) {
   if (!_db || !_uid) return;
   try {
     await setDoc(_prefsRef(), {
       ...prefs,
-      updatedAt: serverTimestamp(), // Palvelimen aikaleima — luotettavampi kuin Date.now()
-    }, { merge: true });
+      updatedAt: serverTimestamp(),
+    });
   } catch (err) {
     console.warn('[prefs] Firestore-kirjoitus epäonnistui:', err);
   }
 }
 
 /**
- * Aikatauluttaa Firestore-kirjoituksen 500 ms viiveellä (debounce).
- *
- * Ongelma jota ratkoo — räpyttely (rapid successive updates):
- *   Käyttäjä voi klikata Follow/Unfollow-nappia tai vaihtaa teemaa useita kertoja
- *   peräkkäin lyhyen ajan sisällä. Ilman debouncea jokainen updatePrefs()-kutsu
- *   laukaisisi oman Firestore-kirjoituksen → turhia kirjoituksia, quota-kulutusta
- *   ja mahdollisia race conditioneja.
- *
- *   Toimintaperiaate: clearTimeout nollaa edellisen ajastimen aina uuden päivityksen
- *   saapuessa. Firestore-kirjoitus tapahtuu vasta kun päivityksiä ei tule 500 ms:ään.
- *   localStorage kirjoitetaan silti välittömästi jokaisella päivityksellä (offline-tuki).
+ * Ajastaa Firestore-kirjoituksen 500 ms viiveellä.
+ * Peruuttaa edellisen ajastimen jos updatePrefs() kutsutaan uudelleen
+ * ennen kuin ajastin laukeaa — estää turhat kirjoitukset nopeissa muutoksissa.
  */
 function _scheduleFirestore() {
   clearTimeout(_debounceTimer);
   _debounceTimer = setTimeout(() => _writeFirestore(_prefs), 500);
 }
 
-/**
- * Ilmoittaa kaikille rekisteröidyille kuuntelijoille preferenssien muutoksesta.
- * Ottaa snapshot muistissa olevista preferensseistä ennen kuuntelijoiden kutsumista
- * — näin kuuntelija ei voi vahingossa muuttaa jaettua tilaa.
- */
+/** Kutsuu kaikki rekisteröidyt muutoskuuntelijat kopiolla nykyisistä preferensseistä. */
 function _notify() {
   const snapshot = { ..._prefs };
-  _listeners.forEach(fn => fn(snapshot));
+  _listeners.forEach((fn) => fn(snapshot));
 }
 
 /**
- * Päivittää vanhan rakenteen uuteen skeemaan täyttämällä puuttuvat kentät.
- * Varmistaa taaksepäin yhteensopivuuden kun tietomalliin lisätään kenttiä.
+ * Migroi vanhan schemaVersion:n mukaisen preferenssidatan nykymalliin.
+ * Palauttaa aina täydellisen DEFAULT_PREFS-rakenteen täydennettynä remote-datalla.
  *
- * Esimerkki: jos käyttäjällä on tallennettu v0-rakenne ilman theme-kenttää,
- * _migrate() lisää sen oletusarvolla ('system').
- *
- * @param {object} stored - localStorage:sta tai Firestoresta luettu raakaobjekti
+ * @param {object} remote - Firestore-dokumentin data
  * @returns {typeof DEFAULT_PREFS}
  */
-function _migrate(stored) {
-  return {
-    ...DEFAULT_PREFS,
-    ...stored,
-    schemaVersion: SCHEMA_VERSION,
-  };
+function _migrate(remote) {
+  // Versio 1 → 1: ei muutoksia, yhdistetään vain oletusarvot puuttuvien kenttien täydentämiseksi.
+  return { ...DEFAULT_PREFS, ...remote, schemaVersion: SCHEMA_VERSION };
 }
