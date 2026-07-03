@@ -3,32 +3,53 @@ name: Create Jira Custom Fields
 on:
   workflow_dispatch:
 
+env:
+  BASE_URL: https://api.atlassian.com/ex/jira/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/rest/api/3
+
 jobs:
   create-fields:
     runs-on: ubuntu-latest
     steps:
-      - name: Create source_repo field
+      - name: Build auth header
+        id: auth
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         run: |
-          RESPONSE=$(curl -s -o /tmp/f1.json -w "%{http_code}" \
+          AUTH=$(echo -n "${JIRA_EMAIL}:${JIRA_API_TOKEN}" | base64 -w 0)
+          echo "::add-mask::$AUTH"
+          echo "auth=$AUTH" >> $GITHUB_OUTPUT
+
+      - name: Create source_repo field
+        id: f1
+        env:
+          AUTH: ${{ steps.auth.outputs.auth }}
+        run: |
+          HTTP=$(curl -s -o /tmp/f1.json -w "%{http_code}" \
             -X POST \
-            -H "Authorization: Basic $(echo -n '${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}' | base64)" \
+            -H "Authorization: Basic ${AUTH}" \
             -H "Content-Type: application/json" \
             -H "Accept: application/json" \
             --data '{
               "name": "source_repo",
-              "description": "GitHub repository name (uutisseuranta.github.io / patterns / bq-activitystreams)",
+              "description": "GitHub repository name",
               "type": "com.atlassian.jira.plugin.system.customfieldtypes:textfield",
               "searcherKey": "com.atlassian.jira.plugin.system.customfieldtypes:textsearcher"
             }' \
-            "https://api.atlassian.com/ex/jira/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/rest/api/3/field")
-          echo "source_repo: HTTP $RESPONSE"
+            "${BASE_URL}/field")
+          echo "source_repo HTTP: $HTTP"
           cat /tmp/f1.json
+          F1=$(python3 -c "import json; d=json.load(open('/tmp/f1.json')); print(d.get('id',''))" 2>/dev/null)
+          echo "id=$F1" >> $GITHUB_OUTPUT
 
       - name: Create github_issue_number field
+        id: f2
+        env:
+          AUTH: ${{ steps.auth.outputs.auth }}
         run: |
-          RESPONSE=$(curl -s -o /tmp/f2.json -w "%{http_code}" \
+          HTTP=$(curl -s -o /tmp/f2.json -w "%{http_code}" \
             -X POST \
-            -H "Authorization: Basic $(echo -n '${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}' | base64)" \
+            -H "Authorization: Basic ${AUTH}" \
             -H "Content-Type: application/json" \
             -H "Accept: application/json" \
             --data '{
@@ -37,15 +58,20 @@ jobs:
               "type": "com.atlassian.jira.plugin.system.customfieldtypes:float",
               "searcherKey": "com.atlassian.jira.plugin.system.customfieldtypes:exactnumber"
             }' \
-            "https://api.atlassian.com/ex/jira/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/rest/api/3/field")
-          echo "github_issue_number: HTTP $RESPONSE"
+            "${BASE_URL}/field")
+          echo "github_issue_number HTTP: $HTTP"
           cat /tmp/f2.json
+          F2=$(python3 -c "import json; d=json.load(open('/tmp/f2.json')); print(d.get('id',''))" 2>/dev/null)
+          echo "id=$F2" >> $GITHUB_OUTPUT
 
       - name: Create github_url field
+        id: f3
+        env:
+          AUTH: ${{ steps.auth.outputs.auth }}
         run: |
-          RESPONSE=$(curl -s -o /tmp/f3.json -w "%{http_code}" \
+          HTTP=$(curl -s -o /tmp/f3.json -w "%{http_code}" \
             -X POST \
-            -H "Authorization: Basic $(echo -n '${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}' | base64)" \
+            -H "Authorization: Basic ${AUTH}" \
             -H "Content-Type: application/json" \
             -H "Accept: application/json" \
             --data '{
@@ -54,46 +80,59 @@ jobs:
               "type": "com.atlassian.jira.plugin.system.customfieldtypes:url",
               "searcherKey": "com.atlassian.jira.plugin.system.customfieldtypes:exacttextsearcher"
             }' \
-            "https://api.atlassian.com/ex/jira/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/rest/api/3/field")
-          echo "github_url: HTTP $RESPONSE"
+            "${BASE_URL}/field")
+          echo "github_url HTTP: $HTTP"
           cat /tmp/f3.json
+          F3=$(python3 -c "import json; d=json.load(open('/tmp/f3.json')); print(d.get('id',''))" 2>/dev/null)
+          echo "id=$F3" >> $GITHUB_OUTPUT
 
-      - name: Add fields to project screen (US)
+      - name: Add fields to project US screen
+        env:
+          AUTH: ${{ steps.auth.outputs.auth }}
+          F1: ${{ steps.f1.outputs.id }}
+          F2: ${{ steps.f2.outputs.id }}
+          F3: ${{ steps.f3.outputs.id }}
         run: |
-          # Fetch field IDs from responses
-          F1=$(cat /tmp/f1.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
-          F2=$(cat /tmp/f2.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
-          F3=$(cat /tmp/f3.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
-          echo "Field IDs: $F1 $F2 $F3"
+          echo "Field IDs: F1=$F1 F2=$F2 F3=$F3"
 
-          # Get screens for project US
           SCREENS=$(curl -s \
-            -H "Authorization: Basic $(echo -n '${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}' | base64)" \
+            -H "Authorization: Basic ${AUTH}" \
             -H "Accept: application/json" \
-            "https://api.atlassian.com/ex/jira/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/rest/api/3/screens?queryString=US")
+            "${BASE_URL}/screens?queryString=US")
           echo "Screens: $SCREENS"
 
-          SCREEN_ID=$(echo $SCREENS | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('values',[]); print(v[0]['id'] if v else '')" 2>/dev/null)
-          echo "Using screen ID: $SCREEN_ID"
+          SCREEN_ID=$(echo "$SCREENS" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+v=d.get('values',[])
+print(v[0]['id'] if v else '')
+" 2>/dev/null)
+          echo "Screen ID: $SCREEN_ID"
 
-          if [ -n "$SCREEN_ID" ] && [ -n "$F1" ]; then
-            # Get default tab
-            TABS=$(curl -s \
-              -H "Authorization: Basic $(echo -n '${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}' | base64)" \
-              -H "Accept: application/json" \
-              "https://api.atlassian.com/ex/jira/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/rest/api/3/screens/${SCREEN_ID}/tabs")
-            TAB_ID=$(echo $TABS | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null)
-            echo "Tab ID: $TAB_ID"
-
-            for FID in $F1 $F2 $F3; do
-              if [ -n "$FID" ]; then
-                curl -s -X POST \
-                  -H "Authorization: Basic $(echo -n '${{ secrets.JIRA_EMAIL }}:${{ secrets.JIRA_API_TOKEN }}' | base64)" \
-                  -H "Content-Type: application/json" \
-                  -H "Accept: application/json" \
-                  --data "{\"fieldId\": \"$FID\"}" \
-                  "https://api.atlassian.com/ex/jira/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/rest/api/3/screens/${SCREEN_ID}/tabs/${TAB_ID}/fields"
-                echo "Added $FID to screen"
-              fi
-            done
+          if [ -z "$SCREEN_ID" ]; then
+            echo "No screen found, skipping screen assignment"
+            exit 0
           fi
+
+          TABS=$(curl -s \
+            -H "Authorization: Basic ${AUTH}" \
+            -H "Accept: application/json" \
+            "${BASE_URL}/screens/${SCREEN_ID}/tabs")
+          TAB_ID=$(echo "$TABS" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print(d[0]['id'] if isinstance(d,list) and d else '')
+" 2>/dev/null)
+          echo "Tab ID: $TAB_ID"
+
+          for FID in "$F1" "$F2" "$F3"; do
+            if [ -n "$FID" ] && [ -n "$TAB_ID" ]; then
+              RESP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                -H "Authorization: Basic ${AUTH}" \
+                -H "Content-Type: application/json" \
+                -H "Accept: application/json" \
+                --data "{\"fieldId\": \"${FID}\"}" \
+                "${BASE_URL}/screens/${SCREEN_ID}/tabs/${TAB_ID}/fields")
+              echo "Added field $FID to screen: HTTP $RESP"
+            fi
+          done
