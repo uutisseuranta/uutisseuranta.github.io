@@ -9,7 +9,7 @@ Tämä dokumentti kuvaa **uutisseuranta**-projektin Jira–GitHub-integraation d
 | Vaihe | Kuvaus | Status | Toteutettu |
 |---|---|---|---|
 | 1 | Luo custom-kentät Jira-projektiin (`source_repo`, `github_issue_number`, `github_url`) | ✅ Valmis | 2026-07-03 |
-| 2 | Asenna GitHub for Atlassian -app ja liitä repot | 🔄 Käynnissä | 2026-07-03 |
+| 2 | Asenna GitHub for Atlassian -app ja liitä repot | ✅ Valmis | 2026-07-03 |
 | 3 | Tallenna GitHub PAT Atlassian Automation -säännön HTTP-headeriin | ⏳ Odottaa | — |
 | 4 | Luo GitHub-webhookit kaikille kolmelle repolle | ⏳ Odottaa | — |
 | 5 | Rakenna Säännöt 1–8 (GitHub → Jira) | ⏳ Odottaa | — |
@@ -69,40 +69,41 @@ Secrets ovat **salasanoja joita GitHub Actions käyttää** — niihin on kaksi 
 
 ---
 
-### Vaihe 2: GitHub for Atlassian -app (🔄 Käynnissä)
+### Vaihe 2: GitHub for Atlassian -app (✅ Valmis)
 
-**Asenna virallinen Atlassian-ylläpitämä app:**
+**App on asennettu ja yhdistetty Jira-instanssiin `uutisseuranta.atlassian.net`.**
 
-👉 [https://marketplace.atlassian.com/apps/1219592/github-for-atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-atlassian)
+Varmistettu admin-konsolista:
+- Sijainti: [https://admin.atlassian.com/s/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/user-connected-apps/tab/installed](https://admin.atlassian.com/s/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/user-connected-apps/tab/installed)
+- Status: **Connected** `uutisseuranta.atlassian.net`
+- Luvat: READ, WRITE, DELETE Jiraan
+- Ulkoinen domain: `github.atlassian.com` (pakollinen appin toiminnalle)
+- Marketplace-sivu: [https://marketplace.atlassian.com/apps/1219592/github-for-atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-atlassian)
 
-Tämä on Atlassianin oma integraatiosovellus, ei kolmannen osapuolen toteutus. Se hoitaa natiivisti kehityspaneelin (branchit, commitit, PR:t) Jira-ticketeissä.
+> **Huom MCP-serverien rajoituksesta:** GitHub for Atlassian -appin asennus ja repojen liittäminen vaatii OAuth-pohjaisen selainvirtauksen. Sitä ei voi tehdä REST API:lla tai MCP-serverien kautta — tehdään kerran käsin käyttöliittymässä.
 
-**Asennusvaiheet:**
+#### Repojen liittäminen Jiraan (tehtävä käsin)
 
-1. Kirjaudu Jiraan admin-tunnuksilla
-2. Avaa **Apps → Explore more apps** (tai käytä suoraa Marketplace-linkkiä yllä)
-3. Hae `GitHub for Atlassian` ja klikkaa **Get it now**
-4. Kun asennus on valmis, siirry **Apps → Manage apps → GitHub for Jira → Configure**
-5. Klikkaa **Connect GitHub organization**
-6. Kirjaudu GitHubiin ja valitse organisaatio `uutisseuranta`
-7. Valitse **Only select repositories** ja lisää kaikki kolme repoa:
+Tämä yhdistää kehityspaneelin (branchit, commitit, PR:t) Jira-ticketteihin.
+
+1. Jirassa: **Apps → Manage apps → GitHub for Jira → Configure**
+   - Tai suoraan: [https://uutisseuranta.atlassian.net/jira/settings/apps/github](https://uutisseuranta.atlassian.net/jira/settings/apps/github)
+2. Klikkaa **Connect GitHub organization**
+3. Kirjaudu GitHubiin ja valitse organisaatio `uutisseuranta`
+4. Valitse **Only select repositories** ja lisää kaikki kolme repoa:
    - `uutisseuranta/uutisseuranta.github.io`
    - `uutisseuranta/patterns`
    - `uutisseuranta/bq-activitystreams`
-8. Klikkaa **Save** ja hyväksy luvat
+5. Klikkaa **Save** ja hyväksy luvat
 
 **Uusien repojen lisääminen myöhemmin:**
-
-Jos lisäät repon myöhemmin jota ei vielä liitetty:
 1. Jirassa: **Apps → Manage apps → GitHub for Jira → Configure**
 2. Etsi organisaatio `uutisseuranta` → klikkaa **…** → **Configure**
 3. GitHub avautuu: **Repository access → Select repositories** → lisää repo → **Save**
 
-> **Voiko tämän tehdä MCP-serverillä?** Ei. GitHub for Atlassian -appin asennus ja repojen liittäminen vaatii OAuth-pohjaisen selainpohjaisen virtauksen Atlassian Marketplacen ja GitHubin välillä. Sitä ei voi tehdä REST API:n tai MCP-serverien kautta — se on nimenomaan tarkoitettu tehtäväksi kerran käsin käyttöliittymässä. MCP-serverit sopivat sen sijaan kaikkeen automatisoituun API-kutsuihin (webhookit, Automation-säännöt, custom-kenttien luonti) jotka tehdään sen jälkeen.
-
 **Kehityspaneelin linkitys issueihin:**
 
-Kun app on asennettu, branchit, commitit ja PR:t linkittyvät Jira-ticketteihin automaattisesti kun branch- tai commit-nimessä on Jira-avain, esim:
+Kun repot on liitetty, branchit, commitit ja PR:t linkittyvät Jira-ticketteihin automaattisesti kun branch- tai commit-nimessä on Jira-avain:
 ```
 git checkout -b US-42-feat-like-button
 git commit -m "US-42 add like button to article view"
@@ -197,14 +198,14 @@ Labelit luodaan automaattisesti GitHub Actionilla kun `.github/labels.yml` muutt
 
 ### Edellytykset
 
-- GitHub for Atlassian -app asennettuna ja repot liitettynä (Vaihe 2).
+- GitHub for Atlassian -app asennettuna ja repot liitettynä (Vaihe 2). ✅
 - GitHub PAT tallennettu suoraan Automation-sääntöjen HTTP-toiminnon Authorization-headeriin (Jira Cloud ei tue Secrets-manageria).
-- Kolme custom-kenttää luotuna Jira-projektiin: `customfield_10071`, `customfield_10072`, `customfield_10073`.
+- Kolme custom-kenttää luotuna Jira-projektiin: `customfield_10071`, `customfield_10072`, `customfield_10073`. ✅
 - GitHub-repositorioihin luotu webhook Atlassian Automation incoming webhook -URL:iin, events: `Issues`, `Issue comments`.
 
 ### Silmukan esto (kaikki säännöt)
 
-Kommentteisäännöissä tarkistetaan etuliite: ei prosessoida kommenttia joka alkaa `[GitHub]` tai `[Jira]`. Teksti/otsikko-päivityssäännöissä käytetään **5 sekunnin ikkunaa**: jos Jira `updated`-aika ja webhook-aikaleima ovat alle 5 s erossa, ohitetaan päivitys.
+Kommenttisäännöissä tarkistetaan etuliite: ei prosessoida kommenttia joka alkaa `[GitHub]` tai `[Jira]`. Teksti/otsikko-päivityssäännöissä käytetään **5 sekunnin ikkunaa**: jos Jira `updated`-aika ja webhook-aikaleima ovat alle 5 s erossa, ohitetaan päivitys.
 
 ---
 
@@ -395,7 +396,7 @@ Toiminto 2: Jos löytyy:
 ## Toteutusjärjestys
 
 1. **Vaihe 1** — Luo custom-kentät Jira-projektiin ✅
-2. **Vaihe 2** — [Asenna GitHub for Atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-atlassian) ja liitä repot 🔄
+2. **Vaihe 2** — Asenna GitHub for Atlassian ja liitä repot ✅
 3. **Vaihe 3** — Lisää GitHub PAT Automation-sääntöjen HTTP-toimintojen Authorization-headeriin
 4. **Vaihe 4** — Luo GitHub-webhookit kaikille kolmelle repolle (events: Issues, Issue comments)
 5. **Vaihe 5** — Rakenna Säännöt 1–8 (GitHub → Jira)
@@ -415,4 +416,4 @@ Toiminto 2: Jos löytyy:
 | Jira Cloud: ei Secrets-manageria Automationissa | Hyväksytty: GitHub PAT kovakoodattu HTTP-headeriin (pieni suljettu tiimi) |
 | Konfliktiresoluutio monimutkaisissa tapauksissa | Yksinkertainen sääntö: uudempi `updated_at` voittaa + 5 s silmukkaikkuna |
 | Jira-käyttäjä ≠ GitHub-käyttäjä | Ensimmäisessä vaiheessa käyttäjätunnusten pitää vastata toisiaan; myöhemmin voidaan rakentaa user-mapping-taulukko |
-| GitHub for Atlassian -asennus | Ei voi automatisoida MCP-serverillä tai REST API:lla — vaatii kertaluonteisen OAuth-virtauksen selaimessa |
+| GitHub for Atlassian -asennus ja repojen liittäminen | Ei voi automatisoida MCP-serverillä tai REST API:lla — vaatii kertaluonteisen OAuth-virtauksen selaimessa |
