@@ -4,6 +4,46 @@ Tämä dokumentti kuvaa **uutisseuranta**-projektin Jira–GitHub-integraation d
 
 ---
 
+## Toteutusstatus
+
+| Vaihe | Kuvaus | Status | Toteutettu |
+|---|---|---|---|
+| 1 | Luo custom-kentät Jira-projektiin (`source_repo`, `github_issue_number`, `github_url`) | ⏳ Odottaa | — |
+| 2 | Asenna GitHub for Atlassian -app ja liitä repot | ⏳ Odottaa | — |
+| 3 | Tallenna GitHub PAT Atlassian Automation -salaisuuksiin | ⏳ Odottaa | — |
+| 4 | Luo GitHub-webhookit kaikille kolmelle repolle | ⏳ Odottaa | — |
+| 5 | Rakenna Säännöt 1–8 (GitHub → Jira) | ⏳ Odottaa | — |
+| 6 | Rakenna Säännöt 9–15 (Jira → GitHub) | ⏳ Odottaa | — |
+| 7 | Testaa sääntö 1 manuaalisesti, tarkista idempotenttius | ⏳ Odottaa | — |
+| 8 | Backfill-ajo kaikille olemassa oleville avoimille issueille | ⏳ Odottaa | — |
+| — | `.github/labels.yml` + `sync-labels` GitHub Action kaikille kolmelle repolle | ✅ Valmis | 2026-07-03 |
+
+### GitHub-labelit (kaikki kolme repoa)
+
+Labelit luodaan automaattisesti GitHub Actionilla kun `.github/labels.yml` muuttuu, tai manuaalisesti `workflow_dispatch`-triggerillä.
+
+**Luodut labelit:**
+
+| Label | Väri | Kuvaus |
+|---|---|---|
+| `priority:highest` | `#b71c1c` | Jira: Highest |
+| `priority:high` | `#e53935` | Jira: High |
+| `priority:medium` | `#fb8c00` | Jira: Medium |
+| `priority:low` | `#81c784` | Jira: Low |
+| `priority:lowest` | `#b0bec5` | Jira: Lowest |
+| `sprint:1` … `sprint:5` | `#5c6bc0` | Jira Sprint N |
+| `status:to-do` | `#eceff1` | Jira: To Do |
+| `status:in-progress` | `#f9a825` | Jira: In Progress |
+| `status:in-review` | `#0288d1` | Jira: In Review |
+| `status:done` | `#388e3c` | Jira: Done |
+
+**Huom:** Labelit ovat olemassa `.github/labels.yml`-tiedostossa, mutta GitHub Action täytyy ajaa kerran manuaalisesti jotta labelit luodaan repositorioon:
+1. Siirry Actions-välilehdelle halutussa repossa
+2. Valitse **Sync Labels** -workflow
+3. Klikkaa **Run workflow**
+
+---
+
 ## Arkkitehtuurilinja
 
 **Malli: Jira ensisijaisena, GitHub masterina.**
@@ -268,7 +308,7 @@ Toiminto 2: Jos löytyy:
 5. **Vaihe 5** — Rakenna Säännöt 1–8 (GitHub → Jira)
 6. **Vaihe 6** — Rakenna Säännöt 9–15 (Jira → GitHub)
 7. **Vaihe 7** — Testaa sääntö 1 manuaalisesti yhdellä testiissuella, tarkista idempotenttius
-8. **Vaihe 8** — Aja kertaluonteinen backfill-ajo kaikille olemassa oleville avoimille issueille (GitHub API + Automation tai erillinen skripti)
+8. **Vaihe 8** — Aja kertaluonteinen backfill-ajo kaikille olemassa oleville avoimille issueille
 
 ---
 
