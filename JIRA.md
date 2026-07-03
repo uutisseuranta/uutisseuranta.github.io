@@ -1,6 +1,6 @@
 # GitHub ↔ Jira Integration — Täysi toteutussuunnitelma
 
-> Päivitetty 2026-07-03  
+> Päivitetty 2026-07-04  
 > Atlassian Cloud Automation -viitteet: https://support.atlassian.com/cloud-automation/resources/  
 > Jira Cloud API -viitteet: https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
@@ -248,13 +248,17 @@ Action: Lookup work items
 Condition: {{smart values}} condition
   → {{lookupIssues.size}} greater than 0
 
+Action: Edit work item  (tyhjennä resolution ENNEN transitiota)
+  → Work item: {{lookupIssues.first.key}}
+  → Field: Resolution → (tyhjä)
+
 Action: Transition work item
   → Work item: {{lookupIssues.first.key}}
   → To status: To Do
-
-> **Huom:** Jos work itemillä on Resolution asetettu, Transition saattaa epäonnistua.
-> Lisää ennen transitiota: Edit work item → Resolution → Tyhjennä.
 ```
+
+> **Huom:** Resolution täytyy tyhjentää **ennen** transitiota — muuten Jira hylkää  
+> siirtymän jos nykyisellä work itemillä on Resolution asetettu.
 
 ---
 
@@ -542,6 +546,111 @@ Action: Send web request  (päivitä tai luo)
 
 ---
 
+## Historia-miggraatio: GitHub Actions
+
+> **Tausta:** Kertaluonteinen (tai uudelleenkäytettävä) workflow joka replikoi olemassa
+> olevan GitHub-issuehistorian Jiraan Automation incoming webhook -endpointin kautta.
+> Sama Action toimii seuraavaan projektiin `project_key`-parametria vaihtamalla.
+
+### Tiedostot
+
+```
+.github/workflows/migrate-history.yml   ← GitHub Actions workflow
+scripts/migrate_history.py              ← Python-skripti
+```
+
+### Workflow: `migrate-history.yml`
+
+```yaml
+name: Migrate Jira Issue History
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_key:
+        description: 'Jira project key (e.g. US)'
+        required: true
+        default: 'US'
+      dry_run:
+        description: 'Dry run (ei webhook-kutsuja, vain loki)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      max_issues:
+        description: 'Max issues (0 = kaikki)'
+        required: false
+        default: '0'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - name: Run migration script
+        env:
+          JIRA_BASE_URL:          ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL:             ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN:         ${{ secrets.JIRA_API_TOKEN }}
+          AUTOMATION_WEBHOOK_URL: ${{ secrets.AUTOMATION_WEBHOOK_URL }}
+          PROJECT_KEY:            ${{ inputs.project_key }}
+          DRY_RUN:                ${{ inputs.dry_run }}
+          MAX_ISSUES:             ${{ inputs.max_issues }}
+        run: python scripts/migrate_history.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: migration-log-${{ inputs.project_key }}-${{ github.run_id }}
+          path: migration_log.jsonl
+          retention-days: 30
+```
+
+### Python-skripti: päälogiikka
+
+Skripti (`scripts/migrate_history.py`) tekee seuraavaa:
+
+1. Hakee kaikki projektin issuet `GET /rest/api/3/search` (sivutettu, 50 kerrallaan)
+2. Per issue: hakee koko muutoshistorian `GET /rest/api/3/issue/{key}/changelog`
+3. Muodostaa jokaisesta changelog-entrystä webhook-payloadin:
+   - `{{webhookData.issue}}` — issue-kenttä Automation smart valueja varten
+   - `{{webhookData.changelog}}` — author, created, items (muuttuneet kentät)
+   - `{{webhookData.originalTimestamp}}` — alkuperäinen aika (Automation ei tue takautuvaa ts)
+   - `{{webhookData.migrationMeta}}` — migraatiomerkintä
+4. POST-aa payloadin `AUTOMATION_WEBHOOK_URL`:iin
+5. Kirjoittaa `migration_log.jsonl`-lokitiedoston (uploadataan Artifactina)
+
+**Rate limit -suojaus:** 100 ms viive Jira API -kutsujen välillä, 50 ms webhook-kutsujen välillä.
+**Retry:** 429-vastaus → odottaa `Retry-After`-headerin mukaisen ajan ja yrittää uudelleen.
+
+### Aikaleima-rajoitus
+
+Jira Cloud Automation kirjaa tapahtumat **tähän hetkeen** eikä tue takautuvaa aikaleimaa.
+Alkuperäinen aika säilyy `originalTimestamp`-kentässä ja on käytettävissä Automation-säännön
+smart valuena `{{webhookData.originalTimestamp}}`. Tarvittaessa voit lisätä sen kommenttina
+tai custom-kentän arvona tiketin historiaan.
+
+### Tarvittavat GitHub Secrets
+
+| Secret | Arvo | Tila |
+|--------|------|------|
+| `JIRA_EMAIL` | Jira-tilin sähköposti | ✅ asetettu |
+| `JIRA_API_TOKEN` | Atlassian API token | ✅ asetettu |
+| `AUTOMATION_WEBHOOK_URL` | Jira Automation → Incoming webhook → URL (ks. JIRA.md) | ✅ asetettu |
+| `JIRA_BASE_URL` | `https://uutisseuranta.atlassian.net` | lisättävä |
+
+### Suositeltu testijärjestys
+
+1. `dry_run: true`, `max_issues: 5` → tarkista Actions-loki
+2. `dry_run: false`, `max_issues: 5` → tarkista Jirasta että tiketti päivittyi
+3. `dry_run: false`, `max_issues: 0` → kaikki issuet
+
+---
+
 ## Conditions (Ehdot)
 
 Virallinen dokumentaatio: https://support.atlassian.com/cloud-automation/docs/jira-automation-conditions/
@@ -610,9 +719,10 @@ Smart valuesit käyttävät **mustache-syntaksia** ja **dot notation** -merkint�
 | `{{webhookData.issue.milestone.title}}` | Milestonen nimi | |
 | `{{webhookData.issue.milestone.due_on}}` | Milestonen eräpäivä (ISO 8601) | |
 | `{{webhookData.label.name}}` | Lisätyn/poistetun labelin nimi | Vain labeled/unlabeled -eventissä |
-| `{{webhookData.comment.body}}` | Kommentin sisältö | |
+| `{{webhookData.comment.body}}` | Kommentin sisältö | Vain issue_comment -eventissä |
 | `{{webhookData.comment.user.login}}` | Kommentoijan GitHub-tunnus | |
 | `{{webhookData.repository.name}}` | Repositorion nimi (ilman organia) | `uutisseuranta.github.io` |
+| `{{webhookData.originalTimestamp}}` | Alkuperäinen aika historia-miggraatiossa | Vain migrate-history -payloadissa |
 | `{{lookupIssues}}` | Lookup work items -actionin tulos (lista) | |
 | `{{lookupIssues.first.key}}` | Ensimmäisen tuloksen avain (esim. `US-7`) | |
 | `{{lookupIssues.size}}` | Tulosten lukumäärä | |
@@ -697,8 +807,11 @@ GitHub lähettää seuraavan rakenteen (issues event + issue_comment event):
 
 ---
 
-## GitHub Actions Workflow
+## GitHub Actions Workflows
 
+### 1. Relay: `jira-webhook-relay.yml`
+
+Välittää live GitHub-issueeventsit Jira Automation -webhookiin.
 Tiedosto: `.github/workflows/jira-webhook-relay.yml`
 
 ```yaml
@@ -729,8 +842,14 @@ jobs:
             -w "\nHTTP %{http_code}\n"
 ```
 
-> **Huom:** `JIRA_WEBHOOK_TOKEN` ja `JIRA_WEBHOOK_URL` tulee olla GitHub Secrets -muuttujina,  
-> ei plain textinä koodissa. `-w "\nHTTP %{http_code}"` tulostaa HTTP-statuskoodin lokiin.
+> **Secretit:** `JIRA_WEBHOOK_TOKEN` ja `JIRA_WEBHOOK_URL` ovat GitHub Secrets -muuttujina.
+
+### 2. Historia-miggraatio: `migrate-history.yml`
+
+Kertaluonteinen workflow olemassa olevien issuejen historian replikointiin Jiraan.
+Katso tarkemmat ohjeet [Historia-miggraatio](#historia-miggraatio-github-actions) -osiosta.
+
+Tarvittava lisäsecret: `JIRA_BASE_URL` = `https://uutisseuranta.atlassian.net`
 
 ---
 
@@ -759,11 +878,12 @@ komponenttityyppien listalta.
 | 1 | Luo custom-kentät Jira-projektiin (`source_repo`, `github_issue_number`, `github_url`) | ✅ VALMIS |
 | 2 | Asenna GitHub for Atlassian -app ja liitä repot (kehityspaneeli) | ✅ VALMIS |
 | 3 | Tallenna GitHub PAT ja Jira webhook-token GitHub Secrets -muuttujiin | ✅ VALMIS |
-| 4 | Luo GitHub Actions -relay kaikille kolmelle repolle | ✅ VALMIS |
+| 4 | Luo GitHub Actions relay (`jira-webhook-relay.yml`) kaikille kolmelle repolle | ✅ VALMIS |
 | 5 | Sääntö 1: GitHub → Jira, issue opened | ✅ VALMIS (US-7) |
 | 6 | Säännöt 2–8: loput GitHub → Jira -flowledet | 🔄 JSON valmis, testaamatta |
 | 7 | Säännöt 9–15: Jira → GitHub -flowledet | 📋 Suunniteltu |
-| 8 | Backfill-ajo kaikille avoimille issueille | 📋 Suunniteltu |
+| 8 | Historia-miggraatio (`migrate-history.yml`): lisää `JIRA_BASE_URL` secret → aja dry run → aja live | 📋 Valmis ajettavaksi |
+| 9 | Backfill-validointi: tarkista Jirasta että kaikki issuet löytyvät | 📋 Suunniteltu |
 
 ---
 
@@ -793,6 +913,7 @@ curl -s -X POST \
 | `{{lookupIssues}}` tyhjä | JQL ei löydä work itemejä | Tarkista `cf[10072]` -arvo ja `cf[10071]` -quoted string |
 | `{{issue.customfield_10071}}` tyhjä | Väärä smart value -syntaksi | Käytä `customfield_10071`, ei display-nimeä `source_repo` |
 | HTTP 422 GitHub API | Assignee-login ei ole GitHub-käyttäjä | Katso käyttäjäkartoitus-osio |
+| Resolution estää transition (Sääntö 4) | Resolution asetettu ennen transitiota | Tyhjennä Resolution -kenttä **ennen** Transition-actionia |
 
 ### Automation-lokit
 
@@ -811,6 +932,7 @@ Filter: Work item key (esim. `US-7`) tai ajanjakso.
 | Konfliktiresoluutio | Yksinkertainen sääntö: uudempi `updated_at` voittaa + 5 s silmukkaikkuna |
 | GitHub-käyttäjä ≠ Jira-käyttäjä | Vaihe 1: tunnusten pitää vastata toisiaan. Vaihe 2: voidaan rakentaa Create lookup table -toiminnolla user-mapping-taulukko |
 | Automation-kutsumäärä | Jira Automation Free: 500 kutsua/kk. Jos ylittyy, harkitse GitHub Apps -webhookia suorana. |
+| Historia-miggraation aikaleima | Automation kirjaa tähän hetkeen; alkuperäinen aika säilyy `originalTimestamp`-kentässä |
 
 ---
 
