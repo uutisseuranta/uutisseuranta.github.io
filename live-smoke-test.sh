@@ -29,6 +29,28 @@ for URL in "${URLS[@]}"; do
         echo "ERROR: Could not find 'firebase-auth.js' at $URL"
         exit 1
     fi
+
+    # 1. Check prefs.js for exportPrefsAsJson
+    echo "Checking $URL/prefs.js for exportPrefsAsJson ..."
+    PREFS_CONTENT=$(curl -sSL -f "$URL/prefs.js")
+    if ! echo "$PREFS_CONTENT" | grep -q "export function exportPrefsAsJson"; then
+        echo "ERROR: Could not find 'exportPrefsAsJson' export in prefs.js at $URL"
+        exit 1
+    fi
+    echo "prefs.js export OK."
+
+    # 2. Check profile.js for exportPrefsAsJson usage
+    echo "Checking $URL/profile.js for exportPrefsAsJson usage ..."
+    PROFILE_CONTENT=$(curl -sSL -f "$URL/profile.js")
+    if ! echo "$PROFILE_CONTENT" | grep -q "exportPrefsAsJson"; then
+        echo "ERROR: Could not find 'exportPrefsAsJson' import in profile.js at $URL"
+        exit 1
+    fi
+    if ! echo "$PROFILE_CONTENT" | grep -q "#btn-export-json"; then
+        echo "ERROR: Could not find '#btn-export-json' element listener in profile.js at $URL"
+        exit 1
+    fi
+    echo "profile.js integration OK."
     
     # Extract apiKey and authDomain dynamically
     API_KEY=$(echo "$CONTENT" | grep -o 'apiKey: "[^"]*"' | cut -d'"' -f2)
