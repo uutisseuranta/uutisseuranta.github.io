@@ -71,39 +71,24 @@ Secrets ovat **salasanoja joita GitHub Actions käyttää** — niihin on kaksi 
 
 ### Vaihe 2: GitHub for Atlassian -app (✅ Valmis)
 
-**App on asennettu ja yhdistetty Jira-instanssiin `uutisseuranta.atlassian.net`.**
+**App on asennettu ja GitHub-organisaatio `uutisseuranta` on yhdistetty — kaikki repot mukana.**
 
-Varmistettu admin-konsolista:
-- Sijainti: [https://admin.atlassian.com/s/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/user-connected-apps/tab/installed](https://admin.atlassian.com/s/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/user-connected-apps/tab/installed)
-- Status: **Connected** `uutisseuranta.atlassian.net`
-- Luvat: READ, WRITE, DELETE Jiraan
-- Ulkoinen domain: `github.atlassian.com` (pakollinen appin toiminnalle)
-- Marketplace-sivu: [https://marketplace.atlassian.com/apps/1219592/github-for-atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-atlassian)
+Varmistettu:
+- Admin-konsoli: [https://admin.atlassian.com/s/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/user-connected-apps/tab/installed](https://admin.atlassian.com/s/38191fa4-e340-4d5e-8f7d-33c8f6829dbd/user-connected-apps/tab/installed) — Status: **Connected** `uutisseuranta.atlassian.net`
+- App-sivu: [https://uutisseuranta.atlassian.net/plugins/servlet/ac/com.github.integration.production/spa-index-page](https://uutisseuranta.atlassian.net/plugins/servlet/ac/com.github.integration.production/spa-index-page) — näyttää: **"uutisseuranta is now connected! All repos connected"**
+- Marketplace: [https://marketplace.atlassian.com/apps/1219592/github-for-atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-atlassian) — versio 2.3.0
+- App key: `com.github.integration.production`
+- Luvat: READ, WRITE, DELETE Jiraan; ulkoinen domain `github.atlassian.com`
+
+> **Huom navigaatiosta:** "Connect GitHub organization" -painike ei löydy admin-konsolista eikä Space settings -kohdasta. Se löytyy appin omalta sivulta:
+> `https://uutisseuranta.atlassian.net/plugins/servlet/ac/com.github.integration.production/spa-index-page`
+> tai Jirassa: **Apps → Manage your apps → GitHub for Atlassian → Get started**
 
 > **Huom MCP-serverien rajoituksesta:** GitHub for Atlassian -appin asennus ja repojen liittäminen vaatii OAuth-pohjaisen selainvirtauksen. Sitä ei voi tehdä REST API:lla tai MCP-serverien kautta — tehdään kerran käsin käyttöliittymässä.
 
-#### Repojen liittäminen Jiraan (tehtävä käsin)
-
-Tämä yhdistää kehityspaneelin (branchit, commitit, PR:t) Jira-ticketteihin.
-
-1. Jirassa: **Apps → Manage apps → GitHub for Jira → Configure**
-   - Tai suoraan: [https://uutisseuranta.atlassian.net/jira/settings/apps/github](https://uutisseuranta.atlassian.net/jira/settings/apps/github)
-2. Klikkaa **Connect GitHub organization**
-3. Kirjaudu GitHubiin ja valitse organisaatio `uutisseuranta`
-4. Valitse **Only select repositories** ja lisää kaikki kolme repoa:
-   - `uutisseuranta/uutisseuranta.github.io`
-   - `uutisseuranta/patterns`
-   - `uutisseuranta/bq-activitystreams`
-5. Klikkaa **Save** ja hyväksy luvat
-
-**Uusien repojen lisääminen myöhemmin:**
-1. Jirassa: **Apps → Manage apps → GitHub for Jira → Configure**
-2. Etsi organisaatio `uutisseuranta` → klikkaa **…** → **Configure**
-3. GitHub avautuu: **Repository access → Select repositories** → lisää repo → **Save**
-
 **Kehityspaneelin linkitys issueihin:**
 
-Kun repot on liitetty, branchit, commitit ja PR:t linkittyvät Jira-ticketteihin automaattisesti kun branch- tai commit-nimessä on Jira-avain:
+Branchit, commitit ja PR:t linkittyvät Jira-ticketteihin automaattisesti kun branch- tai commit-nimessä on Jira-avain:
 ```
 git checkout -b US-42-feat-like-button
 git commit -m "US-42 add like button to article view"
@@ -198,7 +183,7 @@ Labelit luodaan automaattisesti GitHub Actionilla kun `.github/labels.yml` muutt
 
 ### Edellytykset
 
-- GitHub for Atlassian -app asennettuna ja repot liitettynä (Vaihe 2). ✅
+- GitHub for Atlassian -app asennettuna ja org `uutisseuranta` liitettynä, kaikki repot mukana. ✅
 - GitHub PAT tallennettu suoraan Automation-sääntöjen HTTP-toiminnon Authorization-headeriin (Jira Cloud ei tue Secrets-manageria).
 - Kolme custom-kenttää luotuna Jira-projektiin: `customfield_10071`, `customfield_10072`, `customfield_10073`. ✅
 - GitHub-repositorioihin luotu webhook Atlassian Automation incoming webhook -URL:iin, events: `Issues`, `Issue comments`.
@@ -396,8 +381,8 @@ Toiminto 2: Jos löytyy:
 ## Toteutusjärjestys
 
 1. **Vaihe 1** — Luo custom-kentät Jira-projektiin ✅
-2. **Vaihe 2** — Asenna GitHub for Atlassian ja liitä repot ✅
-3. **Vaihe 3** — Lisää GitHub PAT Automation-sääntöjen HTTP-toimintojen Authorization-headeriin
+2. **Vaihe 2** — Asenna GitHub for Atlassian ja liitä org `uutisseuranta` (kaikki repot) ✅
+3. **Vaihe 3** — Luo GitHub PAT ja lisää se Automation-sääntöjen HTTP-toimintojen Authorization-headeriin
 4. **Vaihe 4** — Luo GitHub-webhookit kaikille kolmelle repolle (events: Issues, Issue comments)
 5. **Vaihe 5** — Rakenna Säännöt 1–8 (GitHub → Jira)
 6. **Vaihe 6** — Rakenna Säännöt 9–15 (Jira → GitHub)
@@ -416,4 +401,4 @@ Toiminto 2: Jos löytyy:
 | Jira Cloud: ei Secrets-manageria Automationissa | Hyväksytty: GitHub PAT kovakoodattu HTTP-headeriin (pieni suljettu tiimi) |
 | Konfliktiresoluutio monimutkaisissa tapauksissa | Yksinkertainen sääntö: uudempi `updated_at` voittaa + 5 s silmukkaikkuna |
 | Jira-käyttäjä ≠ GitHub-käyttäjä | Ensimmäisessä vaiheessa käyttäjätunnusten pitää vastata toisiaan; myöhemmin voidaan rakentaa user-mapping-taulukko |
-| GitHub for Atlassian -asennus ja repojen liittäminen | Ei voi automatisoida MCP-serverillä tai REST API:lla — vaatii kertaluonteisen OAuth-virtauksen selaimessa |
+| GitHub for Atlassian -asennus ja repojen liittäminen | Ei voi automatisoida MCP-serverillä tai REST API:lla — vaatii kertaluonteisen OAuth-virtauksen selaimessa. Oikea polku: `https://uutisseuranta.atlassian.net/plugins/servlet/ac/com.github.integration.production/spa-index-page` |
