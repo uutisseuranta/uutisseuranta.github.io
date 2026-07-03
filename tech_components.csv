@@ -1,0 +1,31 @@
+repo,kategoria,komponentti,rooli,tiedosto_tai_viite
+uutisseuranta.github.io,Frontend – kieli,JavaScript (Vanilla ES2022+),Sovelluslogiikka ja UI,app.js / prefs.js / profile.js
+uutisseuranta.github.io,Frontend – kieli,HTML5,Rakenne ja semantiikka,index.html
+uutisseuranta.github.io,Frontend – kieli,CSS3 (Custom Properties),Ulkoasu ja responsiivisuus,style.css
+uutisseuranta.github.io,Backend – BaaS,Firebase Authentication,Käyttäjähallinta (Google SSO),app.js (Firebase SDK)
+uutisseuranta.github.io,Backend – BaaS,Cloud Firestore,Reaaliaikainen NoSQL-tietokanta,firestore.rules / firestore.indexes.json
+uutisseuranta.github.io,Backend – BaaS,Firebase Hosting,Staattinen web-hosting + CDN,firebase.json
+uutisseuranta.github.io,Testaus,Bash smoke-test,Live-integraatiotestaus,live-smoke-test.sh
+uutisseuranta.github.io,CI/CD,GitHub Actions,Automaattinen deploy-pipeline,.github/
+uutisseuranta.github.io,Tyypitys / Schema,ActivityStreams 2.0 (AS2),Uutisartikkelien tietorakenne,TECHNICAL_DESIGN.md
+uutisseuranta.github.io,Hosting / DNS,GitHub Pages + CNAME,Julkinen domain,CNAME
+bq-activitystreams,Backend – kieli,Python 3.11,Datapipeline ja BigQuery-integraatio,src/
+bq-activitystreams,Backend – alusta,Google Cloud Run,Kontaineroitu suoritusympäristö,deploy/ (Dockerfile viitattu pyproject.toml:ssa)
+bq-activitystreams,Backend – tietokanta,Google BigQuery,Analytiikkatietokanta / data warehouse,sql/
+bq-activitystreams,Backend – tietokanta,Cloud Firestore,Lähdetietovarasto (artikkelit),TECHNICAL_DESIGN.md
+bq-activitystreams,Skeemat,JSON Schema (ActivityStreams 2.0),Tietomallien validointi,article.schema.json / collection.schema.json / note.schema.json / hashtag.schema.json
+bq-activitystreams,Linting / laatu,Ruff (pycodestyle + pyflakes + isort + bugbear + bandit),Python-linting ja SAST,pyproject.toml
+bq-activitystreams,Testaus,Bash unit-test + smoke-test,Yksikkö- ja integraatiotestaus,unit-test.sh / live-smoke-test.sh
+bq-activitystreams,CI/CD,GitHub Actions,Automaattinen pipeline,.github/
+bq-activitystreams,Paketinhallinta,pyproject.toml (PEP 517),Python-projektin määritys,pyproject.toml
+bq-activitystreams,Paketinhallinta,requirements-dev.txt,Kehitysriippuvuudet,requirements-dev.txt
+bq-activitystreams,Hosting / DNS,–,Ei julkista web-hostingia (backend-only),–
+patterns,Frontend – kieli,JavaScript (Vanilla),Design system -komponenttidemot,patterns.js
+patterns,Frontend – kieli,HTML5,Komponenttikirjaston esittely,index.html
+patterns,Frontend – kieli,CSS3 (Custom Properties),Design tokens ja visuaalinen kieli,style.css
+patterns,Typografia,Cabinet Grotesk (woff2),Otsikkotypografia (self-hosted),cabinet-grotesk-bold.woff2
+patterns,Typografia,Satoshi (woff2),Leipäteksti ja UI-typografia (self-hosted),satoshi-bold.woff2 / satoshi-medium.woff2 / satoshi-regular.woff2
+patterns,Data / Schema,ActivityStreams 2.0 attribuutit (CSV),AS2-kenttien dokumentaatio,as2_attributes.csv
+patterns,Data / Mock,Mock-artikkeli (JSON),Kehitysaikainen testausdata,mock-article-wayback-machine.json
+patterns,Hosting / DNS,GitHub Pages + CNAME,Design system julkisena sivustona,CNAME
+patterns,CI/CD,GitHub Actions,Automaattinen deploy,.github/ (oletettu rakenteesta)
