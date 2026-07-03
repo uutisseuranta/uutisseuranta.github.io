@@ -8,9 +8,9 @@ Tämä dokumentti kuvaa **uutisseuranta**-projektin Jira–GitHub-integraation d
 
 | Vaihe | Kuvaus | Status | Toteutettu |
 |---|---|---|---|
-| 1 | Luo custom-kentät Jira-projektiin (`source_repo`, `github_issue_number`, `github_url`) | 🔄 Käynnissä | 2026-07-03 |
-| 2 | Asenna GitHub for Atlassian -app ja liitä repot | ⏳ Odottaa | — |
-| 3 | Tallenna GitHub PAT Atlassian Automation -salaisuuksiin | ⏳ Odottaa | — |
+| 1 | Luo custom-kentät Jira-projektiin (`source_repo`, `github_issue_number`, `github_url`) | ✅ Valmis | 2026-07-03 |
+| 2 | Asenna GitHub for Atlassian -app ja liitä repot | 🔄 Käynnissä | 2026-07-03 |
+| 3 | Tallenna GitHub PAT Atlassian Automation -säännön HTTP-headeriin | ⏳ Odottaa | — |
 | 4 | Luo GitHub-webhookit kaikille kolmelle repolle | ⏳ Odottaa | — |
 | 5 | Rakenna Säännöt 1–8 (GitHub → Jira) | ⏳ Odottaa | — |
 | 6 | Rakenna Säännöt 9–15 (Jira → GitHub) | ⏳ Odottaa | — |
@@ -20,14 +20,26 @@ Tämä dokumentti kuvaa **uutisseuranta**-projektin Jira–GitHub-integraation d
 | — | GitHub Secrets: `JIRA_EMAIL` + `JIRA_API_TOKEN` tallennettu repoon `uutisseuranta.github.io` | ✅ Valmis | 2026-07-03 |
 | — | `.github/workflows/create-jira-fields.yml` — luo 3 custom-kenttää Jira REST API:lla | ✅ Valmis | 2026-07-03 |
 
-### Vaihe 1: Custom-kenttien luonti Jiraan (🔄 Käynnissä)
+---
 
-Kentät luodaan GitHub Actions -workflowlla joka kutsuu Jira REST API:ta.
+### Vaihe 1: Custom-kenttien luonti Jiraan (✅ Valmis)
+
+Kentät luotiin GitHub Actions -workflowlla joka kutsui Jira REST API:ta.
 
 **Konfiguraatio:**
 - Cloud ID: `38191fa4-e340-4d5e-8f7d-33c8f6829dbd`
 - Project key: `US`
 - API endpoint: `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/field`
+
+**Luodut kentät ja niiden Jira field ID:t:**
+
+| Kenttä | Field ID | Tyyppi |
+|---|---|---|
+| `source_repo` | `customfield_10071` | Text (Short text) |
+| `github_issue_number` | `customfield_10072` | Number |
+| `github_url` | `customfield_10073` | URL |
+
+> **Miten field ID:t selvitettiin:** GitHub Actions -lokeista täytyy hakea **raw log** (ei tavallinen lokinäkymä). Workflown ajon sivulla klikkaa oikeasta yläkulmasta **⚙️ → Download log archive** tai avaa lokin yläpalkista **Raw logs** -linkki. Raw logissa jokainen `curl`-vastaus näkyy JSON-muodossa ja siitä löytyy `"id":"customfield_XXXXX"` -kenttä jokaiselle luodulle kentälle.
 
 #### GitHub Secrets — tallennus repoon
 
@@ -50,9 +62,53 @@ Secrets ovat **salasanoja joita GitHub Actions käyttää** — niihin on kaksi 
 **Ajo:**
 1. Tallenna molemmat secretit: [Settings → Secrets → Actions → New secret](https://github.com/uutisseuranta/uutisseuranta.github.io/settings/secrets/actions/new)
 2. Siirry: [Actions → Create Jira Custom Fields → Run workflow](https://github.com/uutisseuranta/uutisseuranta.github.io/actions/workflows/create-jira-fields.yml)
-3. Tarkista lokeista että kaikki kolme kenttää luotiin (HTTP 201) ja lisättiin näytölle
+3. Avaa ajon lokit — **käytä Raw log** -näkymää (ajon sivulla oikeassa yläkulmassa ⚙️ → Download log archive, tai kunkin stepin oikealla puolella oleva ⚙️ → View raw logs). Normaalinäkymässä JSON-vastaukset eivät näy kokonaan.
+4. Etsi JSON-riveiltä `"id":"customfield_XXXXX"` — sieltä löytyvät luotujen kenttien ID:t.
 
 **Huom:** Jira Cloud Automationissa ei ole Secrets-manageria (vain Data Center). GitHub PAT tallennetaan Automation-sääntöjen HTTP-toimintojen Authorization-headeriin suoraan (selväkielinen, hyväksytty riski pienessä tiimissä).
+
+---
+
+### Vaihe 2: GitHub for Atlassian -app (🔄 Käynnissä)
+
+**Asenna virallinen Atlassian-ylläpitämä app:**
+
+👉 [https://marketplace.atlassian.com/apps/1219592/github-for-atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-atlassian)
+
+Tämä on Atlassianin oma integraatiosovellus, ei kolmannen osapuolen toteutus. Se hoitaa natiivisti kehityspaneelin (branchit, commitit, PR:t) Jira-ticketeissä.
+
+**Asennusvaiheet:**
+
+1. Kirjaudu Jiraan admin-tunnuksilla
+2. Avaa **Apps → Explore more apps** (tai käytä suoraa Marketplace-linkkiä yllä)
+3. Hae `GitHub for Atlassian` ja klikkaa **Get it now**
+4. Kun asennus on valmis, siirry **Apps → Manage apps → GitHub for Jira → Configure**
+5. Klikkaa **Connect GitHub organization**
+6. Kirjaudu GitHubiin ja valitse organisaatio `uutisseuranta`
+7. Valitse **Only select repositories** ja lisää kaikki kolme repoa:
+   - `uutisseuranta/uutisseuranta.github.io`
+   - `uutisseuranta/patterns`
+   - `uutisseuranta/bq-activitystreams`
+8. Klikkaa **Save** ja hyväksy luvat
+
+**Uusien repojen lisääminen myöhemmin:**
+
+Jos lisäät repon myöhemmin jota ei vielä liitetty:
+1. Jirassa: **Apps → Manage apps → GitHub for Jira → Configure**
+2. Etsi organisaatio `uutisseuranta` → klikkaa **…** → **Configure**
+3. GitHub avautuu: **Repository access → Select repositories** → lisää repo → **Save**
+
+> **Voiko tämän tehdä MCP-serverillä?** Ei. GitHub for Atlassian -appin asennus ja repojen liittäminen vaatii OAuth-pohjaisen selainpohjaisen virtauksen Atlassian Marketplacen ja GitHubin välillä. Sitä ei voi tehdä REST API:n tai MCP-serverien kautta — se on nimenomaan tarkoitettu tehtäväksi kerran käsin käyttöliittymässä. MCP-serverit sopivat sen sijaan kaikkeen automatisoituun API-kutsuihin (webhookit, Automation-säännöt, custom-kenttien luonti) jotka tehdään sen jälkeen.
+
+**Kehityspaneelin linkitys issueihin:**
+
+Kun app on asennettu, branchit, commitit ja PR:t linkittyvät Jira-ticketteihin automaattisesti kun branch- tai commit-nimessä on Jira-avain, esim:
+```
+git checkout -b US-42-feat-like-button
+git commit -m "US-42 add like button to article view"
+```
+
+---
 
 ### GitHub-labelit (kaikki kolme repoa)
 
@@ -96,34 +152,34 @@ Labelit luodaan automaattisesti GitHub Actionilla kun `.github/labels.yml` muutt
 
 ## Tietomalli
 
-### Jira custom -kentät (luotava projektiin)
+### Jira custom -kentät (luotu projektiin)
 
-| Kenttä | Tyyppi | Kuvaus |
-|---|---|---|
-| `source_repo` | Text | `uutisseuranta.github.io` / `patterns` / `bq-activitystreams` |
-| `github_issue_number` | Number | GitHub issue number (esim. `42`) |
-| `github_url` | URL | Suora linkki GitHub-issueen |
+| Kenttä | Field ID | Tyyppi | Kuvaus |
+|---|---|---|---|
+| `source_repo` | `customfield_10071` | Text | `uutisseuranta.github.io` / `patterns` / `bq-activitystreams` |
+| `github_issue_number` | `customfield_10072` | Number | GitHub issue number (esim. `42`) |
+| `github_url` | `customfield_10073` | URL | Suora linkki GitHub-issueen |
 
 ### Kenttäkohtainen synkronointi
 
-| # | Kenttä | GitHub-vastine | Jira-vastine | Auktoriteetti | GitHub → Jira | Jira → GitHub | Konfliktiresoluutio |
-|---|---|---|---|---|---|---|---|
-| 1 | Otsikko | `title` | `summary` | GitHub | ✅ | ✅ | Uudempi `updated_at` voittaa |
-| 2 | Kuvaus | `body` (Markdown) | `description` (plain text) | GitHub | ✅ | ✅ | GitHub voittaa; Markdown säilyy plain textinä Jirassa |
-| 3 | Tila | `state` (open/closed) | `status` (workflow) | Jira | ✅ open→To Do, closed→Done | ✅ Done→close, muut→open+label | Jira-status on master |
-| 4 | Assignee | `assignees[]` | `assignee` | Jira | ✅ | ✅ | Jira voittaa |
-| 5 | Labelit | `labels[]` | `labels[]` | GitHub | ✅ luo uudet Jiraan | ✅ unioni molempiin | Ei ylikirjoiteta; lisätään puuttuvat |
-| 6 | Prioriteetti | label `priority:*` | `priority` | Jira | ✅ label→Jira priority | ✅ Jira priority→GitHub label | Jira voittaa |
-| 7 | Milestone | `milestone.title` + `due_on` | `fixVersions` | GitHub | ✅ | ✅ luo tarvittaessa | Nimet identtiset; GitHub on master |
-| 8 | Sprint / Iteration | label `sprint:N` | `sprint` (Scrum) | Jira | ⛔ ei lähdettä | ✅ Jira sprint→GitHub label | Jira on ainoa auktoriteetti |
-| 9 | Pull Request | PR-numero, branch, status | `development`-kenttä | GitHub | ✅ natiivi GitHub for Atlassian | ⛔ | Natiivi kattaa |
-| 10 | Kommentit | `comments[]` | `comments[]` | Molemmat | ✅ `[GitHub] @user:` -etuliite | ✅ `[Jira] user:` -etuliite | Ei koskaan ylikirjoiteta; aina uusi kommentti |
-| 11 | Sulkemisen syy | `state_reason` | `resolution` | Jira | ✅ | ✅ Fixed/Won't Do/Duplicate | Jira voittaa |
-| 12 | Source repo | repo-nimi | `source_repo` (custom) | GitHub (vain luku) | ✅ kirjoitetaan luonnissa | ⛔ | Ei muutu koskaan |
-| 13 | Source issue # | `number` | `github_issue_number` (custom) | GitHub (vain luku) | ✅ kirjoitetaan luonnissa | ⛔ | Ei muutu koskaan |
-| 14 | Source URL | `html_url` | `github_url` (custom) | GitHub (vain luku) | ✅ kirjoitetaan luonnissa | ⛔ | Ei muutu koskaan |
-| 15 | Luontiaika | `created_at` | `created` | GitHub | ✅ asetetaan kerran | ⛔ | Ei muutu |
-| 16 | Päivitysaika | `updated_at` | `updated` | Molemmat | ✅ käytetään konfliktin ratkaisuun | ✅ | Uudempi voittaa |
+| # | Kenttä | GitHub-vastine | Jira-vastine | Jira Field ID | Auktoriteetti | GitHub → Jira | Jira → GitHub | Konfliktiresoluutio |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Otsikko | `title` | `summary` | (natiivi) | GitHub | ✅ | ✅ | Uudempi `updated_at` voittaa |
+| 2 | Kuvaus | `body` (Markdown) | `description` (plain text) | (natiivi) | GitHub | ✅ | ✅ | GitHub voittaa; Markdown säilyy plain textinä Jirassa |
+| 3 | Tila | `state` (open/closed) | `status` (workflow) | (natiivi) | Jira | ✅ open→To Do, closed→Done | ✅ Done→close, muut→open+label | Jira-status on master |
+| 4 | Assignee | `assignees[]` | `assignee` | (natiivi) | Jira | ✅ | ✅ | Jira voittaa |
+| 5 | Labelit | `labels[]` | `labels[]` | (natiivi) | GitHub | ✅ luo uudet Jiraan | ✅ unioni molempiin | Ei ylikirjoiteta; lisätään puuttuvat |
+| 6 | Prioriteetti | label `priority:*` | `priority` | (natiivi) | Jira | ✅ label→Jira priority | ✅ Jira priority→GitHub label | Jira voittaa |
+| 7 | Milestone | `milestone.title` + `due_on` | `fixVersions` | (natiivi) | GitHub | ✅ | ✅ luo tarvittaessa | Nimet identtiset; GitHub on master |
+| 8 | Sprint / Iteration | label `sprint:N` | `sprint` (Scrum) | (natiivi) | Jira | ⛔ ei lähdettä | ✅ Jira sprint→GitHub label | Jira on ainoa auktoriteetti |
+| 9 | Pull Request | PR-numero, branch, status | `development`-kenttä | (natiivi) | GitHub | ✅ natiivi GitHub for Atlassian | ⛔ | Natiivi kattaa |
+| 10 | Kommentit | `comments[]` | `comments[]` | (natiivi) | Molemmat | ✅ `[GitHub] @user:` -etuliite | ✅ `[Jira] user:` -etuliite | Ei koskaan ylikirjoiteta; aina uusi kommentti |
+| 11 | Sulkemisen syy | `state_reason` | `resolution` | (natiivi) | Jira | ✅ | ✅ Fixed/Won't Do/Duplicate | Jira voittaa |
+| 12 | Source repo | repo-nimi | `source_repo` | `customfield_10071` | GitHub (vain luku) | ✅ kirjoitetaan luonnissa | ⛔ | Ei muutu koskaan |
+| 13 | Source issue # | `number` | `github_issue_number` | `customfield_10072` | GitHub (vain luku) | ✅ kirjoitetaan luonnissa | ⛔ | Ei muutu koskaan |
+| 14 | Source URL | `html_url` | `github_url` | `customfield_10073` | GitHub (vain luku) | ✅ kirjoitetaan luonnissa | ⛔ | Ei muutu koskaan |
+| 15 | Luontiaika | `created_at` | `created` | (natiivi) | GitHub | ✅ asetetaan kerran | ⛔ | Ei muutu |
+| 16 | Päivitysaika | `updated_at` | `updated` | (natiivi) | Molemmat | ✅ käytetään konfliktin ratkaisuun | ✅ | Uudempi voittaa |
 
 ### Issuetype-mapaus
 
@@ -141,9 +197,9 @@ Labelit luodaan automaattisesti GitHub Actionilla kun `.github/labels.yml` muutt
 
 ### Edellytykset
 
-- GitHub for Atlassian -app asennettuna ja repot liitettynä.
+- GitHub for Atlassian -app asennettuna ja repot liitettynä (Vaihe 2).
 - GitHub PAT tallennettu suoraan Automation-sääntöjen HTTP-toiminnon Authorization-headeriin (Jira Cloud ei tue Secrets-manageria).
-- Kolme custom-kenttää luotuna Jira-projektiin: `source_repo`, `github_issue_number`, `github_url`.
+- Kolme custom-kenttää luotuna Jira-projektiin: `customfield_10071`, `customfield_10072`, `customfield_10073`.
 - GitHub-repositorioihin luotu webhook Atlassian Automation incoming webhook -URL:iin, events: `Issues`, `Issue comments`.
 
 ### Silmukan esto (kaikki säännöt)
@@ -158,20 +214,20 @@ Kommentteisäännöissä tarkistetaan etuliite: ei prosessoida kommenttia joka a
 
 ```
 Triggeri:   Incoming webhook — issues.opened
-Ehto:       JQL-haku: "github_issue_number" = {{webhookData.issue.number}}
-            AND "source_repo" = "{{webhookData.repository.name}}"
+Ehto:       JQL-haku: cf[10072] = {{webhookData.issue.number}}
+            AND cf[10071] = "{{webhookData.repository.name}}"
             → jos löytyy: ohita (idempotentti)
             → jos ei löydy: jatka
 Toiminto:   Create issue
-  summary:        {{webhookData.issue.title}}
-  description:    {{webhookData.issue.body}}
-  issuetype:      [mapaus label-kentästä, ks. taulukko]
-  labels:         {{webhookData.issue.labels[*].name}}
-  assignee:       {{webhookData.issue.assignee.login}}
-  fixVersions:    {{webhookData.issue.milestone.title}} (luo jos puuttuu)
-  source_repo:    {{webhookData.repository.name}}
-  github_issue_number: {{webhookData.issue.number}}
-  github_url:     {{webhookData.issue.html_url}}
+  summary:          {{webhookData.issue.title}}
+  description:      {{webhookData.issue.body}}
+  issuetype:        [mapaus label-kentästä, ks. taulukko]
+  labels:           {{webhookData.issue.labels[*].name}}
+  assignee:         {{webhookData.issue.assignee.login}}
+  fixVersions:      {{webhookData.issue.milestone.title}} (luo jos puuttuu)
+  customfield_10071: {{webhookData.repository.name}}
+  customfield_10072: {{webhookData.issue.number}}
+  customfield_10073: {{webhookData.issue.html_url}}
 ```
 
 #### Sääntö 2 — Otsikko tai body muuttuu → päivitä Jira
@@ -251,7 +307,7 @@ Toiminto:   Add comment
 
 ### Jira → GitHub -säännöt (7 sääntöä)
 
-Kaikkien HTTP-toimintojen URL-pohja: `https://api.github.com/repos/uutisseuranta/{{issue.source_repo}}/issues/{{issue.github_issue_number}}`
+Kaikkien HTTP-toimintojen URL-pohja: `https://api.github.com/repos/uutisseuranta/{{issue.customfield_10071}}/issues/{{issue.customfield_10072}}`
 
 Autentikointi: `Authorization: Bearer <GitHub PAT>` (tallennettu suoraan säännön headeriin)
 
@@ -259,7 +315,7 @@ Autentikointi: `Authorization: Bearer <GitHub PAT>` (tallennettu suoraan säänn
 
 ```
 Triggeri:   Issue transitioned
-Ehto:       github_issue_number-kenttä ei ole tyhjä
+Ehto:       customfield_10072-kenttä ei ole tyhjä
 Toiminto:   HTTP PATCH [URL]
   Jos uusi status = Done:
     body: {"state": "closed", "state_reason": "completed"}
@@ -274,7 +330,7 @@ Toiminto:   HTTP PATCH [URL]
 
 ```
 Triggeri:   Issue assigned / unassigned
-Ehto:       github_issue_number-kenttä ei ole tyhjä
+Ehto:       customfield_10072-kenttä ei ole tyhjä
 Toiminto:   HTTP PATCH [URL]
   body: {"assignees": ["{{issue.assignee.name}}"]}
   (unassigned: {"assignees": []})
@@ -284,7 +340,7 @@ Toiminto:   HTTP PATCH [URL]
 
 ```
 Triggeri:   Field value changed — priority
-Ehto:       github_issue_number-kenttä ei ole tyhjä
+Ehto:       customfield_10072-kenttä ei ole tyhjä
 Toiminto 1: HTTP DELETE [URL] poista vanhat priority:* -labelit
 Toiminto 2: HTTP POST [URL]/labels
   body: {"labels": ["priority:{{issue.priority.name.toLowerCase}}"]}
@@ -294,7 +350,7 @@ Toiminto 2: HTTP POST [URL]/labels
 
 ```
 Triggeri:   Sprint started + Issue moved to sprint
-Ehto:       github_issue_number-kenttä ei ole tyhjä
+Ehto:       customfield_10072-kenttä ei ole tyhjä
 Toiminto 1: HTTP DELETE [URL] poista vanhat sprint:* -labelit
 Toiminto 2: HTTP POST [URL]/labels
   body: {"labels": ["sprint:{{sprint.name}}"]}
@@ -304,7 +360,7 @@ Toiminto 2: HTTP POST [URL]/labels
 
 ```
 Triggeri:   Field value changed — summary
-Ehto:       github_issue_number-kenttä ei ole tyhjä
+Ehto:       customfield_10072-kenttä ei ole tyhjä
             + 5 s silmukan esto
 Toiminto:   HTTP PATCH [URL]
   body: {"title": "{{issue.summary}}"}
@@ -314,7 +370,7 @@ Toiminto:   HTTP PATCH [URL]
 
 ```
 Triggeri:   Comment added
-Ehto:       github_issue_number-kenttä ei ole tyhjä
+Ehto:       customfield_10072-kenttä ei ole tyhjä
             + kommentti EI ala "[GitHub]" (silmukan esto)
 Toiminto:   HTTP POST [URL]/comments
   body: {"body": "[Jira] {{comment.author.displayName}}: {{comment.body}}"}
@@ -324,8 +380,8 @@ Toiminto:   HTTP POST [URL]/comments
 
 ```
 Triggeri:   Field value changed — fixVersions
-Ehto:       github_issue_number-kenttä ei ole tyhjä
-Toiminto 1: HTTP GET https://api.github.com/repos/uutisseuranta/{{source_repo}}/milestones
+Ehto:       customfield_10072-kenttä ei ole tyhjä
+Toiminto 1: HTTP GET https://api.github.com/repos/uutisseuranta/{{issue.customfield_10071}}/milestones
             → hae milestone-numero nimellä {{issue.fixVersions[0].name}}
 Toiminto 2: Jos löytyy:
               HTTP PATCH [URL] body: {"milestone": {{milestoneNumber}}}
@@ -338,8 +394,8 @@ Toiminto 2: Jos löytyy:
 
 ## Toteutusjärjestys
 
-1. **Vaihe 1** — Luo custom-kentät Jira-projektiin — [aja workflow](https://github.com/uutisseuranta/uutisseuranta.github.io/actions/workflows/create-jira-fields.yml) 🔄
-2. **Vaihe 2** — Asenna GitHub for Atlassian -app ja liitä repot (kehityspaneeli)
+1. **Vaihe 1** — Luo custom-kentät Jira-projektiin ✅
+2. **Vaihe 2** — [Asenna GitHub for Atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-atlassian) ja liitä repot 🔄
 3. **Vaihe 3** — Lisää GitHub PAT Automation-sääntöjen HTTP-toimintojen Authorization-headeriin
 4. **Vaihe 4** — Luo GitHub-webhookit kaikille kolmelle repolle (events: Issues, Issue comments)
 5. **Vaihe 5** — Rakenna Säännöt 1–8 (GitHub → Jira)
@@ -359,3 +415,4 @@ Toiminto 2: Jos löytyy:
 | Jira Cloud: ei Secrets-manageria Automationissa | Hyväksytty: GitHub PAT kovakoodattu HTTP-headeriin (pieni suljettu tiimi) |
 | Konfliktiresoluutio monimutkaisissa tapauksissa | Yksinkertainen sääntö: uudempi `updated_at` voittaa + 5 s silmukkaikkuna |
 | Jira-käyttäjä ≠ GitHub-käyttäjä | Ensimmäisessä vaiheessa käyttäjätunnusten pitää vastata toisiaan; myöhemmin voidaan rakentaa user-mapping-taulukko |
+| GitHub for Atlassian -asennus | Ei voi automatisoida MCP-serverillä tai REST API:lla — vaatii kertaluonteisen OAuth-virtauksen selaimessa |
