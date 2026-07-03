@@ -221,7 +221,11 @@ export function exportPrefsAsJson(user) {
   a.href = url;
   a.download = `uutisseuranta-asetukset-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
-  URL.revokeObjectURL(url);
+  // Vapautetaan URL vasta pienen viiveen jälkeen, jotta selain ehtii käynnistää latauksen
+  // (ehkäisee latauksen peruuntumista joissakin selaimissa, esim. Safari/Firefox).
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 100);
 }
 
 /**
