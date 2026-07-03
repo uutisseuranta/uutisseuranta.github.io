@@ -22,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send to Jira Automation
+        env:
+          EVENT_PAYLOAD: ${{ toJson(github.event) }}
+          EVENT_ACTION: ${{ github.event_name }}
         run: |
           curl -X POST \
             "https://api-private.atlassian.com/automation/webhooks/jira/a/042ceae5-c99b-4174-9d44-46a2d26e9c05/019f288b-703a-7e52-bd20-d9cb4f5cb560" \
             -H "Content-Type: application/json" \
             -H "X-Automation-Webhook-Token: 4aed5c2e19b6532368342c136e1f7211ce709f50" \
-            -d '{
-              "issues": [],
-              "webhookData": ${{ toJson(github.event) }}
-            }'
+            --data-raw "$(echo '{"issues":[],"webhookData":' && echo $EVENT_PAYLOAD && echo '}')"
