@@ -40,7 +40,7 @@ uutisseuranta/
 ├── live-smoke-test.sh  ← pipeline-testiskripti
 ├── firebase.json       ← Firebase-projektin konfiguraatio
 ├── TECHNICAL_DESIGN.md ← tämä dokumentti
-└── patterns.md         ← D-CENT UI -komponenttikuvaukset (viittaa patterns-repoon)
+└── patterns.md         ← UI-komponenttikuvaukset (viittaa patterns-repoon)
 ```
 
 Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemistoa. Sivusto on suoraan selaimessa ajettavaa HTML/CSS/JS:ää.
@@ -60,7 +60,7 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 
 ### `patterns.md` — mikä se on?
 
-`patterns.md` on luettelo D-CENT UI -komponenteista, joita tämä sovellus kuluttaa [`patterns`-reposta](https://github.com/uutisseuranta/patterns). Se dokumentoi minkä komponenttien CSS-luokat ovat käytössä tässä sovelluksessa ja mistä ne ladataan. Se ei ole normatiivinen määrittely — normatiivinen määrittely on `patterns`-repon `TECHNICAL_DESIGN.md`:ssä.
+`patterns.md` on luettelo UI-komponenteista, joita tämä sovellus kuluttaa [`patterns`-reposta](https://github.com/uutisseuranta/patterns). Se dokumentoi minkä komponenttien CSS-luokat ovat käytössä tässä sovelluksessa ja mistä ne ladataan. Se ei ole normatiivinen määrittely — normatiivinen määrittely on `patterns`-repon `TECHNICAL_DESIGN.md`:ssä.
 
 ---
 
@@ -87,6 +87,13 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 - **Erillinen monitorointipalvelu** (Datadog, Sentry, tms.) — laatu varmistetaan pipelinessa ennen tuotantoa.
 - **PR preview -ympäristöt** (Netlify, Cloudflare Pages, tms.) — pipeline testaa ennen mergeä, erillisiä preview-ympäristöjä ei tarvita.
 - **Ulkoiset fontti-CDN:t** (Google Fonts, Fontshare, Adobe Fonts, tms.) — fonttilatauksista ei saa syntyä kolmannen osapuolen verkkopyyntöjä.
+
+### Activity Streams 2.0 standardinmukaisuus
+
+Kaikessa tietomallinnuksessa ja rajapintatiedonsiirrossa käytetään W3C:n määrittelemiä Activity Streams 2.0 -kenttiä ja schemaa.
+- Kanoninen spesifikaatio: [W3C Activity Streams 2.0 Core](https://www.w3.org/TR/activitystreams-core/) ja [Vocabulary](https://www.w3.org/TR/activitystreams-vocabulary/)
+- Kaikki JSON-LD `@context`-tunnisteet ja objektien ominaisuudet noudattavat suoraan standardissa sovittuja nimiä ja tyyppejä (kuten `Article` uutisille ja `Like`/`Dislike` reaktioille).
+- Koodissa käytetään aina standardinmukaista Activity Streams 2.0 -nimitystä rajapintakommunikaatiossa (esim. `Like`/`Dislike`), vaikka käyttöliittymän näyttöniminä (displayname) käytetään `Samaa mieltä` / `Eri mieltä` (tai `Agree`/`Disagree`).
 
 ---
 
@@ -433,8 +440,6 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 
 ### Iteraatio 3 — Scope
 
-> **Suunniteltu:** 2026-07-03 | **Arviointijakso:** 2026-07-03 – 2026-07-17
-
 #### Teema 1: Rajapintaintegraatio ja dynaaminen uutisvirta (Core MVP)
 
 | # | Repo | Tiketti | Kuvaus |
@@ -476,7 +481,7 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 
 ### 2026-06-25 — style.css korruptoitumisincident
 
-- **Mitä tapahtui:** CSS-tyylitiedosto `style.css` ylikirjoittui automaattisen AI-agenttimuokkauksen yhteydessä siten, että suurin osa tiedostosta hävisi ja vain osa korvaavasta sisällöstä tallentui.
-- **Juurisyy:** CSS-tiedostolla ei ollut selkeää rakennetta tai osiojakoa. Edellisen kerran konflikti ratkaistiin manuaalisesti, jolloin osien rajat olivat epäselviä. Tiedoston koko oli kasvanut liian suureksi monoliitiksi ilman ylläpidettävää arkkitehtuuria.
-- **Lessons learned:** Tyylitiedostot on jaettava selkeisiin kommentoituihin lohkoihin heti projektin alussa ja otettava käyttöön automaattiset syntaksi- ja tyylivalidoinnit (Stylelint), jotka estävät korruptoituneiden koodien pushaamisen päähaaraan.
+- **Mitä tapahtui:** CSS-tyylitiedosto `style.css` ylikirjoittui vajaaksi automaattisen kehitysajon aikana. Suurin osa tiedoston sisällöstä katkesi ja hävisi tallennuksessa.
+- **Juurisyy:** Ylikirjoitus johtui verkkoyhteyden katkeamisesta (verkkohäiriöstä) web-pohjaisen kielimalliyhteyden aikana tallennusvaiheessa, yhdistettynä siihen ettei tiedostolla ollut loogista osiojakoa.
+- **Lessons learned:** Suurissa tiedostomuokkauksissa on käytettävä tarkasti kohdistettuja rivikorvauksia koko tiedoston ylikirjoittamisen sijaan. Lisäksi tyylitiedostot on jaettava selkeisiin kommentoituihin lohkoihin heti alussa ja otettava käyttöön automaattiset syntaksi- ja tyylivalidoinnit (Stylelint), jotka estävät korruptoituneiden koodien pushaamisen päähaaraan.
 - **Korjaava toimenpide:** [patterns#56](https://github.com/uutisseuranta/patterns/issues/56) — style.css rakenteellistaminen ja [patterns#55](https://github.com/uutisseuranta/patterns/issues/55) — automaattisten validointityökalujen integrointi CI-putkeen.
