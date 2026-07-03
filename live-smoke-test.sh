@@ -18,17 +18,18 @@ for URL in "${URLS[@]}"; do
         exit 1
     fi
     
-    # Check for Firebase app initialization script
-    if ! echo "$CONTENT" | grep -q "firebase-app.js"; then
-        echo "ERROR: Could not find 'firebase-app.js' at $URL"
+    # Check that app.js imports firebase-app.js and firebase-auth.js
+    echo "Checking $URL/app.js for Firebase imports ..."
+    APP_CONTENT=$(curl -sSL -f "$URL/app.js")
+    if ! echo "$APP_CONTENT" | grep -q "firebase-app.js"; then
+        echo "ERROR: Could not find 'firebase-app.js' import in app.js at $URL"
         exit 1
     fi
-    
-    # Check for Firebase auth script
-    if ! echo "$CONTENT" | grep -q "firebase-auth.js"; then
-        echo "ERROR: Could not find 'firebase-auth.js' at $URL"
+    if ! echo "$APP_CONTENT" | grep -q "firebase-auth.js"; then
+        echo "ERROR: Could not find 'firebase-auth.js' import in app.js at $URL"
         exit 1
     fi
+    echo "app.js Firebase imports OK."
 
     # 1. Check prefs.js for exportPrefsAsJson
     echo "Checking $URL/prefs.js for exportPrefsAsJson ..."
