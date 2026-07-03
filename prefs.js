@@ -182,6 +182,48 @@ export function unfollowTag(tag) {
   updatePrefs({ followedTags: [...tags] });
 }
 
+/** Tarkistaa onko tagi seurannassa. Synkroninen, ei sivuvaikutuksia. */
+export function isFollowing(tag) {
+  return _prefs.followedTags.includes(tag);
+}
+
+/**
+ * Vie käyttäjän preferenssit JSON-tiedostona (GDPR Art. 20 — tietojen siirrettävyys).
+ * Lataa selaimen kautta tiedoston nimellä uutisseuranta-asetukset-YYYY-MM-DD.json.
+ *
+ * Sisältää:
+ *   - käyttäjän uid, displayName, email
+ *   - kaikki tallennetut preferenssit (_prefs)
+ *   - vientipäivämäärä ISO 8601 -muodossa
+ *
+ * TODO (iteraatio 3): siirretään profile.js:lle — profile.js omistaa
+ * profiilimodaalin UI:n ja tarjoaa latauspainikkeen. prefs.js tarjoaa
+ * dataan pääsyn getPrefs():n kautta. Toistaiseksi pidetään tässä.
+ *
+ * @param {{ uid: string, displayName: string|null, email: string|null }} user
+ */
+export function exportPrefsAsJson(user) {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    user: {
+      uid: user.uid,
+      displayName: user.displayName,
+      email: user.email,
+    },
+    preferences: { ..._prefs },
+  };
+  const blob = new Blob(
+    [JSON.stringify(payload, null, 2)],
+    { type: 'application/json' }
+  );
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `uutisseuranta-asetukset-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /**
  * Rekisteröi muutoskuuntelija.
  * Kutsutaan heti rekisteröinnin yhteydessä nykyisillä preferensseillä,
