@@ -79,12 +79,17 @@ let _listeners = [];
  * Kutsutaan aina kun autentikointitila muuttuu (kirjautuminen / uloskirjautuminen).
  * Nollaa muistissa olevan tilan ja asettaa Firestore-instanssin kirjautuneelle käyttäjälle.
  *
+ * Huom. _listeners nollataan myös — estää muistivuodon tilanteessa jossa
+ * initPrefs() kutsutaan useamman kerran (auth-tilan muutos). Kutsuja vastaa
+ * rekisteröimisestä uudelleen tarvittaessa initPrefs()-kutsun jälkeen.
+ *
  * @param {import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js').FirebaseApp} app - Firebase-sovellus
  * @param {string|null} uid - Kirjautuneen käyttäjän uid, tai null
  */
 export function initPrefs(app, uid) {
   _uid = uid;
   _prefs = { ...DEFAULT_PREFS };
+  _listeners = [];
 
   if (uid) {
     // Otetaan Firestore offline-persistointi käyttöön kirjautuneelle käyttäjälle.
@@ -214,6 +219,9 @@ export function exportPrefsAsJson(user) {
  * Rekisteröi muutoskuuntelija.
  * Kuuntelija kutsutaan aina kun preferenssit muuttuvat.
  * Palauttaa unsubscribe-funktion.
+ *
+ * Huom. initPrefs() nollaa kuuntelijalistan — kutsuja vastaa
+ * rekisteröimisestä uudelleen tarvittaessa.
  *
  * @param {(prefs: typeof DEFAULT_PREFS) => void} fn
  * @returns {() => void} unsubscribe
