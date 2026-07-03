@@ -29,10 +29,26 @@ Kentät luodaan GitHub Actions -workflowlla joka kutsuu Jira REST API:ta.
 - Project key: `US`
 - API endpoint: `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/field`
 
+#### GitHub Secrets — tallennus repoon
+
+Secrets ovat **salasanoja joita GitHub Actions käyttää** — niihin on kaksi kenttää:
+
+| Kenttä GitHubissa | Selitys | Esimerkki |
+|---|---|---|
+| **Name** | Muuttujan nimi, johon workflow viittaa koodissa | `JIRA_EMAIL` |
+| **Secret** | Oikea arvo — itse salasana tai tunnus | `jaakko.korhonen@gmail.com` |
+
+> **Muistisääntö:** Name-kenttään tulee se nimi jolla kutsut muuttujaa (`${{ secrets.JIRA_EMAIL }}`), ei arvo itse. Secret-kenttään tulee oikea, salainen arvo.
+
+**Tallennettavat secretit repoon `uutisseuranta.github.io`:**
+
+| Name (muuttujan nimi) | Secret (arvo) | Mistä haetaan |
+|---|---|---|
+| `JIRA_EMAIL` | Atlassian-tilin sähköpostiosoite | Oma sähköposti jolla kirjaudut Jiraan |
+| `JIRA_API_TOKEN` | Atlassian API token | https://id.atlassian.com/manage-profile/security/api-tokens |
+
 **Ajo:**
-1. Varmista että GitHub Secrets on tallennettu repoon `uutisseuranta.github.io`:
-   - `JIRA_EMAIL` — Atlassian-tilin sähköpostiosoite
-   - `JIRA_API_TOKEN` — Atlassian API token (haetaan: https://id.atlassian.com/manage-profile/security/api-tokens)
+1. Tallenna molemmat secretit: [Settings → Secrets → Actions → New secret](https://github.com/uutisseuranta/uutisseuranta.github.io/settings/secrets/actions/new)
 2. Siirry: [Actions → Create Jira Custom Fields → Run workflow](https://github.com/uutisseuranta/uutisseuranta.github.io/actions/workflows/create-jira-fields.yml)
 3. Tarkista lokeista että kaikki kolme kenttää luotiin (HTTP 201) ja lisättiin näytölle
 
@@ -132,7 +148,7 @@ Labelit luodaan automaattisesti GitHub Actionilla kun `.github/labels.yml` muutt
 
 ### Silmukan esto (kaikki säännöt)
 
-Kommenttisäännöissä tarkistetaan etuliite: ei prosessoida kommenttia joka alkaa `[GitHub]` tai `[Jira]`. Teksti/otsikko-päivityssäännöissä käytetään **5 sekunnin ikkunaa**: jos Jira `updated`-aika ja webhook-aikaleima ovat alle 5 s erossa, ohitetaan päivitys.
+Kommentteisäännöissä tarkistetaan etuliite: ei prosessoida kommenttia joka alkaa `[GitHub]` tai `[Jira]`. Teksti/otsikko-päivityssäännöissä käytetään **5 sekunnin ikkunaa**: jos Jira `updated`-aika ja webhook-aikaleima ovat alle 5 s erossa, ohitetaan päivitys.
 
 ---
 
