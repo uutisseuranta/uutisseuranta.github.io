@@ -2,20 +2,10 @@ name: Jira Webhook Relay
 
 on:
   issues:
-    types:
-      - opened
-      - edited
-      - closed
-      - reopened
-      - labeled
-      - unlabeled
-      - assigned
-      - unassigned
-      - milestoned
-      - demilestoned
+    types: [opened, edited, closed, reopened, labeled, unlabeled,
+            milestoned, demilestoned]
   issue_comment:
-    types:
-      - created
+    types: [created]
 
 jobs:
   relay:
@@ -23,17 +13,17 @@ jobs:
     steps:
       - name: Send to Jira Automation
         env:
-          PAYLOAD: ${{ toJson(github.event) }}
           JIRA_WEBHOOK_TOKEN: ${{ secrets.JIRA_WEBHOOK_TOKEN }}
-          JIRA_WEBHOOK_URL: ${{ secrets.AUTOMATION_WEBHOOK_URL || secrets.JIRA_WEBHOOK_URL }}
+          JIRA_WEBHOOK_URL: ${{ secrets.JIRA_WEBHOOK_URL }}
         run: |
           if [ -z "$JIRA_WEBHOOK_URL" ]; then
-            echo "::warning::Jira Webhook URL (AUTOMATION_WEBHOOK_URL or JIRA_WEBHOOK_URL) secret is missing! Skipping relay."
+            echo "::warning::Jira Webhook URL (JIRA_WEBHOOK_URL) secret is missing! Skipping relay."
             exit 0
           fi
-          printf '%s' "$PAYLOAD" > payload.json
-          curl --fail --retry 3 --retry-delay 5 \
-            -X POST "$JIRA_WEBHOOK_URL" \
+          echo '${{ toJson(github.event) }}' | \
+          curl -s -X POST \
+            "$JIRA_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -H "X-Automation-Webhook-Token: $JIRA_WEBHOOK_TOKEN" \
-            --data-binary @payload.json
+            --data-binary @- \
+            -w "\nHTTP %{http_code}\n"
