@@ -127,10 +127,14 @@ btnProfile.addEventListener('click', () => {
   openProfileModal();
 });
 
-// Kytketään teeman vaihto (theme toggle) prefs-moduulin ohjaamaksi
+// Kytketään teeman vaihto (theme toggle) prefs-moduulin ohjaamaksi.
+// Korvataan inline-klikkaaja kun app.js on latautunut, jotta saadaan Firestore-synkronointi toimimaan.
 const btnTheme = document.querySelector('[data-theme-toggle]');
 if (btnTheme) {
-  btnTheme.addEventListener('click', () => {
+  const newBtnTheme = btnTheme.cloneNode(true);
+  btnTheme.parentNode.replaceChild(newBtnTheme, btnTheme);
+  
+  newBtnTheme.addEventListener('click', () => {
     const currentPrefs = getPrefs();
     const currentTheme = currentPrefs.theme || 'system';
     let newTheme = 'light';
