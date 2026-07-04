@@ -1,5 +1,7 @@
 # CODE_CONVENTIONS.md
 
+<!-- version: v1.1 | päivitetty: 2026-07-04 | päätös: D-011 -->
+
 > Tämä dokumentti on yhteinen kaikille uutisseuranta-repositorioille.
 > Sama tiedosto sijaitsee jokaisen repon juuressa.
 >
@@ -125,7 +127,49 @@ v2.0.0   ← breaking change
 
 Git-tagit luodaan tällä muodolla. GitHub Releases käyttää samaa tunnistetta.
 
+### Branch-strategia ja SemVer-kytkentä
+
+| Muutos | SemVer | Kuvaus |
+|--------|--------|--------|
+| Bugikorjaus, dokumentaatio | `vX.Y.Z+1` | patch — ei breaking changeja |
+| Uusi toiminnallisuus, taaksepäin yhteensopiva | `vX.Y+1.0` | minor |
+| Breaking change, API-muutos | `vX+1.0.0` | major |
+
 Perustelu (D-002, uutisseuranta.github.io): Yhtenäiset julkaisukäytännöt kaikkien repojen välillä.
+
+---
+
+## Commit-viestit
+
+Kaikki commit-viestit noudattavat **Conventional Commits** -muotoa:
+
+```
+<type>(<scope>): <kuvaus>
+```
+
+`type`-arvot:
+
+| type | Käyttö |
+|------|--------|
+| `feat` | Uusi toiminnallisuus |
+| `fix` | Bugikorjaus |
+| `docs` | Dokumentaatio |
+| `chore` | Ylläpito, riippuvuudet, konfiguraatio |
+| `refactor` | Koodirakenne ilman toiminnallista muutosta |
+| `test` | Testit |
+| `ci` | GitHub Actions -muutokset |
+
+`scope` on valinnainen ja viittaa repo-nimeen tai komponenttiin:
+
+```
+feat(patterns): lisää regex-pattern uutisotsikoille
+fix(jira-sync): korjaa webhook-duplikaatti
+docs: päivitä CODE_CONVENTIONS versionumerointiohje
+chore(deps): päivitä firebase 10.x → 11.x
+ci: lisää yamllint-tarkistus workflowhin
+```
+
+Perustelu (D-011): Yhdenmukainen commit-historia mahdollistaa automaattisen CHANGELOG-generoinnin ja helpottaa `git log`-selailua. Kytkeytyy suoraan DECISION_LOG-merkintöihin.
 
 ---
 
@@ -218,6 +262,21 @@ def get_prefs(uid: str) -> dict:
 
 ---
 
+## Automaattinen tarkistus
+
+Konventioiden noudattaminen tarkistetaan automaattisesti CI-putkessa. Tarkistukset ajetaan GitHub Actions -workflowssa ennen merge-oikeutta.
+
+| Kieli / formaatti | Työkalu | Konfiguraatio |
+|-------------------|---------|---------------|
+| JavaScript | `eslint` | `.eslintrc.json` (repokohtainen) |
+| Bash | `shellcheck` | CI-workflow, ei erillistä konfiguraatiota |
+| YAML | `yamllint` | `.yamllint` (repokohtainen) |
+| Markdown | `markdownlint` | `.markdownlint.json` (repokohtainen) |
+
+Perustelu (D-011): Ilman automaattista enforcement-mekanismia konventiot jäävät puhtaaksi toiveeksi. Jokaisen repon CI-workflow vastaa oman kielivalikoiman tarkistuksista.
+
+---
+
 ## Päätösloki
 
 Kaikki arkkitehtuuripäätökset kirjataan repokohtaiseen `DECISION_LOG.csv`-tiedostoon.
@@ -229,3 +288,14 @@ D-001,...
 
 Jira-integraation päätösloki:
 [jira-github-integration/DECISION_LOG.csv](https://github.com/uutisseuranta/jira-github-integration/blob/main/DECISION_LOG.csv)
+
+### Poikkeukset konventiosta
+
+Jos tekninen syy (esim. kolmannen osapuolen kirjaston nimikonventiokonflikti tai tooling-rajoite) pakottaa poikkeamaan tästä dokumentista:
+
+1. Kirjaa poikkeus repokohtaiseen `DECISION_LOG.csv`-tiedostoon erillisellä `D-xxx`-merkinnällä
+2. Merkitse `rationale`-kenttään syy ja poikkeuksen laajuus
+3. Lisää `affects_issues`-kenttään tieto siitä, mihin konventioon poikkeus kohdistuu
+4. Poikkeuksella on revisiopäivä: palaa arvioimaan poikkeuksen tarpeellisuutta seuraavan major-version yhteydessä
+
+Poikkeusta ei saa tehdä hiljaa — dokumentoimaton poikkeus on rikkomus, dokumentoitu poikkeus on tietoinen päätös.
