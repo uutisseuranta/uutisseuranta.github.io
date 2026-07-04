@@ -14,8 +14,11 @@ import {
   getPrefs,
   exportPrefsAsJson,
   unfollowTag,
-  onPrefsChange
+  onPrefsChange,
+  updatePrefs
 } from './prefs.js';
+
+import { getAuth, signOut, deleteUser } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
 let _user    = null;
 let _modal   = null;
@@ -119,6 +122,7 @@ function _renderContent() {
       <div>
         <div class="profile-name">${_escHtml(_user.displayName || '–')}</div>
         <div class="profile-email">${_escHtml(_user.email || '')}</div>
+        <div class="profile-created" style="font-size:var(--text-xs);color:var(--color-text-faint);margin-top:var(--space-1)">Liittynyt: ${new Date(_user.metadata.creationTime).toLocaleDateString('fi-FI')}</div>
       </div>
     </div>
 
@@ -136,13 +140,24 @@ function _renderContent() {
                           aria-label="Lopeta ${_escHtml(tag)}-seuranta">
                     <svg width="12" height="12" viewBox="0 0 24 24"
                          fill="none" stroke="currentColor" stroke-width="2.5">
-                      <path d="M18 6L6 18M6 6l12 12"/>
+                       <path d="M18 6L6 18M6 6l12 12"/>
                     </svg>
                   </button>
                 </span>
               `).join('')
             }</div>`
       }
+    </section>
+
+    <section class="profile-section">
+      <h3 class="profile-section-title">Ulkoasu</h3>
+      <div class="profile-theme-select">
+        <select id="profile-theme" class="profile-select" aria-label="Valitse teema">
+          <option value="system" ${prefs.theme === 'system' ? 'selected' : ''}>Järjestelmän oletus</option>
+          <option value="light" ${prefs.theme === 'light' ? 'selected' : ''}>Vaalea</option>
+          <option value="dark" ${prefs.theme === 'dark' ? 'selected' : ''}>Tumma</option>
+        </select>
+      </div>
     </section>
 
     <section class="profile-section">
@@ -161,6 +176,14 @@ function _renderContent() {
         Lataa asetukset (JSON)
       </button>
     </section>
+
+    <section class="profile-section">
+      <h3 class="profile-section-title">Tilinhallinta</h3>
+      <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-2)">
+        <button class="btn-profile-logout" id="btn-profile-logout">Kirjaudu ulos</button>
+        <button class="btn-danger" id="btn-delete-account">Poista tili</button>
+      </div>
+    </section>
   `;
 
   // Tagien poisto
@@ -170,9 +193,43 @@ function _renderContent() {
     });
   });
 
+  // Teeman valinta
+  body.querySelector('#profile-theme')?.addEventListener('change', e => {
+    updatePrefs({ theme: e.target.value });
+  });
+
   // JSON-vienti
   body.querySelector('#btn-export-json')?.addEventListener('click', () => {
     exportPrefsAsJson(_user);
+  });
+
+  // Kirjaudu ulos profiilista
+  body.querySelector('#btn-profile-logout')?.addEventListener('click', () => {
+    const auth = getAuth();
+    signOut(auth);
+    closeProfileModal();
+  });
+
+  // Poista tili
+  body.querySelector('#btn-delete-account')?.addEventListener('click', async () => {
+    if (confirm("Haluatko varmasti poistaa tilisi ja kaikki asetuksesi pysyvästi? Tätä toimintoa ei voi peruuttaa.")) {
+      try {
+        const uid = _user.uid;
+        localStorage.removeItem(`prefs_${uid}`);
+        localStorage.removeItem(`seen_${uid}`);
+        
+        await deleteUser(_user);
+        alert("Tili ja paikalliset asetukset poistettu onnistuneesti.");
+        closeProfileModal();
+      } catch (err) {
+        console.error("Tilin poisto epäonnistui", err);
+        if (err.code === 'auth/requires-recent-login') {
+          alert("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä uudelleen.");
+        } else {
+          alert("Tilin poistaminen epäonnistui: " + err.message);
+        }
+      }
+    }
   });
 }
 

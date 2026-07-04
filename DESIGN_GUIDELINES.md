@@ -156,9 +156,7 @@ Tämä redesign toteutetaan seuraavilla ehdoilla:
 
 ## Tiedostorakenne
 
-Projekti noudattaa tiukkaa **"ei alikansioita"** -periaatetta (ks. `TECHNICAL_DESIGN.md`). Ainoa poikkeus on GitHub Actions -työnkulkuja varten tarkoitettu `.github/`-hakemisto. Kaikki muut tiedostot — koodit, tyylit, skriptit, kuvat, fontit ja testit — sijaitsevat suoraan repositorion **juurihakemistossa**.
-
-Tämä rakenne takaa sen, että tiedostojen väliset viittaukset ovat mahdollisimman yksinkertaisia ja vältytään polkujen hallinnan aiheuttamalta monimutkaisuudelta.
+Tiedostorakenne noudattaa organisaation yhteistä [CODE_CONVENTIONS.md](file:///Users/jaakkokorhonen/uutisseuranta/CODE_CONVENTIONS.md) -ohjeistusta. Kaikki uuden käyttöliittymän tiedostot ja resurssit sijoitetaan suoraan juurikansioon:
 
 Hyväksytty rakenne:
 ```

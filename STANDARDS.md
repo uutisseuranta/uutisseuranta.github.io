@@ -1,6 +1,6 @@
 # STANDARDS.md — Uutisseuranta Frontend Standardit ja Vaatimukset
 
-Tämä dokumentti määrittelee uutisseuranta-projektin käyttöliittymäkerroksen (frontend) noudattamat ulkoiset standardit ja tekniset vaatimukset.
+Tämä dokumentti määrittelee uutisseuranta-projektin käyttöliittymäkerroksen (frontend) noudattamat ulkoiset standardit ja tekniset vaatimukset. Koodaustyyliä ja sisäisiä käytäntöjä varten katso [CODE_CONVENTIONS.md](file:///Users/jaakkokorhonen/uutisseuranta/CODE_CONVENTIONS.md).
 
 ---
 
@@ -19,16 +19,16 @@ Tämä dokumentti määrittelee uutisseuranta-projektin käyttöliittymäkerroks
 ## 2. Soveltaminen ja reunaehdot
 
 ### ActivityStreams 2.0 (AS2)
-- Käytetään standardin mukaisia objekteja:
+- Käytetään standardin mukaisia objekteja (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> L-003):
   - `Article` uutisartikkeleille
   - `Note` kommenteille
   - `Collection` uutisvirralle (Outbox/Inbox)
 - Semanttisen oikeellisuuden varmistamiseksi kaikkiin uutiskortteihin ja kommenttirakenteisiin liitetään vastaavat `data-ap-type`, `data-ap-id` ja `@context`-arvot.
 
 ### WCAG 2.1 AA (Saavutettavuus)
+- Vaatimustenmukaisuus on organisaation linjaus (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> L-004).
 - **Kontrasti:** Tekstin ja taustan välisen kontrastisuhteen on oltava vähintään **4.5:1** (WCAG SC 1.4.3) ja käyttöliittymän graafisten osien vähintään **3:1** (WCAG SC 1.4.11).
 - **Näppäimistöohjaus:** Kaikkiin interaktiivisiin elementteihin (kuten teeman vaihto ja profiilin avaaminen) pitää päästä `Tab`-näppäimellä ja niillä pitää olla selkeä `:focus-visible` -korostus (WCAG SC 2.4.7).
 - **Elementtien haku kohdistettaessa:** Elementtejä ei saa näyttää ainoastaan hover-tilan avulla ilman, että ne ovat saavutettavissa näppäimistöllä kohdistettaessa (WCAG SC 1.4.13).
 
-### GDPR (Tietosuoja)
-- Käyttäjällä on oikeus ladata omat tietonsa JSON-muodossa (Data Portability) sekä poistaa tilinsä kokonaan (Right to be Forgotten). Profiilimodaalin tulee tarjota nämä toiminnot Firebase Auth- ja Firestore-tietojen osalta.
+

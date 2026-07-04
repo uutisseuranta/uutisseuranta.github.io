@@ -22,7 +22,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js';
-import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange } from './prefs.js';
+import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs } from './prefs.js';
 import { initProfileModal, openProfileModal } from './profile.js';
 
 // ---- SCROLL OBSERVER ----
@@ -125,4 +125,48 @@ onAuthStateChanged(auth, async (user) => {
 // Kytketään navbarin avatar-nappi avaamaan profiilimodaali
 btnProfile.addEventListener('click', () => {
   openProfileModal();
+});
+
+// Kytketään teeman vaihto (theme toggle) prefs-moduulin ohjaamaksi
+const btnTheme = document.querySelector('[data-theme-toggle]');
+if (btnTheme) {
+  btnTheme.addEventListener('click', () => {
+    const currentPrefs = getPrefs();
+    const currentTheme = currentPrefs.theme || 'system';
+    let newTheme = 'light';
+    
+    if (currentTheme === 'system') {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      newTheme = isDark ? 'light' : 'dark';
+    } else {
+      newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    }
+    
+    updatePrefs({ theme: newTheme });
+  });
+}
+
+// Kuunnellaan preferenssien muutoksia ja päivitetään dokumentin teema sekä toggle-ikonin tila
+onPrefsChange((prefs) => {
+  const theme = prefs.theme || 'system';
+  let activeTheme = theme;
+  
+  if (theme === 'system') {
+    activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  
+  document.documentElement.setAttribute('data-theme', activeTheme);
+  
+  const toggleBtn = document.querySelector('[data-theme-toggle]');
+  if (toggleBtn) {
+    toggleBtn.setAttribute('aria-label', 'Vaihda ' + (activeTheme === 'dark' ? 'vaaleaan' : 'tummaan') + ' teemaan');
+    toggleBtn.innerHTML = activeTheme === 'dark'
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+           <circle cx="12" cy="12" r="5"/>
+           <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+         </svg>`
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+         </svg>`;
+  }
 });

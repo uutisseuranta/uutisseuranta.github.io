@@ -2,7 +2,7 @@
 
 Tämä dokumentti kuvaa uutisseuranta.net-sivuston käyttäjäpolut ja käyttötapaukset. Se kattaa sekä nykyisin toteutetut perustoiminnot (UP-1–8) että tulevat ehdotetut laajennukset (UP-9–15).
 
-Dokumentti pohjautuu `index.html`-toteutukseen, `TECHNICAL_DESIGN.md`-linjauksiin ja kuviointikirjaston suunnittelumalleihin ([d-cent.github.io/patterns](https://d-cent.github.io/patterns/)).
+Dokumentti pohjautuu `index.html`-toteutukseen, `TECHNICAL_DESIGN.md`-linjauksiin ja kuviointikirjaston suunnittelumalleihin ([d-cent.github.io/patterns](https://d-cent.github.io/patterns/)). Koodaustyyliä ja käytäntöjä varten katso [CODE_CONVENTIONS.md](file:///Users/jaakkokorhonen/uutisseuranta/CODE_CONVENTIONS.md), ja visuaalista asettelua varten [DESIGN_GUIDELINES.md](file:///Users/jaakkokorhonen/uutisseuranta/DESIGN_GUIDELINES.md).
 
 ---
 

@@ -12,7 +12,19 @@
 
 ---
 
-## Tiedostorakenne
+## Dokumentin rakenne ja soveltaminen
+
+Tämä ohjeisto jakautuu kahteen pääosaan:
+1. **Kanoniset (yhteiset) käytännöt** (Tiedostorakenne, nimeäminen, linkit, versionhallinta, commitit) — koskevat kaikkia organisaation repositorioita.
+2. **Repokohtaiset käytännöt** (Kommentointi, linttaustyökalut) — sovelletaan kunkin repon käyttämän teknologiapinon mukaan.
+
+Jokainen repositorio ylläpitää omaa paikallista `DESIGN_GUIDELINES.md` ja `STANDARDS.md` -ohjeistoaan, jotka kuvaavat vain kyseisen palvelun omia käyttöliittymä-, asettelu- ja teknologiapinostandardeja (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-004).
+
+---
+
+## 1. Kanoniset (yhteiset) käytännöt
+
+### Tiedostorakenne
 
 **Kaikki tiedostot sijaitsevat repositorion juuressa. Alikansioita ei käytetä.**
 
@@ -34,7 +46,7 @@ repo/
 └── ...
 ```
 
-Perustelu (D-009): Projekteissa on vähän tiedostoja. Hakemistorakenne ei tuo lisäarvoa — se lisää navigaatiokulua ilman hyötyä. Kaikki tiedostot löytyvät yhdestä paikasta. `skill-*/`-poikkeus on skills-repokohtainen ja perusteltu: Perplexity-skillit ovat itsenäisiä dokumentaatioyksikköjä, jotka tarvitsevat oman hakemiston `load_skill`-mekanismin vuoksi.
+Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-001): Projekteissa on vähän tiedostoja. Hakemistorakenne ei tuo lisäarvoa — se lisää navigaatiokulua ilman hyötyä. Kaikki tiedostot löytyvät yhdestä paikasta. `skill-*/`-poikkeus on skills-repokohtainen ja perusteltu: Perplexity-skillit ovat itsenäisiä dokumentaatioyksikköjä, jotka tarvitsevat oman hakemiston `load_skill`-mekanismin vuoksi.
 
 ---
 
@@ -54,7 +66,7 @@ PATTERNS_CATALOG.md
 USER_PATHS.md
 ```
 
-Perustelu (D-002, uutisseuranta.github.io): Erottaa sopimukset ja normatiiviset dokumentit ops-tiedostoista ja lähdekoodista. Yhtenäinen nimeäminen kaikkien repojen välillä.
+Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-002): Erottaa sopimukset ja normatiiviset dokumentit ops-tiedostoista ja lähdekoodista. Yhtenäinen nimeäminen kaikkien repojen välillä.
 
 ### Skill-tiedostot — kaksi formaattia
 
@@ -155,7 +167,7 @@ Kaikki viittaukset toisiin repositorioihin kirjoitetaan **absoluuttisina GitHub-
 [TECHNICAL_DESIGN.md](../jira-github-integration/TECHNICAL_DESIGN.md)
 ```
 
-Perustelu (D-002, uutisseuranta.github.io): Relatiiviset polut eivät toimi GitHubissa cross-repo-viittauksissa.
+Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-002): Relatiiviset polut eivät toimi GitHubissa cross-repo-viittauksissa.
 
 ---
 
@@ -177,7 +189,7 @@ Git-tagit luodaan tällä muodolla. GitHub Releases käyttää samaa tunnistetta
 | Uusi toiminnallisuus, taaksepäin yhteensopiva | `vX.Y+1.0` | minor |
 | Breaking change, API-muutos | `vX+1.0.0` | major |
 
-Perustelu (D-002, uutisseuranta.github.io): Yhtenäiset julkaisukäytännöt kaikkien repojen välillä.
+Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-002): Yhtenäiset julkaisukäytännöt kaikkien repojen välillä.
 
 ---
 
@@ -211,11 +223,13 @@ chore(deps): päivitä firebase 10.x → 11.x
 ci: lisää yamllint-tarkistus workflowhin
 ```
 
-Perustelu (D-011): Yhdenmukainen commit-historia mahdollistaa automaattisen CHANGELOG-generoinnin ja helpottaa `git log`-selailua. Kytkeytyy suoraan DECISION_LOG-merkintöihin.
+Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-003): Yhdenmukainen commit-historia mahdollistaa automaattisen CHANGELOG-generoinnin ja helpottaa `git log`-selailua. Kytkeytyy suoraan DECISION_LOG-merkintöihin.
 
 ---
 
-## Koodin kommentointi
+## 2. Repokohtaiset käytännöt
+
+### Koodin kommentointi
 
 ### Periaate
 
@@ -323,15 +337,17 @@ Perustelu: Repojen kielivalikoima vaihtelee — `bq-activitystreams` tarvitsee e
 
 ## Päätösloki
 
-Kaikki arkkitehtuuripäätökset kirjataan repokohtaiseen `DECISION_LOG.csv`-tiedostoon.
+Kaikki arkkitehtuuripäätökset kirjataan repokohtaiseen [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -tiedostoon.
 
-```
+Esimerkki uutisseuranta.github.io -repositorion päätöksistä:
+```csv
 id,date,title,decision,rationale,affects_issues
-D-001,...
+G-002,2026-07-04,Cross-repo links,Use absolute GitHub URLs for cross-repository links,Relative paths do not resolve correctly across different GitHub repositories,CODE_CONVENTIONS.md
+G-001,2026-07-04,Flat directory structure,Keep all project files in the repository root directory with minimal exceptions (.github/ and skill-*/),Flat structures reduce navigation overhead and simplify path management in small projects,CODE_CONVENTIONS.md;DESIGN_GUIDELINES.md
 ```
 
 Jira-integraation päätösloki:
-[jira-github-integration/DECISION_LOG.csv](https://github.com/uutisseuranta/jira-github-integration/blob/main/DECISION_LOG.csv)
+[jira-github-integration / DECISION_LOG.csv](https://github.com/uutisseuranta/jira-github-integration/blob/main/DECISION_LOG.csv)
 
 ---
 
