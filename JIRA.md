@@ -47,7 +47,12 @@ Jira Automation Incoming Webhook trigger
 Create work item / Transition work item / Comment on work item
 ```
 
-Workflow on tallennettu: `.github/workflows/jira-webhook-relay.yml`
+> **Relay-workflow sijaitsee repossa polulla:**
+> ```
+> .github/workflows/jira-webhook-relay.yml
+> ```
+> Lisää tai tarkista polku suoraan koodieditorissa — älä kopioi polkua leikepöydän kautta,
+> jotta näkymättömät whitespace-merkit eivät päädy tiedostoon.
 
 ---
 
@@ -329,9 +334,9 @@ Action: Edit work item
   → Work item: {{lookupIssues.first.key}}
   → Assignee (assigned):   Smart value: Specify user → {{webhookData.issue.assignee.login}}
   → Assignee (unassigned): Unassigned
+```
 
 > Rajoitus: GitHub login ≠ Jira accountId. Katso käyttäjäkartoitus-osio (Rajoitukset).
-```
 
 ---
 
@@ -578,8 +583,8 @@ Action: Send web request  (päivitä tai luo)
 ### Tiedostot
 
 ```
-.github/workflows/migrate-history.yml   ← GitHub Actions workflow
-scripts/migrate_history.py              ← Python-skripti
+.github/workflows/migrate-history.yml   <- GitHub Actions workflow
+scripts/migrate_history.py              <- Python-skripti
 ```
 
 ### Workflow: `migrate-history.yml`
@@ -712,7 +717,7 @@ ELSE IF: {{webhookData.action}} equals "reopened"
 ```
 
 > **Tärkeä korjaus:** Vanhentunut `jira.condition.webhook.compare` ei enää toimi JSON-importissa.  
-> Korvaa aina `jira.condition.if` (If/else block) -ehdolla.
+> Korvaa aina `jira.condition.if` (If/else block) -ehdolla — ei webhook-specific compare-conditioneja.
 
 ---
 
@@ -730,7 +735,7 @@ Smart valuesit käyttävät **mustache-syntaksia** ja **dot notation** -merkint�
 
 | Smart value | Palauttaa | Huomio |
 |---|---|---|
-| `{{webhookData.action}}` | GitHub-eventin tyyppi (`opened`, `closed`, `labeled`…) | |
+| `{{webhookData.action}}` | GitHub-eventin tyyppi (`opened`, `closed`, `labeled`...) | |
 | `{{webhookData.issue.number}}` | GitHub issue -numero | Kokonaisluku, ei lainausmerkkejä JQL:ssä |
 | `{{webhookData.issue.title}}` | GitHub issue -otsikko | |
 | `{{webhookData.issue.body}}` | GitHub issue -kuvaus | Markdown plain textinä |
@@ -838,7 +843,11 @@ GitHub lähettää seuraavan rakenteen (issues event + issue_comment event):
 ### 1. Relay: `jira-webhook-relay.yml`
 
 Välittää live GitHub-issueeventsit Jira Automation -webhookiin.
-Tiedosto: `.github/workflows/jira-webhook-relay.yml`
+
+> **Tiedostopolku repossa:**
+> ```
+> .github/workflows/jira-webhook-relay.yml
+> ```
 
 ```yaml
 name: Jira Webhook Relay
