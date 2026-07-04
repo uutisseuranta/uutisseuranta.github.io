@@ -1,7 +1,7 @@
 # GitHub ↔ Jira Integration — Täysi toteutussuunnitelma
 
-> Päivitetty 2026-07-04  
-> Atlassian Cloud Automation -viitteet: https://support.atlassian.com/cloud-automation/resources/  
+> Päivitetty 2026-07-04
+> Atlassian Cloud Automation -viitteet: https://support.atlassian.com/cloud-automation/resources/
 > Jira Cloud API -viitteet: https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
 ---
@@ -28,7 +28,7 @@ Kun GitHub for Jira -app on asennettu, Jiran issue-näkymässä Development-pane
 | GitHub repo | **Repository** | Repon nimi, URL, connected status |
 | Jira → GitHub -linkki | **Link to GitHub** | Manuaalinen tai automaatio-luotu linkki Jira-tiketiltä GitHub-issueen |
 
-> **Huom:** "Link to GitHub" -toiminto löytyy Jira-tiketin **Link**-napista → **Link to GitHub**.  
+> **Huom:** "Link to GitHub" -toiminto löytyy Jira-tiketin **Link**-napista → **Link to GitHub**.
 > Se luo Jira issue link -tyyppisen viittauksen eikä korvaa Development-paneelin natiivia dataa.
 
 ### Tekniset arkkitehtuurivalinnat
@@ -58,7 +58,7 @@ Create work item / Transition work item / Comment on work item
 
 ## Terminologia (viralliset Atlassian-nimet, 2026)
 
-> **Huom 2026:** Atlassian uudisti terminologiaa vuoden 2025 lopulla.  
+> **Huom 2026:** Atlassian uudisti terminologiaa vuoden 2025 lopulla.
 > Vanha "rule" = **Flow**. Vanha "issue" = **Work item**. Vanha "project" = **Space**.
 
 | Vanhentunut nimi | Atlassianin virallinen nimi (2026) | Huomio |
@@ -91,7 +91,7 @@ Custom kenttien **display nimet** varmistettu suoraan Jira Cloud -instanssista
 | `customfield_10072` | `github_issue_number` | `cf[10072]` | Number | `45` |
 | `customfield_10073` | `github_url` | `cf[10073]` | URL | `https://github.com/uutisseuranta/uutisseuranta.github.io/issues/45` |
 
-> **Idempotenttius-JQL:** `project = US AND cf[10072] = {{webhookData.issue.number}} AND cf[10071] = "{{webhookData.repository.name}}"`  
+> **Idempotenttius-JQL:** `project = US AND cf[10072] = {{webhookData.issue.number}} AND cf[10071] = "{{webhookData.repository.name}}"`
 > **Smart value -syntaksi:** `{{issue.customfield_10071}}` — käytä kenttä-ID:tä, ei display nimeä.
 
 ### Kenttäkohtainen synkronointi
@@ -123,6 +123,7 @@ Custom kenttien **display nimet** varmistettu suoraan Jira Cloud -instanssista
 | `bug` | Bug |
 | `chore`, `docs`, `refactor`, `test` | Task |
 | `arch`, `sec` | Task (tai Epic jos laajuus vaatii) |
+| `epic` | Epic |
 | ei labelia | Task (oletus) |
 
 ---
@@ -188,8 +189,8 @@ Condition: {{smart values}} condition
 | `customfield_10072` | `{{webhookData.issue.number}}` |
 | `customfield_10073` | `{{webhookData.issue.html_url}}` |
 
-> **Huom:** Create work item -actionin "Advanced fields" -osio ei enää tue raw JSON -syötettä  
-> uusimmassa Automation UI:ssa. Käytä jokainen kenttä erikseen listasta valiten,  
+> **Huom:** Create work item -actionin "Advanced fields" -osio ei enää tue raw JSON -syötettä
+> uusimmassa Automation UI:ssa. Käytä jokainen kenttä erikseen listasta valiten,
 > tai käytä **Send web request** → `POST /rest/api/3/issue` -toimintoa.
 
 ---
@@ -248,8 +249,8 @@ Action: Edit work item (resolution)
   → IF {{webhookData.issue.state_reason}} == "duplicate"   → "Duplicate"
 ```
 
-> **Huom:** Transition-nimien täytyy täsmätä täsmälleen Jiran workflow-konfiguraatioon.  
-> Tarkista: **Project Settings → Workflows → [workflow nimi] → Edit**  
+> **Huom:** Transition-nimien täytyy täsmätä täsmälleen Jiran workflow-konfiguraatioon.
+> Tarkista: **Project Settings → Workflows → [workflow nimi] → Edit**
 > US-projektin statukset (varmistettu MCP:llä): `To Do` (id: 10000), `In Progress` (id: 10001), `Done` (id: 10002 tai vastaava).
 
 ---
@@ -278,7 +279,7 @@ Action: Transition work item
   → To status: To Do
 ```
 
-> **Huom:** Resolution täytyy tyhjentää **ennen** transitiota — muuten Jira hylkää  
+> **Huom:** Resolution täytyy tyhjentää **ennen** transitiota — muuten Jira hylkää
 > siirtymän jos nykyisellä work itemillä on Resolution asetettu.
 
 ---
@@ -336,7 +337,9 @@ Action: Edit work item
   → Assignee (unassigned): Unassigned
 ```
 
-> Rajoitus: GitHub login ≠ Jira accountId. Katso käyttäjäkartoitus-osio (Rajoitukset).
+> **Rajoitus:** GitHub login ≠ Jira accountId. Jira Automation ei voi hakea accountId:tä
+> pelkän GitHub-loginin perusteella ilman erillistä käyttäjäkartoitustaulukkoa.
+> Katso käyttäjäkartoitus-osio (Rajoitukset).
 
 ---
 
@@ -397,7 +400,7 @@ URL-pohja kaikkiin GitHub API -kutsuihin:
 https://api.github.com/repos/uutisseuranta/{{issue.customfield_10071}}/issues/{{issue.customfield_10072}}
 ```
 
-> **Huom:** Käytä `{{issue.customfield_10071}}` ja `{{issue.customfield_10072}}` —  
+> **Huom:** Käytä `{{issue.customfield_10071}}` ja `{{issue.customfield_10072}}` —
 > **ei** display-nimiä (`{{issue.source_repo}}`), koska Jira Automation -smart valuesit
 > viittaavat custom kenttiin ID:llä, ei display-nimellä.
 
@@ -430,11 +433,15 @@ Action: Send web request
       {"state": "open"}
 
 Action: Send web request  (lisää status-label)
+  → Method: GET ensin .../labels, suodata status:* -labelit
+  → DELETE .../labels/{label} per vanhentunut status-label (yksi API-kutsu per label)
   → Method: POST
   → URL: .../labels
   → Body: {"labels": ["status:{{issue.status.name | toLower}}"]}
-  (Poista ensin vanhat status:* -labelit: DELETE .../labels/status:*)
 ```
+
+> **Huom:** GitHub Labels API ei tue wildcard-poistoa. Vanhat `status:*` -labelit
+> täytyy poistaa yksitellen: ensin `GET /labels` → suodata `status:` -alkuiset → `DELETE` per label.
 
 ---
 
@@ -455,6 +462,10 @@ Action: Send web request
   → Body (unassigned): {"assignees": []}
 ```
 
+> **Huom:** `{{issue.assignee.name}}` palauttaa Jira-käyttäjätunnuksen (username),
+> mutta GitHub vaatii GitHub-loginin. Jos tunnukset eivät vastaa toisiaan,
+> katso käyttäjäkartoitus-osio (Rajoitukset). Toimii suoraan jos Jira-tunnus == GitHub-login.
+
 ---
 
 ### Sääntö 11: Jira prioriteetti muuttuu → Päivitä GitHub label
@@ -468,15 +479,24 @@ Trigger: Field value changed
 Condition: Issue fields condition
   → customfield_10072 is not empty
 
-Action: Send web request  (poista vanhat priority:* -labelit)
+Action: Send web request  (hae nykyiset labelit)
+  → Method: GET
+  → URL: .../labels
+  (Suodata vastauksen [*].name jotka alkavat "priority:" → tallenna muuttujaan)
+
+Action: Send web request  (poista vanhat priority:* -labelit, yksi kerrallaan)
   → Method: DELETE
-  → URL: .../labels/priority:<arvo>  (per label erikseen)
+  → URL: .../labels/priority:high  (esimerkki — toista per löydetty label)
 
 Action: Send web request  (lisää uusi)
   → Method: POST
   → URL: .../labels
   → Body: {"labels": ["priority:{{issue.priority.name | toLower}}"]}
 ```
+
+> **Huom:** GitHub Labels API ei tue wildcard-poistoa. Vanhat `priority:*` -labelit
+> täytyy poistaa yksitellen URL-polulla `/labels/{label_name}`.
+> Jos `issue.priority.name` on esim. `Highest`, laske vastaava label-arvo (`priority:highest`).
 
 ---
 
@@ -495,7 +515,7 @@ Trigger: Field value changed
 Condition: Issue fields condition
   → customfield_10072 is not empty
 
-Action: Send web request  (poista vanhat sprint:* -labelit)
+Action: Send web request  (poista vanhat sprint:* -labelit, yksi kerrallaan)
 Action: Send web request  (lisää sprint-label)
   → Method: POST
   → URL: .../labels
@@ -515,12 +535,18 @@ Trigger: Field value changed
 Condition: Issue fields condition
   → customfield_10072 is not empty
 
-Condition: {{smart values}} condition  (silmukan esto)
-  → First value:  {{issue.updated.epochMillis}} + 5000
+Condition: {{smart values}} condition  (silmukan esto — ohita tuore päivitys)
+  → First value:  {{issue.updated.epochMillis}}
   → Condition:    less than
-  → Second value: {{now.epochMillis}}
+  → Second value: {{now.epochMillis}} - 5000
   → (Eli: päivitys on yli 5 s vanha → jatka; tuore → ohita)
+```
 
+> **Tärkeä huomio:** Automation ei tue aritmetiikkaa `{{now.epochMillis}} - 5000` -muodossa
+> suoraan. Vaihtoehto: lisää erillinen "Wait 5 seconds" -action ennen tarkistusta,
+> tai hyväksy pieni riski lyhyestä kilpailevasta päivityksestä (käytännössä harvinainen).
+
+```
 Action: Send web request
   → Method: PATCH
   → URL: [URL-pohja]
@@ -579,12 +605,16 @@ Action: Send web request  (päivitä tai luo)
 > **Tausta:** Kertaluonteinen (tai uudelleenkäytettävä) workflow joka replikoi olemassa
 > olevan GitHub-issuehistorian Jiraan Automation incoming webhook -endpointin kautta.
 > Sama Action toimii seuraavaan projektiin `project_key`-parametria vaihtamalla.
+>
+> **Huom:** Workflow käynnistyy **vain manuaalisesti** (`workflow_dispatch`).
+> Se ei reagoi automaattisesti issue-tapahtumiin — sen tarkoitus on kertaluonteinen
+> tai hallittu backfill-ajo, ei jatkuva synkronointi.
 
 ### Tiedostot
 
 ```
-.github/workflows/migrate-history.yml   <- GitHub Actions workflow
-scripts/migrate_history.py              <- Python-skripti
+.github/workflows/migrate-history.yml
+scripts/migrate_history.py
 ```
 
 ### Workflow: `migrate-history.yml`
@@ -652,7 +682,7 @@ Skripti (`scripts/migrate_history.py`) tekee seuraavaa:
 4. POST-aa payloadin `AUTOMATION_WEBHOOK_URL`:iin
 5. Kirjoittaa `migration_log.jsonl`-lokitiedoston (uploadataan Artifactina)
 
-**Rate limit -suojaus:** 100 ms viive Jira API -kutsujen välillä, 50 ms webhook-kutsujen välillä.  
+**Rate limit -suojaus:** 100 ms viive Jira API -kutsujen välillä, 50 ms webhook-kutsujen välillä.
 **Retry:** 429-vastaus → odottaa `Retry-After`-headerin mukaisen ajan ja yrittää uudelleen.
 
 ### Aikaleima-rajoitus
@@ -668,8 +698,8 @@ tai custom-kentän arvona tiketin historiaan.
 |--------|------|------|
 | `JIRA_EMAIL` | Jira-tilin sähköposti | ✅ asetettu |
 | `JIRA_API_TOKEN` | Atlassian API token | ✅ asetettu |
-| `AUTOMATION_WEBHOOK_URL` | Jira Automation → Incoming webhook → URL (ks. JIRA.md) | ✅ asetettu |
-| `JIRA_BASE_URL` | `https://uutisseuranta.atlassian.net` | lisättävä |
+| `AUTOMATION_WEBHOOK_URL` | Jira Automation → Incoming webhook → URL | ✅ asetettu |
+| `JIRA_BASE_URL` | `https://uutisseuranta.atlassian.net` | ⚠️ lisättävä ennen ajoa |
 
 ### Suositeltu testijärjestys
 
@@ -716,7 +746,7 @@ ELSE IF: {{webhookData.action}} equals "reopened"
            → Transition work item → To Do
 ```
 
-> **Tärkeä korjaus:** Vanhentunut `jira.condition.webhook.compare` ei enää toimi JSON-importissa.  
+> **Tärkeä korjaus:** Vanhentunut `jira.condition.webhook.compare` ei enää toimi JSON-importissa.
 > Korvaa aina `jira.condition.if` (If/else block) -ehdolla — ei webhook-specific compare-conditioneja.
 
 ---
@@ -844,11 +874,6 @@ GitHub lähettää seuraavan rakenteen (issues event + issue_comment event):
 
 Välittää live GitHub-issueeventsit Jira Automation -webhookiin.
 
-> **Tiedostopolku repossa:**
-> ```
-> .github/workflows/jira-webhook-relay.yml
-> ```
-
 ```yaml
 name: Jira Webhook Relay
 
@@ -900,8 +925,8 @@ IllegalStateException: Component for type ComponentTypeKey{
 } no longer exists.
 ```
 
-**Syy:** `jira.condition.webhook.compare` on poistunut tuettujen importoitavien  
-komponenttityyppien listalta.  
+**Syy:** `jira.condition.webhook.compare` on poistunut tuettujen importoitavien
+komponenttityyppien listalta.
 **Korjaus:** Korvaa `jira.condition.if` (If/else block) -ehdolla — ei webhook-specific compare-conditioneja.
 
 ---
@@ -917,7 +942,7 @@ komponenttityyppien listalta.
 | 5 | Sääntö 1: GitHub → Jira, issue opened | ✅ VALMIS (US-7) |
 | 6 | Säännöt 2–8: loput GitHub → Jira -flowledet | 🔄 JSON valmis, testaamatta |
 | 7 | Säännöt 9–15: Jira → GitHub -flowledet | 📋 Suunniteltu |
-| 8 | Historia-miggraatio (`migrate-history.yml`): lisää `JIRA_BASE_URL` secret → aja dry run → aja live | 📋 Valmis ajettavaksi |
+| 8 | Lisää `JIRA_BASE_URL` secret → Historia-miggraatio (`migrate-history.yml`): aja dry run → aja live | 📋 Valmis ajettavaksi |
 | 9 | Backfill-validointi: tarkista Jirasta että kaikki issuet löytyvät | 📋 Suunniteltu |
 
 ---
@@ -949,11 +974,15 @@ curl -s -X POST \
 | `{{issue.customfield_10071}}` tyhjä | Väärä smart value -syntaksi | Käytä `customfield_10071`, ei display-nimeä `source_repo` |
 | HTTP 422 GitHub API | Assignee-login ei ole GitHub-käyttäjä | Katso käyttäjäkartoitus-osio |
 | Resolution estää transition (Sääntö 4) | Resolution asetettu ennen transitiota | Tyhjennä Resolution -kenttä **ennen** Transition-actionia |
+| `JIRA_BASE_URL` undefined | Secret puuttuu migrate-history-workflowsta | Lisää `JIRA_BASE_URL` = `https://uutisseuranta.atlassian.net` |
+| GitHub Labels wildcard-poisto epäonnistuu | DELETE ei tue `*`-wildcardia URL:ssa | Hae labelit ensin GET, poista yksitellen per label |
 
 ### Automation-lokit
 
-Audit log löytyy: **Jira Settings → Automation → Audit log**  
+Audit log löytyy: **Jira Settings → Automation → Audit log**
 Filter: Work item key (esim. `US-7`) tai ajanjakso.
+
+Virallinen ohje audit logiin: https://support.atlassian.com/cloud-automation/docs/view-the-automation-audit-log/
 
 ---
 
@@ -968,6 +997,7 @@ Filter: Work item key (esim. `US-7`) tai ajanjakso.
 | GitHub-käyttäjä ≠ Jira-käyttäjä | Vaihe 1: tunnusten pitää vastata toisiaan. Vaihe 2: voidaan rakentaa Create lookup table -toiminnolla user-mapping-taulukko |
 | Automation-kutsumäärä | Jira Automation Free: 500 kutsua/kk. Jos ylittyy, harkitse GitHub Apps -webhookia suorana. |
 | Historia-miggraation aikaleima | Automation kirjaa tähän hetkeen; alkuperäinen aika säilyy `originalTimestamp`-kentässä |
+| GitHub Labels API, wildcard-poisto | DELETE vaatii täsmällisen label-nimen URL-polkuun; poista `priority:*` / `status:*` yksi kerrallaan |
 
 ---
 
@@ -977,10 +1007,12 @@ Filter: Work item key (esim. `US-7`) tai ajanjakso.
 - [Jira Automation triggers](https://support.atlassian.com/cloud-automation/docs/jira-automation-triggers/)
 - [Jira Automation actions](https://support.atlassian.com/cloud-automation/docs/jira-automation-actions/)
 - [Jira Automation conditions](https://support.atlassian.com/cloud-automation/docs/jira-automation-conditions/)
+- [Jira Automation audit log](https://support.atlassian.com/cloud-automation/docs/view-the-automation-audit-log/)
 - [Smart values — overview](https://support.atlassian.com/cloud-automation/docs/what-are-smart-values/)
 - [Smart values — issues](https://support.atlassian.com/cloud-automation/docs/smart-values-issues/)
 - [Jira Automation branches](https://support.atlassian.com/cloud-automation/docs/jira-automation-branches/)
 - [Automation template library](https://www.atlassian.com/software/jira/automation-template-library)
 - [Jira Cloud REST API v3](https://developer.atlassian.com/cloud/jira/platform/rest/v3/)
 - [GitHub Issues API](https://docs.github.com/en/rest/issues/issues)
+- [GitHub Labels API](https://docs.github.com/en/rest/issues/labels)
 - [GitHub for Jira — Atlassian Marketplace](https://marketplace.atlassian.com/apps/1219592/github-for-jira)
