@@ -23,12 +23,13 @@ jobs:
     steps:
       - name: Send to Jira Automation
         env:
-          JIRA_WEBHOOK_TOKEN: 4aed5c2e19b6532368342c136e1f7211ce709f50
-          JIRA_WEBHOOK_URL: https://api-private.atlassian.com/automation/webhooks/jira/a/042ceae5-c99b-4174-9d44-46a2d26e9c05/019f288b-703a-7e52-bd20-d9cb4f5cb560
+          PAYLOAD: ${{ toJson(github.event) }}
+          JIRA_WEBHOOK_TOKEN: ${{ secrets.JIRA_WEBHOOK_TOKEN }}
+          JIRA_WEBHOOK_URL: ${{ secrets.AUTOMATION_WEBHOOK_URL }}
         run: |
-          echo '${{ toJson(github.event) }}' | \
-          curl -X POST \
-            "$JIRA_WEBHOOK_URL" \
+          printf '%s' "$PAYLOAD" > payload.json
+          curl --fail --retry 3 --retry-delay 5 \
+            -X POST "$JIRA_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -H "X-Automation-Webhook-Token: $JIRA_WEBHOOK_TOKEN" \
-            --data-binary @-
+            --data-binary @payload.json

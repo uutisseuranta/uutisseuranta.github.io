@@ -699,7 +699,26 @@ tai custom-kentän arvona tiketin historiaan.
 | `JIRA_EMAIL` | Jira-tilin sähköposti | ✅ asetettu |
 | `JIRA_API_TOKEN` | Atlassian API token | ✅ asetettu |
 | `AUTOMATION_WEBHOOK_URL` | Jira Automation → Incoming webhook → URL | ✅ asetettu |
-| `JIRA_BASE_URL` | `https://uutisseuranta.atlassian.net` | ⚠️ lisättävä ennen ajoa |
+| `JIRA_BASE_URL` | `https://uutisseuranta.atlassian.net` | ⚠️ **lisättävä ennen historia-miggraation ajoa** |
+
+> ### ⚠️ Muista lisätä `JIRA_BASE_URL` ennen historia-miggraation ajoa
+>
+> **Milloin:** Toteutusjärjestyksen vaihe 8 — ennen `migrate-history.yml`-workflown
+> ensimmäistä ajoa (dry run tai live).
+>
+> **Miten lisätään:**
+> 1. Avaa: **GitHub → uutisseuranta/uutisseuranta.github.io → Settings → Secrets and variables → Actions**
+> 2. Paina **New repository secret**
+> 3. Name: `JIRA_BASE_URL`
+> 4. Secret: `https://uutisseuranta.atlassian.net`
+> 5. Paina **Add secret**
+>
+> **Seuraus jos unohdetaan:** Workflow käynnistyy mutta kaatuu heti ensimmäiseen
+> API-kutsuun (`KeyError: 'JIRA_BASE_URL'` tai vastaava). Dry run -ajo varmistaa tämän
+> ennen live-ajoa.
+>
+> **Tarkistus jälkikäteen:** `GET https://uutisseuranta.atlassian.net/rest/api/3/myself`
+> (Basic Auth: JIRA_EMAIL + JIRA_API_TOKEN) — palauttaa `200 OK` jos URL ja token ovat oikein.
 
 ### Suositeltu testijärjestys
 
@@ -942,7 +961,7 @@ komponenttityyppien listalta.
 | 5 | Sääntö 1: GitHub → Jira, issue opened | ✅ VALMIS (US-7) |
 | 6 | Säännöt 2–8: loput GitHub → Jira -flowledet | 🔄 JSON valmis, testaamatta |
 | 7 | Säännöt 9–15: Jira → GitHub -flowledet | 📋 Suunniteltu |
-| 8 | Lisää `JIRA_BASE_URL` secret → Historia-miggraatio (`migrate-history.yml`): aja dry run → aja live | 📋 Valmis ajettavaksi |
+| 8 | **Lisää `JIRA_BASE_URL` secret** → Historia-migraatio (`migrate-history.yml`): aja dry run → aja live | 📋 Valmis ajettavaksi |
 | 9 | Backfill-validointi: tarkista Jirasta että kaikki issuet löytyvät | 📋 Suunniteltu |
 
 ---
