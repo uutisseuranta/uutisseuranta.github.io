@@ -22,10 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send to Jira Automation
+        if: ${{ secrets.AUTOMATION_WEBHOOK_URL != '' || secrets.JIRA_WEBHOOK_URL != '' }}
         env:
           PAYLOAD: ${{ toJson(github.event) }}
           JIRA_WEBHOOK_TOKEN: ${{ secrets.JIRA_WEBHOOK_TOKEN }}
-          JIRA_WEBHOOK_URL: ${{ secrets.AUTOMATION_WEBHOOK_URL }}
+          JIRA_WEBHOOK_URL: ${{ secrets.AUTOMATION_WEBHOOK_URL || secrets.JIRA_WEBHOOK_URL }}
         run: |
           printf '%s' "$PAYLOAD" > payload.json
           curl --fail --retry 3 --retry-delay 5 \
