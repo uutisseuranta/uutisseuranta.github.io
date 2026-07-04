@@ -154,6 +154,11 @@ Tämä redesign toteutetaan seuraavilla ehdoilla:
 - ei UI-rakenteita, jotka rakentuvat auth-tilan ympärille
 - kaikki käyttöliittymäelementit toimivat ilman backend-riippuvuutta
 
+## Toiminnallisuuksien jakelu ja päällekkäisyyden esto
+
+- **Yksikäsitteisyys**: Jokaisen käyttötapauksen (Use Case) ja käyttäjätarinan (User Story) toiminnallisuuden tulee olla uniikki ilman päällekkäisiä tai kilpailevia toteutuksia.
+- **Yhden paikan periaate**: Jokainen toiminnallisuus toteutetaan ja julkaistaan vain yhdessä paikassa (Single Source of Truth käyttöliittymässä tai taustajärjestelmässä). Samaa logiikkaa tai näkymää ei saa monistaa tarpeettomasti eri paikkoihin.
+
 ## Tiedostorakenne
 
 Tiedostorakenne noudattaa organisaation yhteistä [CODE_CONVENTIONS.md](file:///Users/jaakkokorhonen/uutisseuranta/CODE_CONVENTIONS.md) -ohjeistusta. Kaikki uuden käyttöliittymän tiedostot ja resurssit sijoitetaan suoraan juurikansioon:
