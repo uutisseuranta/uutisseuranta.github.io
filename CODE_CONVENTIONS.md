@@ -1,7 +1,5 @@
 # CODE_CONVENTIONS.md
 
-<!-- version: v1.1 | päivitetty: 2026-07-04 | päätös: D-011 -->
-
 > Tämä dokumentti on yhteinen kaikille uutisseuranta-repositorioille.
 > Sama tiedosto sijaitsee jokaisen repon juuressa.
 >
@@ -9,6 +7,8 @@
 > - [uutisseuranta/uutisseuranta.github.io](https://github.com/uutisseuranta/uutisseuranta.github.io)
 > - [uutisseuranta/patterns](https://github.com/uutisseuranta/patterns)
 > - [uutisseuranta/jira-github-integration](https://github.com/uutisseuranta/jira-github-integration)
+> - [uutisseuranta/bq-activitystreams](https://github.com/uutisseuranta/bq-activitystreams)
+> - [uutisseuranta/skills](https://github.com/uutisseuranta/skills)
 
 ---
 
@@ -16,20 +16,25 @@
 
 **Kaikki tiedostot sijaitsevat repositorion juuressa. Alikansioita ei käytetä.**
 
-Poikkeus: `.github/`-hakemisto on sallittu **GitHubin omaa infrastruktuuria** varten (Actions-workflowt, issue-templatet, Dependabot-konfiguraatio jne.). `.github/` ei ole tarkoitettu repon omille tiedostoille — sinne ei sijoiteta dokumentaatiota, skriptejä, konfiguraatioita eikä muita projektin tiedostoja.
+Sallitut poikkeukset kaikissa repoissa:
+
+- `.github/` — GitHubin omaa infrastruktuuria varten (Actions-workflowt, issue-templatet, Dependabot-konfiguraatio jne.). `.github/` ei ole tarkoitettu repon omille tiedostoille — sinne ei sijoiteta dokumentaatiota, skriptejä, konfiguraatioita eikä muita projektin tiedostoja.
+- `skill-*/` — **vain `skills`-repossa**: Perplexity-agenttiskillit hakemistorakenteella `skill-<nimi>/SKILL.md`. Muissa repoissa ei käytetä `skill-*/`-hakemistoja.
 
 ```
 repo/
 ├── .github/               ← VAIN GitHub-infrastruktuuri (Actions, issue-templatet)
 │   └── workflows/
 │       └── *.yml
-├── skill-(käyttötarkoitus).yml  ← MML-skill-konfiguraatiot, juuressa
+├── skill-<nimi>/          ← VAIN skills-repossa: Perplexity-skill-hakemistot
+│   └── SKILL.md
+├── skill-(käyttötarkoitus).yml  ← MML/ops-konfiguraatiot, juuressa (kaikki repot)
 ├── SOPIMUSDOKUMENTTI.md   ← SCREAMING_SNAKE_CASE-dokumentit juuressa
 ├── tiedosto.ext           ← muu kebab-case-lähdekoodisto juuressa
 └── ...
 ```
 
-Perustelu (D-009): Projekteissa on vähän tiedostoja. Hakemistorakenne ei tuo lisäarvoa — se lisää navigaatiokulua ilman hyötyä. Kaikki tiedostot löytyvät yhdestä paikasta.
+Perustelu (D-009): Projekteissa on vähän tiedostoja. Hakemistorakenne ei tuo lisäarvoa — se lisää navigaatiokulua ilman hyötyä. Kaikki tiedostot löytyvät yhdestä paikasta. `skill-*/`-poikkeus on skills-repokohtainen ja perusteltu: Perplexity-skillit ovat itsenäisiä dokumentaatioyksikköjä, jotka tarvitsevat oman hakemiston `load_skill`-mekanismin vuoksi.
 
 ---
 
@@ -51,7 +56,11 @@ USER_PATHS.md
 
 Perustelu (D-002, uutisseuranta.github.io): Erottaa sopimukset ja normatiiviset dokumentit ops-tiedostoista ja lähdekoodista. Yhtenäinen nimeäminen kaikkien repojen välillä.
 
-### Skill-tiedostot — `skill-(käyttötarkoitus).yml`
+### Skill-tiedostot — kaksi formaattia
+
+Organisaatiossa on kaksi erillisistä käyttötarkoituksesta johtuvaa skill-formaattia:
+
+**Formaatti A — MML/ops-konfiguraatiot (kaikki repot)**
 
 MML-skill-konfiguraatiot nimetään muodossa `skill-(käyttötarkoitus).yml` ja sijoitetaan **repositorion juureen**.
 
@@ -69,6 +78,41 @@ Nimeämissäännöt:
 - Formaatti: `.yml` (ei `.yaml`)
 
 Perustelu: Claudelint-spesifikaation skill-nimikäytäntö (lowercase-with-hyphens, max 64 merkkiä) sovellettuna tähän projektiin. `skill-`-prefix tekee tiedostot tunnistettaviksi hakemistolistauksessa ilman hakemistorakennetta. Skillit ovat repokohtaisia YAML-konfiguraatioita, eivät sopimusdokumentteja — siksi ne eivät käytä `SCREAMING_SNAKE_CASE`-muotoa.
+
+**Formaatti B — Perplexity-agenttiskillit (vain `skills`-repo)**
+
+Perplexity-agentin `load_skill`-kutsulla ladattavat skillit sijaitsevat `skills`-repossa hakemistorakenteella `skill-<nimi>/SKILL.md`.
+
+```
+skill-code-conventions/
+└── SKILL.md
+skill-decision-log/
+└── SKILL.md
+```
+
+Hakemiston nimi (`<nimi>`) on se tunniste, jolla skill ladataan: `load_skill(skill_names=["<nimi>"])`. Nimi noudattaa samaa `kebab-case`-käytäntöä kuin Formaatti A.
+
+`SKILL.md` sisältää YAML front matterin ja markdown-rungon:
+
+```markdown
+---
+name: <nimi>
+description: Lyhyt kuvaus skillin tarkoituksesta
+version: 1.0.0
+---
+
+# Skillin otsikko
+
+Skillin sisältö markdown-muodossa.
+```
+
+Nimeämissäännöt:
+- Hakemisto: `skill-<nimi>/` — `kebab-case`, prefix `skill-` pakollinen
+- Tiedosto hakemiston sisällä: aina `SKILL.md` (`SCREAMING_SNAKE_CASE`, koska normatiivinen sopimusdokumentti)
+- YAML front matter: `name`, `description`, `version` ovat pakollisia kenttiä
+- Formaatti: `.md`
+
+Perustelu: Perplexity-agentin `load_skill`-mekanismi tunnistaa skillit hakemistonimen perusteella. `SKILL.md`-tiedosto on sekä ihmis- että agenttiluettava dokumentaatio, joka eroaa konekäyttöisestä YAML-konfiguraatiosta (Formaatti A) — siksi eri rakenne on perusteltu.
 
 ### Lähdekooditiedostot — `kebab-case`
 
@@ -126,8 +170,6 @@ v2.0.0   ← breaking change
 ```
 
 Git-tagit luodaan tällä muodolla. GitHub Releases käyttää samaa tunnistetta.
-
-### Branch-strategia ja SemVer-kytkentä
 
 | Muutos | SemVer | Kuvaus |
 |--------|--------|--------|
@@ -240,7 +282,7 @@ font-size: clamp(0.75rem, ...);
 # Käyttö: ./live-smoke-test.sh https://uutisseuranta.fi
 ```
 
-### YAML (GitHub Actions & skill-tiedostot)
+### YAML (GitHub Actions & muut konfiguraatiot)
 
 ```yaml
 # Yksiriviset: #
@@ -264,16 +306,18 @@ def get_prefs(uid: str) -> dict:
 
 ## Automaattinen tarkistus
 
-Konventioiden noudattaminen tarkistetaan automaattisesti CI-putkessa. Tarkistukset ajetaan GitHub Actions -workflowssa ennen merge-oikeutta.
+Konventioiden automaattinen tarkistus on **repokohtaista** — jokainen repo määrittelee `.github/workflows/`-hakemistossaan omat tarkistuksensa sen mukaan, mitä kieliä ja formaatteja se käyttää. Tarkistustyökalut ja konfiguraatiot eivät kuulu tähän kanoniseen dokumenttiin.
 
-| Kieli / formaatti | Työkalu | Konfiguraatio |
-|-------------------|---------|---------------|
-| JavaScript | `eslint` | `.eslintrc.json` (repokohtainen) |
-| Bash | `shellcheck` | CI-workflow, ei erillistä konfiguraatiota |
-| YAML | `yamllint` | `.yamllint` (repokohtainen) |
-| Markdown | `markdownlint` | `.markdownlint.json` (repokohtainen) |
+Suositeltavat työkalut repokohtaiseen harkintaan:
 
-Perustelu (D-011): Ilman automaattista enforcement-mekanismia konventiot jäävät puhtaaksi toiveeksi. Jokaisen repon CI-workflow vastaa oman kielivalikoiman tarkistuksista.
+| Kieli / formaatti | Työkalu | Huomio |
+|-------------------|---------|--------|
+| JavaScript | `eslint` | `.eslintrc.json` repokohtainen |
+| Bash | `shellcheck` | ei erillistä konfiguraatiota |
+| YAML | `yamllint` | `.yamllint` repokohtainen |
+| Markdown | `markdownlint` | `.markdownlint.json` repokohtainen |
+
+Perustelu: Repojen kielivalikoima vaihtelee — `bq-activitystreams` tarvitsee eri tarkistukset kuin `uutisseuranta.github.io`. Pakollinen yhteinen tooling-lista vanhentuisi nopeasti ja rajoittaisi repojen kehitystä tarpeettomasti. Enforcement-periaate (konventiot tarkistetaan CI:ssä) on kuitenkin yhteinen.
 
 ---
 
@@ -289,7 +333,9 @@ D-001,...
 Jira-integraation päätösloki:
 [jira-github-integration/DECISION_LOG.csv](https://github.com/uutisseuranta/jira-github-integration/blob/main/DECISION_LOG.csv)
 
-### Poikkeukset konventiosta
+---
+
+## Poikkeukset konventiosta
 
 Jos tekninen syy (esim. kolmannen osapuolen kirjaston nimikonventiokonflikti tai tooling-rajoite) pakottaa poikkeamaan tästä dokumentista:
 
