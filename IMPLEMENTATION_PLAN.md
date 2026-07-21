@@ -136,3 +136,101 @@ Nämä puuttuvat vielä kokonaan issueina. Avaa ennen vastaavan PR:n aloittamist
 | WCAG AA -saavutettavuusauditointi (koko sivu) | `hardened` | erillinen PR |
 | Vite-pakkaajan käyttöönotto (#17) | `production` | ennen `production/pwa` |
 | Modern CSS (@layer, nesting) (#18) | `production` | yhdistettävissä Vite-PR:ään |
+
+---
+
+## Release — tägijärjestys ja gate-kriteerit
+
+Tägit luodaan kolmessa vaiheessa. Jokainen tägi odottaa edellisen CI-buildin läpimenoa.
+Tägiketju: **patterns → bq-activitystreams → uutisseuranta.github.io**.
+
+### v0.1.0 — "Ei rikki"
+
+**Gate:** kaikki `0-sprint`-labeliset issuet kiinni, sivusto latautuu tuotannossa.
+
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0: 0-sprint valmis, sivusto ei rikki"
+git push origin v0.1.0
+```
+
+### v0.5.0 — "MVP alpha"
+
+**Gate:** kaikki `mvp`- ja `gdpr`-labeliset issuet kiinni. Tarkista:
+
+```bash
+# Avoimet mvp-issuet — nolla ennen tagausta
+gh issue list --label mvp --state open --repo uutisseuranta/uutisseuranta.github.io
+
+# Avoimet gdpr-issuet
+gh issue list --label gdpr --state open --repo uutisseuranta/uutisseuranta.github.io
+```
+
+```bash
+git tag -a v0.5.0 -m "Release v0.5.0: MVP alpha — uutisvirta, filtteröinti, haku, kirjautuminen, GDPR"
+git push origin v0.5.0
+```
+
+### v1.0.0 — "Production hardened"
+
+**Gate:** kaikki `hardened`- ja `testing`-labeliset issuet kiinni, Mozilla Observatory A.
+
+```bash
+gh issue list --label hardened --state open --repo uutisseuranta/uutisseuranta.github.io
+
+git tag -a v1.0.0 -m "Release v1.0.0: tuotantovalmis — CSP, branch protection, WIF, CORS"
+git push origin v1.0.0
+```
+
+### Terraform-infrastruktuuri labelien hallintaan
+
+Repolabelit ja branch protection hallitaan Terraformilla. Katso
+[`terraform/github/frontend/labels.tf`](../terraform/github/frontend/labels.tf)
+joka provisioi tässä dokumentissa käytetyt labelit (`0-sprint`, `mvp`, `gdpr`,
+`hardened`, `production`, `documentation`, `testing`) sekä `main`-haaran
+suojaussäännöt.
+
+```hcl
+# Esimerkki: terraform/github/frontend/labels.tf
+resource "github_issue_label" "mvp" {
+  repository  = "uutisseuranta.github.io"
+  name        = "mvp"
+  color       = "0075ca"
+  description = "MVP-ominaisuudet — vaaditaan alpha-julkaisuun"
+}
+
+resource "github_issue_label" "gdpr" {
+  repository  = "uutisseuranta.github.io"
+  name        = "gdpr"
+  color       = "e4e669"
+  description = "Lakisääteinen — GDPR-vaatimukset ennen julkaisua"
+}
+
+resource "github_branch_protection" "main" {
+  repository_id = github_repository.frontend.node_id
+  pattern       = "main"
+
+  required_status_checks {
+    strict   = true
+    contexts = ["ci / lint-and-test"]
+  }
+
+  required_pull_request_reviews {
+    required_approving_review_count = 1
+  }
+}
+```
+
+Aja muutokset:
+
+```bash
+export GITHUB_TOKEN="ghp_..."
+cd terraform/github
+terraform init && terraform plan && terraform apply
+```
+
+### AS2-skeemaversio per release
+
+| Release | AS2-skeemaversio | Muutokset |
+|---|---|---|
+| `v0.5.0` | schema-v1 | Article, Note, Collection, Hashtag peruskentät |
+| `v1.0.0` | schema-v2 | Content negotiation, `_uutisseuranta:*`-laajennukset |
