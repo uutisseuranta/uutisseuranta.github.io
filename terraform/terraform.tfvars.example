@@ -1,0 +1,6 @@
+# terraform/terraform.tfvars.example
+# Kopioi terraform.tfvars:ksi. Tässä repossa ei ole salaisia muuttujia –
+# kaikki arvot voidaan committaa suoraan.
+
+default_branch     = "main"
+required_ci_checks = ["lint", "test"]
