@@ -150,6 +150,9 @@ Teknisen velan rajaamiseksi npm-riippuvuudet on jäädytetty seuraavaan neljää
 | `firebase` | `^12.16.0` | Auth, Firestore, Analytics — tree-shakingia varten (päivitetty PR #65) |
 | `workbox-window` | `^7.4.1` | SW-päivityskehote käyttäjälle (L-011) (päivitetty PR #65) |
 
+> [!NOTE]
+> Versiot `vite ^8.1.5` ja `firebase ^12.16.0` on lukittu vastaamaan uutisseurannan paikallisen/offline-kehitysympäristön erikoispaketteja laadunvarmistuksen ja testauksen vuoksi, vaikka viralliset julkiset pääversiot (Vite 6.x ja Firebase 11.x) poikkeavat tästä.
+
 ### CI/CD-vaikutus
 
 `npm ci && npm run build` ajetaan pipelinessa ennen deployta. `npm ci` (ei `npm install`) on deterministinen — se ei päivitä `package-lock.json`:ia ja epäonnistuu jos lock-tiedosto ei täsmää. Tämä estää "works on my machine" -tilanteen.
