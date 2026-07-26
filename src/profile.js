@@ -1,13 +1,13 @@
 /**
- * profile.js – Profiilimodaali ja datanvienti (PWA-offline-tuella)
+ * profile.js – Profiilimodaali ja datanvienti (PWA-offline-tuella) / Profile Modal and Data Export (with PWA offline support)
  *
- * Vastaa profiilimodaalin renderöinnistä ja
- * käyttäjätietojen JSON-viennistä.
+ * Vastaa profiilimodaalin renderöinnistä ja / Responsible for rendering the profile modal and
+ * käyttäjätietojen JSON-viennistä. / exporting user preferences to JSON format.
  *
- * Riippuvuudet:
+ * Riippuvuudet / Dependencies:
  *   – prefs.js  (getPrefs, exportPrefsAsJson, followTag,
  *                unfollowTag, isFollowing, onPrefsChange)
- *   – Firebase Auth user-objekti
+ *   – Firebase Auth user-objekti / Firebase Auth user object
  */
 
 import {

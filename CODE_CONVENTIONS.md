@@ -31,6 +31,7 @@ Jokainen repositorio ylläpitää omaa paikallista `DESIGN_GUIDELINES.md` ja `ST
 Sallitut poikkeukset kaikissa repoissa:
 
 - `.github/` — GitHubin omaa infrastruktuuria varten (Actions-workflowt, issue-templatet, Dependabot-konfiguraatio jne.). `.github/` ei ole tarkoitettu repon omille tiedostoille — sinne ei sijoiteta dokumentaatiota, skriptejä, konfiguraatioita eikä muita projektin tiedostoja.
+- `src/` — **vain `uutisseuranta.github.io`-repossa**: Vite-pakkaajalla käännettävä lähdekoodisto (päätös `L-009`), joka sisältää `app.js`, `prefs.js`, `profile.js` ja `style.css` -tiedostot.
 - `skill-*/` — **vain `skills`-repossa**: Perplexity-agenttiskillit hakemistorakenteella `skill-<nimi>/SKILL.md`. Muissa repoissa ei käytetä `skill-*/`-hakemistoja.
 
 ```
@@ -38,6 +39,11 @@ repo/
 ├── .github/               ← VAIN GitHub-infrastruktuuri (Actions, issue-templatet)
 │   └── workflows/
 │       └── *.yml
+├── src/                   ← VAIN uutisseuranta.github.io: Vite-lähdekoodisto (L-009)
+│   ├── app.js
+│   ├── prefs.js
+│   ├── profile.js
+│   └── style.css
 ├── skill-<nimi>/          ← VAIN skills-repossa: Perplexity-skill-hakemistot
 │   └── SKILL.md
 ├── skill-(käyttötarkoitus).yml  ← MML/ops-konfiguraatiot, juuressa (kaikki repot)
@@ -46,7 +52,7 @@ repo/
 └── ...
 ```
 
-Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-001): Projekteissa on vähän tiedostoja. Hakemistorakenne ei tuo lisäarvoa — se lisää navigaatiokulua ilman hyötyä. Kaikki tiedostot löytyvät yhdestä paikasta. `skill-*/`-poikkeus on skills-repokohtainen ja perusteltu: Perplexity-skillit ovat itsenäisiä dokumentaatioyksikköjä, jotka tarvitsevat oman hakemiston `load_skill`-mekanismin vuoksi.
+Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-001 ja L-009): Projekteissa on vähän tiedostoja ja pääsääntöisesti litteä rakenne pitää ylläpidon yksinkertaisena. Web-käyttöliittymässä (`uutisseuranta.github.io`) siirryttiin kuitenkin Vite-käännöstekniikkaan, joka edellyttää `src/`-kansiota lähdekoodille, jotta `dist/`-tuotantoversio voidaan rakentaa puhtaasti. Tämä on sallittu ja dokumentoitu poikkeus.
 
 ---
 

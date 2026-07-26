@@ -1,23 +1,23 @@
 /**
- * app.js – Sovelluksen juurimoduuli
+ * app.js – Sovelluksen juurimoduuli / Application Root Module
  *
- * Vastaa:
- *   - Firebase-alustuksesta ja autentikoinnista (Google Sign-In)
- *   - Kirjautumismodaalin auki/kiinni-logiikasta
- *   - Auth-tilan muutoksiin reagoinnista:
- *       kirjautunut  → initPrefs(app, uid), initProfileModal(user), loadPrefs()
- *       kirjautunut ulos → initPrefs(app, null), loadPrefs()
+ * Vastaa / Responsible for:
+ *   - Firebase-alustuksesta ja autentikoinnista (Google Sign-In) / Firebase initialization and Google Sign-In auth
+ *   - Kirjautumismodaalin auki/kiinni-logiikasta / Toggle logic for the login modal
+ *   - Auth-tilan muutoksiin reagoinnista / Reacting to Authentication state changes:
+ *       kirjautunut / signed in  → initPrefs(app, uid), initProfileModal(user), loadPrefs()
+ *       kirjautunut ulos / signed out → initPrefs(app, null), loadPrefs()
  *
- * Arkkitehtuuriraja:
- *   Tämä moduuli omistaa Firebase Auth -yhteyden.
- *   Preferenssien persistointi (Firestore + localStorage) on delegoitu prefs.js:lle.
- *   Profiilimodaalin UI on delegoitu profile.js:lle.
- *   app.js ei lue eikä kirjoita preferenssejä suoraan.
+ * Arkkitehtuuriraja / Architectural boundary:
+ *   Tämä moduuli omistaa Firebase Auth -yhteyden. / This module owns the Firebase Auth connection.
+ *   Preferenssien persistointi (Firestore + localStorage) on delegoitu prefs.js:lle. / Preferences persistence (Firestore + localStorage) is delegated to prefs.js.
+ *   Profiilimodaalin UI on delegoitu profile.js:lle. / Profile modal UI is delegated to profile.js.
+ *   app.js ei lue eikä kirjoita preferenssejä suoraan. / app.js does not read or write preferences directly.
  *
- * Riippuvuudet:
+ * Riippuvuudet / Dependencies:
  *   – prefs.js  (initPrefs, loadPrefs)
  *   – profile.js (initProfileModal, openProfileModal)
- *   – Firebase Auth, Analytics (CDN)
+ *   – Firebase Auth, Analytics (NPM)
  */
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';

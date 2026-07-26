@@ -1,35 +1,35 @@
 /**
- * prefs.js – Käyttäjäpreferenssien hallinta
+ * prefs.js – Käyttäjäpreferenssien hallinta / User Preferences Management
  *
- * Persistointimalli: Hybrid localStorage + Firestore
- * ───────────────────────────────────────────────────
- * localStorage  → nopea paikallinen välimuisti, UI piirtyy heti ilman verkkoviivettä
- * Firestore     → kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset kaikille laitteille
+ * Persistointimalli: Hybrid localStorage + Firestore / Persistence model: Hybrid localStorage + Firestore
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+ * localStorage  → nopea paikallinen välimuisti, UI piirtyy heti ilman verkkoviivettä / fast local cache, UI renders instantly without network latency
+ * Firestore     → kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset kaikille laitteille / canonical source for signed-in users, syncs settings across all devices
  *
- * PWA-offline-tuki:
- *   Firestore IndexedDB-persistointi (enableIndexedDbPersistence) mahdollistaa sen,
- *   että kirjautunut käyttäjä voi lukea ja kirjoittaa preferenssejä myös offline-tilassa.
- *   Service Worker (SW) huolehtii staattisten resurssien välimuistista; tämä moduuli
- *   huolehtii datan offline-pysyvyydestä. Yhdessä ne muodostavat täyden PWA-offline-kokemuksen.
+ * PWA-offline-tuki / PWA Offline Support:
+ *   Firestore IndexedDB-persistointi (persistentLocalCache) mahdollistaa sen, / Firestore IndexedDB persistence (persistentLocalCache) allows
+ *   että kirjautunut käyttäjä voi lukea ja kirjoittaa preferenssejä myös offline-tilassa. / signed-in users to read and write preferences offline.
+ *   Service Worker (SW) huolehtii staattisten resurssien välimuistista; tämä moduuli / Service Worker (SW) handles static asset caching; this module
+ *   huolehtii datan offline-pysyvyydestä. Yhdessä ne muodostavat täyden PWA-offline-kokemuksen. / handles data offline persistence. Together they form a full PWA offline experience.
  *
- * Kirjautumaton käyttäjä: vain localStorage (avain "prefs_anonymous")
- * Kirjautunut käyttäjä:   localStorage + Firestore molemmat
+ * Kirjautumaton käyttäjä / Anonymous User: vain localStorage (avain "prefs_anonymous") / localStorage only (key "prefs_anonymous")
+ * Kirjautunut käyttäjä / Signed-in User:   localStorage + Firestore molemmat / both localStorage + Firestore
  *
- * Tietomalli (Firestore): /users/{uid}/preferences/main
+ * Tietomalli (Firestore) / Data Model (Firestore): /users/{uid}/preferences/main
  * {
- *   followedTags  : string[],            // seuratut aihetunnisteet
+ *   followedTags  : string[],            // seuratut aihetunnisteet / followed tags
  *   theme         : 'light'|'dark'|'system',
- *   updatedAt     : Timestamp,           // serverTimestamp() kirjoitushetkellä
- *   schemaVersion : number               // migraatioiden versionhallinta
+ *   updatedAt     : Timestamp,           // serverTimestamp() kirjoitushetkellä / serverTimestamp() at write time
+ *   schemaVersion : number               // migraatioiden versionhallinta / schema versioning for migrations
  * }
  *
- * Kirjoituslogiikka:
- *   1. Kirjoita heti localStorage:hen  → nopea feedback, toimii offline
- *   2. Debounce 500 ms → kirjoita Firestoreen (vain kirjautunut käyttäjä)
+ * Kirjoituslogiikka / Write Logic:
+ *   1. Kirjoita heti localStorage:hen  → nopea feedback, toimii offline / Write immediately to localStorage -> immediate feedback, works offline
+ *   2. Debounce 500 ms → kirjoita Firestoreen (vain kirjautunut käyttäjä) / Debounce 500 ms -> write to Firestore (signed-in user only)
  *
- * Lukuprioriteetti käynnistyksessä:
- *   1. Lue localStorage (synkroninen) → UI piirtyy heti
- *   2. Lue Firestore (asynkroninen)   → korvaa jos palvelimen tila on uudempi
+ * Lukuprioriteetti käynnistyksessä / Read Priority on Load:
+ *   1. Lue localStorage (synkroninen) → UI piirtyy heti / Read localStorage (synchronous) -> UI renders immediately
+ *   2. Lue Firestore (asynkroninen)   → korvaa jos palvelimen tila on uudempi / Read Firestore (asynchronous) -> overwrite if server state is newer
  */
 
 import {
