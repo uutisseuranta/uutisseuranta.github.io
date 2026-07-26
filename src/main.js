@@ -183,8 +183,9 @@ onPrefsChange((prefs) => {
 });
 
 // ---- API CONFIGURATION ----
-const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL || 'https://query-api-yq2o6p5wqa-lz.a.run.app';
-const WRITE_API_URL = import.meta.env.VITE_WRITE_API_URL || 'https://write-api-yq2o6p5wqa-lz.a.run.app';
+const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL || 'https://query-api-7y62heo36a-lz.a.run.app';
+const WRITE_API_URL = import.meta.env.VITE_WRITE_API_URL || 'https://write-api-7y62heo36a-lz.a.run.app';
+
 
 // ---- HOMEPAGE DYNAMIC STATS ----
 async function loadHomepageStats() {
