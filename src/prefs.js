@@ -39,7 +39,7 @@ import {
   setDoc,
   serverTimestamp,
   enableIndexedDbPersistence,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+} from 'firebase/firestore';
 
 // Tietomallin versio — kasvata kun DEFAULT_PREFS:iin lisätään kenttiä.
 // _migrate() käyttää tätä arvoa taaksepäin yhteensopivuuden varmistamiseksi.
@@ -83,7 +83,7 @@ let _listeners = [];
  * initPrefs() kutsutaan useamman kerran (auth-tilan muutos). Kutsuja vastaa
  * rekisteröimisestä uudelleen tarvittaessa initPrefs()-kutsun jälkeen.
  *
- * @param {import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js').FirebaseApp} app - Firebase-sovellus
+ * @param {import('firebase/app').FirebaseApp} app - Firebase-sovellus
  * @param {string|null} uid - Kirjautuneen käyttäjän uid, tai null
  */
 export function initPrefs(app, uid) {
