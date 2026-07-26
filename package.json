@@ -2,7 +2,7 @@
   "name": "uutisseuranta.github.io",
   "version": "1.0.0",
   "description": "Uutisseuranta on moderni ja saavutettava suomalainen uutiskoostepalvelu, joka yhdistää eri lähteiden julkaisut yhteen selkeään uutisvirtaan. Tämä repositorio sisältää palvelun staattisen verkkokäyttöliittymän, joka on toteutettu standardeilla vanilla HTML, CSS ja JavaScript -tekniikoilla ilman monimutkaisia build-vaiheita. Käyttöliittymän visuaalinen ilme ja komponenttirakenne noudattavat uutisseurannan kuviointikirjaston periaatteita.",
-  "main": "src/app.js",
+  "main": "src/main.js",
   "type": "module",
   "scripts": {
     "dev": "vite",

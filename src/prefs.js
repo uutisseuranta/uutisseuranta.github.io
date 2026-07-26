@@ -59,6 +59,9 @@ const DEFAULT_PREFS = {
 // Kaikki muuttujat ovat moduulin yksityisiä — ulkopuolelta käytetään
 // vain alla olevaa julkista API:ta.
 
+/** Firestore-instanssin singleton-varaaja race conditionien estämiseksi. / Firestore instance singleton storage. */
+let _dbInstance = null;
+
 /** Firestore-instanssi. null = kirjautumaton tai Firestore ei käytössä. */
 let _db = null;
 
@@ -98,9 +101,12 @@ export function initPrefs(app, uid) {
     // initializeFirestore localCache: persistentLocalCache() tallentaa Firestore-datan selaimen IndexedDB:hen,
     // jolloin preferenssit ovat luettavissa ja kirjoitettavissa myös offline-tilassa.
     try {
-      _db = initializeFirestore(app, {
-        localCache: persistentLocalCache()
-      });
+      if (!_dbInstance) {
+        _dbInstance = initializeFirestore(app, {
+          localCache: persistentLocalCache()
+        });
+      }
+      _db = _dbInstance;
     } catch (err) {
       // Jos alustettu jo aiemmin (esim. ulos- ja sisäänkirjautumisesta johtuva uudelleenalustus),
       // käytetään olemassa olevaa instanssia.

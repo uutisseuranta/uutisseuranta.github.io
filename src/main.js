@@ -55,7 +55,10 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Analytics alustetaan vain, jos measurementId on määritelty ja käyttäjä on antanut suostumuksensa (GDPR / L-009)
+const analytics = (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID && localStorage.getItem('consent_analytics') === 'true')
+  ? getAnalytics(app)
+  : null;
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
@@ -274,6 +277,13 @@ async function fetchOutbox(tag = null, retryCount = 0) {
   }
 }
 
+// Sanitointiapufunktio XSS-hyökkäysten estämiseksi (Security / XSS)
+function sanitize(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
 // ---- RENDERING LOGIC (Issue #12, #20, #21, #24) ----
 function renderFeed(articles) {
   const grid = document.getElementById('feed-grid');
@@ -329,10 +339,10 @@ function renderFeed(articles) {
     let localReaction = localStorage.getItem(reactionKey) || null;
 
     card.innerHTML = `
-      ${isLead ? `<a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${item.name}" loading="lazy" class="feed-item__image"></a>` : ''}
-      <div class="feed-item__category"><span class="category-dot"></span>${category}</div>
-      <h3 class="feed-item__title"><a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow">${item.name}</a></h3>
-      ${item.summary ? `<p class="feed-item__excerpt">${item.summary}</p>` : ''}
+      ${isLead ? `<a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" class="feed-item__image"></a>` : ''}
+      <div class="feed-item__category"><span class="category-dot"></span>${sanitize(category)}</div>
+      <h3 class="feed-item__title"><a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
+      ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       
       ${hasReactions ? `
         <div class="vote-stats" role="img" aria-label="Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)">
