@@ -45,13 +45,13 @@ document.querySelectorAll('.feed-item, .feature-item').forEach(el => {
 
 // ---- FIREBASE INITIALIZATION ----
 const firebaseConfig = {
-  apiKey: "AIzaSyApRi0p3KXOe6W6F-t8QInqJoZQdjOfCjI",
-  authDomain: "uutisseuranta-net.firebaseapp.com",
-  projectId: "uutisseuranta-net",
-  storageBucket: "uutisseuranta-net.firebasestorage.app",
-  messagingSenderId: "131558328064",
-  appId: "1:131558328064:web:2b1eabe45fdb807c9d55e5",
-  measurementId: "G-9J9T62LY57"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
