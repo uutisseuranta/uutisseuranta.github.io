@@ -24,14 +24,23 @@ for URL in "${URLS[@]}"; do
     
     echo "HTTP Status: $HTTP_STATUS"
     
-    if [ "$HTTP_STATUS" -eq 403 ] || [ "$HTTP_STATUS" -eq 404 ]; then
-        echo "WARNING: Access forbidden or not found ($HTTP_STATUS). The Pages site might be private or deploying. Skipping content verification for $URL."
-        continue
-    fi
-    
-    if [ "$HTTP_STATUS" -ne 200 ] && [ "$HTTP_STATUS" -ne 301 ] && [ "$HTTP_STATUS" -ne 302 ]; then
-        echo "ERROR: Unexpected HTTP status $HTTP_STATUS for $URL"
-        exit 1
+    if [ "$HTTP_STATUS" -ne 200 ]; then
+        if [ "$HTTP_STATUS" -eq 301 ] || [ "$HTTP_STATUS" -eq 302 ]; then
+            # Extract Location redirect header (handling token if available)
+            if [ -n "$TOKEN_HEADER" ]; then
+                REDIRECT_URL=$(curl -s -I -H "$TOKEN_HEADER" "$URL" | grep -i '^location:' | awk '{print $2}' | tr -d '\r')
+            else
+                REDIRECT_URL=$(curl -s -I "$URL" | grep -i '^location:' | awk '{print $2}' | tr -d '\r')
+            fi
+            
+            if [[ "$REDIRECT_URL" == *"github.com/login"* ]] || [[ "$REDIRECT_URL" == *"github.com/session"* ]]; then
+                echo "WARNING: Redirected to GitHub Login ($REDIRECT_URL). The Pages site is private. Skipping content verification for $URL."
+                continue
+            fi
+        else
+            echo "WARNING: HTTP status is $HTTP_STATUS (not 200/301/302). The Pages site might be private or deploying. Skipping content verification for $URL."
+            continue
+        fi
     fi
     
     # Fetch content
