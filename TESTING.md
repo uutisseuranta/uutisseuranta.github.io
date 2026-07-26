@@ -19,29 +19,29 @@ Uutisseurannan testaus noudattaa **Shift-Left** -periaatetta ja jaettua testausp
        /--------------\
       /     INTEG      \ <- integration-test.sh (Mock API + Vite build)
      /------------------\
-    /        UNIT        \ <- Staattinen analyysi: ESLint, tsc, linkcheck
+    /   STAATTINEN/LINT  \ <- ESLint, tsc, lychee (linkit), Vite build
    /----------------------\
 ```
 
 | Kerros | Mitä testataan | Milloin ajetaan | Työkalu |
 |---|---|---|---|
-| **1. Staattinen analyysi** | Koodin laatu, tyypitys, kääntyminen, rikkinäiset linkit | Jokainen PR ennen mergeä | ESLint, TypeScript (`tsc`), Vite Build, `linkcheck` |
+| **1. Staattinen analyysi** | Koodin laatu, tyypitys, kääntyminen, rikkinäiset linkit | Jokainen PR ennen mergeä | ESLint, TypeScript (`tsc`), Vite Build, **lychee** |
 | **2. Saavutettavuus (a11y)** | WCAG 2.2 AA -rikkomukset automaattisesti | Jokainen PR (Playwright + axe-core) | `@axe-core/playwright` |
 | **3. Post-deploy E2E** | Live-sivuston kriittisimmät toiminnot selaimessa | GitHub Pages julkaisu valmis | Playwright (Chromium) |
 | **4. Suorituskyky & laatu** | Core Web Vitals, suorituskykybudjetti, SEO, best practices | Ajoitetusti (Weekly) + manuaalisesti | Lighthouse CI (`lhci`) |
 | **5. Visuaalinen regressio** | Layout-muutokset, CSS-regressiot | Harkitusti isoissa muutoksissa | Playwright screenshot diff |
 
-> **Huomio:** Automaattiset a11y-työkalut kattavat noin 30–40 % WCAG-kriteereistä [Axe, 2023]. Manuaalinen testaus näppäimistöllä ja ruudunlukijalla (VoiceOver/NVDA) on välttämätöntä täydelliselle saavutettavuudelle.
+> **Huomio a11y-kattavuudesta:** Automaattiset työkalut kattavat noin 30–40 % WCAG-kriteereistä. Manuaalinen testaus näppäimistöllä ja ruudunlukijalla (VoiceOver/NVDA) on välttämätöntä täydelliselle saavutettavuudelle.
 
 ---
 
 ## 2. GitHub Actions CI/CD Parhaat Käytännöt
 
-Noudatamme Googlen, GitHubin, GitLabin ja OWASP:n suosittelemia standardeja:
+Noudatamme Googlen, GitHubin, GitLabin ja OWASP:n suosittelemia standardeja.
 
 ### 2.1 Älykäs odotus (Polling) vs. `sleep 60`
 
-Kiinteät viiveet (`sleep 60`) ovat CI/CD-putkien hauraita anti-patterneja. Käytämme erillistä polling-skriptiä (`live-smoke-test.sh`), joka kysyy tuotantosivun tilaa (HTTP HEAD/GET) 10 sekunnin välein, kunnes sivu vastaa 200 OK. Sivun lopullinen URL tallennetaan tiedostoon `effective_url.txt`, jota E2E-testit käyttävät testikohteena.
+Kiinteät viiveet (`sleep 60`) ovat CI/CD-putkien hauraita anti-patterneja. Käytämme erillistä polling-skriptiä (`live-smoke-test.sh`), joka kysyy tuotantosivun tilaa (HTTP HEAD/GET) 10 sekunnin välein, kunnes sivu vastaa 200 OK. Sivun lopullinen URL tallennetaan tiedostoon `effective_url.txt`, jota E2E-testit käyttävät testikohteena.
 
 ### 2.2 Rinnakkaiskäynnistyksen hallinta (`workflow_run`)
 
@@ -49,21 +49,22 @@ Estämme testien ajamisen vanhaa live-versiota vasten kytkemällä smoke-testit 
 
 ### 2.3 Tietoturva ja Supply Chain -hyökkäysten esto
 
-- **SHA-pinnat:** Kaikki kolmannen osapuolen GitHub Actions -vaiheet lukittu tarkkoihin commit-hasheihin (esim. `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683` tagin `@v4` sijaan). Katso [GitHub Actions Security Hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions).
+- **SHA-pinnat:** Kaikki kolmannen osapuolen GitHub Actions -vaiheet on lukittu tarkkoihin commit-hasheihin (esim. `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683` tagin `@v4` sijaan). Katso [GitHub Actions Security Hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions).
 - **Minimioikeudet (Least Privilege):** Jokainen workflow sisältää eksplisiittisen `permissions`-lohkon:
   ```yaml
   permissions:
     contents: read
   ```
-- **Salaisuudet:** Ei salaisuuksia koodissa. Käytä `secrets.*` -viittauksia ja tarkista `GITHUB_TOKEN`-käyttöoikeudet erikseen jokaiselle workflowlle.
+- **Salaisuudet:** Ei salaisuuksia koodissa. Käytä `secrets.*`-viittauksia ja tarkista `GITHUB_TOKEN`-käyttöoikeudet erikseen jokaiselle workflowlle.
 
 ### 2.4 Flaky-testien hallinta
 
-Playwright-testit voivat olla epävakaita asynkronisen DOM:n takia. Parhaat käytännöt [Playwright Best Practices, 2026]:
+Playwright-testit voivat olla epävakaita asynkronisen DOM:n takia:
 
-- Käytä `page.waitForSelector()` tai `expect(locator).toBeVisible()` — ei `page.waitForTimeout()`.
+- Käytä `expect(locator).toBeVisible()` — älä koskaan `page.waitForTimeout()`.
 - Suosi käyttäjärooli-lokaattoreita (`getByRole`, `getByLabel`) XPath/CSS-selectoreiden sijaan; ne vastaavat oikeaa käyttäjäkokemusta ja ovat stabiilimpia.
 - Aseta `retries: 2` CI-ympäristössä `playwright.config.ts`:ssa epävakaiden verkko-olosuhteiden varalle.
+- Älä käytä `.first()` ilman `await expect(...).toBeVisible()` -vahvistusta: lokaattori voi ratkaistua ennen kuin elementti on oikeasti näkyvissä.
 
 ---
 
@@ -71,7 +72,7 @@ Playwright-testit voivat olla epävakaita asynkronisen DOM:n takia. Parhaat käy
 
 ### 3.1 PR-validointi (`pr-validate.yml`)
 
-Estää rikkinäisen koodin pääsyn `main`-haaraan. Sisältää nyt myös saavutettavuustarkistuksen.
+Estää rikkinäisen koodin pääsyn `main`-haaraan. Rinnakkaiset jobit: staattinen analyysi + saavutettavuus.
 
 ```yaml
 name: PR Validate
@@ -95,6 +96,27 @@ jobs:
       - run: npm run build
       - run: npx tsc --noEmit
 
+  link-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # lychee: Rust-pohjainen, nopea, natiivi CI-työkalu rikkinäisten linkkien tarkistukseen
+      # https://lychee.cli.rs
+      - name: Check links with lychee
+        uses: lycheeverse/lychee-action@f81112d0d2814ded911bd23654d47b02e9b2c8f0 # v2.4.1
+        with:
+          args: >
+            --verbose
+            --no-progress
+            --exclude 'localhost'
+            --exclude 'example\.com'
+            '**/*.md'
+            '**/*.html'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   accessibility:
     runs-on: ubuntu-latest
     permissions:
@@ -106,11 +128,13 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      # webServer käynnistää "npm run preview" playwright.config.ts:ssä — ei tarvitse erillistä build-askelta tässä
       - name: Run axe-core accessibility audit
         run: npx playwright test tests/a11y/
+        env:
+          CI: true
       - name: Upload a11y report
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea2af6b81c8a70187a9dad191 # v4.4.3
         if: failure()
@@ -119,6 +143,8 @@ jobs:
           path: playwright-report/
           retention-days: 7
 ```
+
+> **Huomio `validate`-job + `accessibility`-job:** Molemmat jobit ajetaan rinnakkain (ei `needs:`-riippuvuutta) CI-ajan minimoimiseksi.
 
 ### 3.2 Post-deploy Smoke-testit (`post-deploy-test.yml`)
 
@@ -150,11 +176,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run Playwright Smoke Tests
         run: |
-          if [ -f effective_url.txt ]; then
-            export EFFECTIVE_URL=$(cat effective_url.txt)
-          else
-            export EFFECTIVE_URL="https://uutisseuranta.net"
-          fi
+          EFFECTIVE_URL=$(cat effective_url.txt 2>/dev/null || echo "https://uutisseuranta.net")
+          export EFFECTIVE_URL
           npx playwright test tests/e2e/
         env:
           CI: true
@@ -169,7 +192,7 @@ jobs:
 
 ### 3.3 Lighthouse CI -suorituskykyauditointi (`lighthouse.yml`)
 
-Ajoitettu viikoittain ja mahdollista käynnistää manuaalisesti. Käyttää `lhci`-komentorivityökalua eikä kolmannen osapuolen Actions-askeletta, jotta SHA-pinnoituksesta ei tarvitse huolehtia.
+Ajoitettu viikoittain ja käynnistettävissä manuaalisesti. `lhci` asennetaan paikallisesti (`npm install --save-dev`) eikä globaalisti, jotta versiointi pysyy `package.json`:ssa.
 
 ```yaml
 name: Lighthouse CI Audit
@@ -189,9 +212,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci && npm run build
-      - run: npm install -g @lhci/cli
-      - run: lhci autorun
+      - run: npm ci
+      - run: npx lhci autorun
       - name: Upload Lighthouse report
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea2af6b81c8a70187a9dad191 # v4.4.3
         if: always()
@@ -199,6 +221,16 @@ jobs:
           name: lighthouse-report
           path: .lighthouseci/
           retention-days: 30
+```
+
+**Lisää `package.json`:iin:**
+
+```json
+{
+  "devDependencies": {
+    "@lhci/cli": "^0.14.0"
+  }
+}
 ```
 
 **`lighthouserc.json` — suorituskykybudjetti:**
@@ -212,15 +244,16 @@ jobs:
     },
     "assert": {
       "assertions": {
-        "categories:performance": ["error", {"minScore": 0.85}],
-        "categories:accessibility": ["error", {"minScore": 0.95}],
+        "categories:performance":    ["error", {"minScore": 0.85}],
+        "categories:accessibility":  ["error", {"minScore": 0.95}],
         "categories:best-practices": ["error", {"minScore": 0.90}],
-        "categories:seo": ["error", {"minScore": 0.90}],
-        "first-contentful-paint": ["warn", {"maxNumericValue": 2000}],
-        "largest-contentful-paint": ["error", {"maxNumericValue": 2500}],
-        "total-blocking-time": ["warn", {"maxNumericValue": 300}],
-        "cumulative-layout-shift": ["error", {"maxNumericValue": 0.1}],
-        "interactive": ["warn", {"maxNumericValue": 3500}]
+        "categories:seo":            ["error", {"minScore": 0.90}],
+        "first-contentful-paint":    ["warn",  {"maxNumericValue": 2000}],
+        "largest-contentful-paint":  ["error", {"maxNumericValue": 2500}],
+        "total-blocking-time":       ["warn",  {"maxNumericValue": 300}],
+        "cumulative-layout-shift":   ["error", {"maxNumericValue": 0.1}],
+        "interaction-to-next-paint": ["warn",  {"maxNumericValue": 200}],
+        "interactive":               ["warn",  {"maxNumericValue": 3500}]
       }
     },
     "upload": {
@@ -230,7 +263,7 @@ jobs:
 }
 ```
 
-> **Huomio budjeteista:** Nämä ovat lähtöarvot. Tarkista ja kiristä arvoja neljännesvuosittain tuotantomittausten perusteella. Core Web Vitals -tavoitteet perustuvat Googlen "Good"-luokkaan (LCP ≤ 2.5 s, CLS ≤ 0.1, INP ≤ 200 ms).
+> **Budjettien lähteet:** LCP ≤ 2 500 ms, CLS ≤ 0.1 ja INP ≤ 200 ms perustuvat Googlen Core Web Vitals "Good"-luokkaan. Tarkista ja kiristä arvoja neljännesvuosittain tuotantomittausten perusteella.
 
 ---
 
@@ -238,7 +271,7 @@ jobs:
 
 ### 4.1 Automaattinen testaus: axe-core + Playwright
 
-`@axe-core/playwright` kattaa noin 30–40 % WCAG-kriteereistä automaattisesti ja on integroitavissa suoraan olemassa oleviin Playwright-testeihin [Playwright Accessibility Testing Docs].
+`@axe-core/playwright` kattaa noin 30–40 % WCAG-kriteereistä automaattisesti ja integroituu suoraan Playwright-testeihin. Akateeminen vertailu yhdeksästä a11y-työkalusta (axe, alfa, Continuum, WAVE jne.) osoittaa, että axe-core on laajimmin käytetty ja antaa vähintään päällekkäisyyksiä muiden työkalujen kanssa yksittäisen työkalun valinnassa.
 
 **Asenna:**
 
@@ -255,9 +288,23 @@ import AxeBuilder from '@axe-core/playwright';
 test.describe('Saavutettavuus — WCAG 2.2 AA', () => {
   test('etusivu: ei WCAG-rikkomuksia', async ({ page }) => {
     await page.goto('/');
+    // Odota, että sivu on renderoitunut kunnolla
+    await expect(page.locator('body')).toBeVisible();
+
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
       .analyze();
+
+    // Tulosta rikkomukset luettavasti epäonnistuessa
+    if (results.violations.length > 0) {
+      console.error(
+        'a11y-rikkomukset:',
+        JSON.stringify(results.violations.map(v => ({
+          id: v.id, impact: v.impact, description: v.description,
+          nodes: v.nodes.map(n => n.html),
+        })), null, 2),
+      );
+    }
     expect(results.violations).toEqual([]);
   });
 
@@ -272,19 +319,26 @@ test.describe('Saavutettavuus — WCAG 2.2 AA', () => {
 });
 ```
 
-**Playwright-konfiguraatio (`playwright.config.ts`) — kehityspalvelin PR-testeissä:**
+**Playwright-konfiguraatio (`playwright.config.ts`):**
 
 ```typescript
 import { defineConfig } from '@playwright/test';
+
 export default defineConfig({
-  webServer: {
-    command: 'npm run preview',
+  // webServer käynnistää Vite preview -serverin automaattisesti PR-testeissä
+  // EFFECTIVE_URL ohittaa tämän post-deploy-testeissä (live-sivusto)
+  webServer: process.env.EFFECTIVE_URL ? undefined : {
+    command: 'npm run build && npm run preview',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
-  use: { baseURL: process.env.EFFECTIVE_URL ?? 'http://localhost:4173' },
+  use: {
+    baseURL: process.env.EFFECTIVE_URL ?? 'http://localhost:4173',
+  },
   retries: process.env.CI ? 2 : 0,
-  reporter: [['html', { outputFolder: 'playwright-report' }]],
+  reporter: [['html', { outputFolder: 'playwright-report', open: 'never' }]],
+  testDir: './tests',
 });
 ```
 
@@ -297,14 +351,14 @@ Automaattiset työkalut eivät tunnista kaikkia ongelmia. Tarkista manuaalisesti
 | Näppäimistönavigointi (Tab, Enter, Esc, nuolinäppäimet) | Selain | Jokainen uusi komponentti |
 | Ruudunlukija | VoiceOver (macOS/iOS), NVDA (Windows) | Merkittävät muutokset |
 | Värikontrasti | WebAIM Contrast Checker, browser DevTools | Designmuutokset |
-| Zoom 200 % (WCAG 1.4.4) | Selain | Layoutmuutokset |
+| Zoom 200 % (WCAG 1.4.4) | Selain | Layoutmuutokset |
 | Fokuksen näkyvyys | Selain, CSS-tarkistus | Jokainen uusi interaktiivinen elementti |
 
 ---
 
 ## 5. Playwright E2E-smoke-testit (`tests/e2e/smoke.spec.ts`)
 
-Playwright on määritelty ajamaan ainoastaan **Chromium**-selaimella suoritusajan minimoimiseksi. Testit käyttävät roolilokaattoreita XPath:n sijaan vakauden parantamiseksi [Playwright Best Practices 2026]:
+Playwright ajaa ainoastaan **Chromium**-selaimella CI:ssä suoritusajan minimoimiseksi. Testit käyttävät roolilokaattoreita XPath/CSS-selectoreiden sijaan vakauden parantamiseksi:
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -312,12 +366,18 @@ import { test, expect } from '@playwright/test';
 test.describe('Uutisseuranta — smoke', () => {
   test('artikkelikortit latautuvat', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.article-card').first()).toBeVisible();
-    // Ei console-virheitä (CORS, CSP)
+    // Odota ensimmäistä korttia eksplisiittisesti — ei .first() ilman odotusta
+    const firstCard = page.locator('.article-card').first();
+    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('konsolissa ei ole virheitä (CORS, CSP)', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
-    await page.reload();
-    expect(errors).toHaveLength(0);
+    page.on('pageerror', err => errors.push(err.message));
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    expect(errors, `Konsolin virheet: ${errors.join(', ')}`).toHaveLength(0);
   });
 
   test('teemanvaihtaja toimii', async ({ page }) => {
@@ -343,15 +403,17 @@ test.describe('Uutisseuranta — smoke', () => {
 
 Visuaalinen regressiotestaus sopii käytettäväksi merkittävien CSS/layout-muutosten yhteydessä. Playwright sisältää screenshot-vertailun ilman lisäriippuvuuksia.
 
-**Peruskäyttö (`tests/visual/snapshot.spec.ts`):**
+**`tests/visual/snapshot.spec.ts`:**
 
 ```typescript
 import { test, expect } from '@playwright/test';
 
 test('etusivu — visuaalinen regressio', async ({ page }) => {
   await page.goto('/');
+  // Odota, että artikkelit ovat latautuneet ennen kuvakaappausta
+  await expect(page.locator('.article-card').first()).toBeVisible({ timeout: 10_000 });
   await expect(page).toHaveScreenshot('homepage.png', {
-    maxDiffPixelRatio: 0.02,  // 2 % pikseliero sallittu
+    maxDiffPixelRatio: 0.02,  // 2 % pikseliero sallittu
     fullPage: true,
   });
 });
@@ -360,42 +422,75 @@ test('etusivu — visuaalinen regressio', async ({ page }) => {
 Päivitä baseline-kuvakaappaukset tietoisesti muutoksissa:
 
 ```bash
-npx playwright test --update-snapshots
+npx playwright test tests/visual/ --update-snapshots
 ```
 
-> **Avoimet vaihtoehdot:** [Playwright screenshot comparison](https://playwright.dev/docs/screenshots) (sisäänrakennettu, ei lisämaksua) on GitHub Pages -projekteille riittävä. Maksulliset palvelut (Percy, Chromatic) sopivat suuremmille tiimeille, joissa useita suunnittelijoita.
+Baseline-kuvakaappaukset tallennetaan repositorioon (`tests/visual/__snapshots__/`) ja niiden muutokset näkyvät PR:n diffissä.
+
+> **Avoimet vaihtoehdot:** Playwright:n sisäänrakennettu screenshot diff on GitHub Pages -projekteille riittävä. Maksulliset palvelut (Percy, Chromatic) sopivat suuremmille tiimeille.
 
 ---
 
-## 7. Testitietojen ja ympäristöjen hallinta
+## 7. Rikkinäisten linkkien tarkistus (lychee)
+
+[lychee](https://lychee.cli.rs) on Rust-pohjainen, asynkroninen linkintarkistustyökalu, joka tukee natiivisti Markdown- ja HTML-tiedostoja. Se on suositeltavampi kuin `linkcheck` tai `hyperlink` GitHub Pages -projekteille, koska se käsittee myös ulkoiset linkit ja integroituu suoraan GitHub Actions -ekosysteemiin omana action-askeleenaan.
+
+**Konfiguraatio (`.lycheeignore`):**
+
+```
+# Jätä pois ajoittain epävakaat tai autentikaatiota vaativat osoitteet
+https://twitter.com
+https://x.com
+https://linkedin.com
+```
+
+**`lychee.toml` (valinnainen tarkennettu konfiguraatio):**
+
+```toml
+# lychee.toml
+max_retries = 3
+timeout = 20
+exclude_loopback = true
+exclude = [
+  "localhost",
+  "example\.com",
+]
+```
+
+---
+
+## 8. Testitietojen ja ympäristöjen hallinta
 
 - **Testit eivät saa käyttää tuotantodata-APIa kirjoitusoperaatioihin.** Uutisseuranta.net on lukutila-sovellus, mutta kirjautumistoiminto tulee testata mock- tai staging-ympäristöä vasten.
-- **Ympäristömuuttujat:** `EFFECTIVE_URL` siirtyy polling-skriptiltä Playwright-testeihin. Älä kovakoodaa URL:ia testeihin — käytä `process.env.EFFECTIVE_URL ?? 'http://localhost:4173'`.
+- **Ympäristömuuttujat:** `EFFECTIVE_URL` siirtyy polling-skriptiltä Playwright-testeihin. Käytä `process.env.EFFECTIVE_URL ?? 'http://localhost:4173'` — älä kovakoodaa URL:ia.
 - **Selainten kattavuus:** CI ajaa vain Chromiumia nopeuden takia. Kriittiset muutokset voi tarkistaa manuaalisesti Firefoxilla ja Safarilla/WebKitillä.
 
 ---
 
-## 8. Raportointi ja näkyvyys
+## 9. Raportointi ja näkyvyys
 
 | Artefakti | Missä | Säilytysaika |
 |---|---|---|
 | Playwright HTML-raportti (epäonnistuneet) | GitHub Actions Artifacts | 7 vrk |
 | axe-core a11y -raportti (epäonnistuneet) | GitHub Actions Artifacts | 7 vrk |
 | Lighthouse CI -raportti | GitHub Actions Artifacts + temporary-public-storage | 30 vrk |
+| lychee link report | GitHub Actions Artifacts (epäonnistuneet) | 7 vrk |
 | Visuaaliset regressiokuvakaappaukset | Repositorio (`tests/visual/__snapshots__/`) | Git-historia |
 
 ---
 
-## 9. Viitteet
+## 10. Viitteet
 
 - [GitHub Actions: Security Hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)
-- [Playwright: Best Practices 2026](https://playwright.dev/docs/best-practices)
+- [Playwright: Best Practices](https://playwright.dev/docs/best-practices)
 - [Playwright: Accessibility Testing with axe-core](https://playwright.dev/docs/accessibility-testing)
 - [Playwright: Screenshot Comparison](https://playwright.dev/docs/screenshots)
+- [Playwright: webServer configuration](https://playwright.dev/docs/test-webserver)
 - [OWASP: CI/CD Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/CI_CD_Security_Cheat_Sheet.html)
 - [Lighthouse CI (lhci)](https://github.com/GoogleChrome/lighthouse-ci)
 - [Google Core Web Vitals thresholds](https://web.dev/articles/vitals)
 - [axe-core: Accessibility rules](https://github.com/dequelabs/axe-core)
 - [WCAG 2.2 (W3C)](https://www.w3.org/TR/WCAG22/)
+- [lychee: Fast async link checker](https://lychee.cli.rs)
 - [STANDARDS.md](STANDARDS.md) — saavutettavuus- ja teknologiastandardit
 - [CODE_CONVENTIONS.md](CODE_CONVENTIONS.md) — koodauskäytännöt
