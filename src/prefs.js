@@ -33,12 +33,13 @@
  */
 
 import {
+  initializeFirestore,
+  persistentLocalCache,
   getFirestore,
   doc,
   getDoc,
   setDoc,
   serverTimestamp,
-  enableIndexedDbPersistence,
 } from 'firebase/firestore';
 
 // Tietomallin versio — kasvata kun DEFAULT_PREFS:iin lisätään kenttiä.
@@ -93,19 +94,17 @@ export function initPrefs(app, uid) {
 
   if (uid) {
     // Otetaan Firestore offline-persistointi käyttöön kirjautuneelle käyttäjälle.
-    // enableIndexedDbPersistence tallentaa Firestore-datan selaimen IndexedDB:hen,
+    // initializeFirestore localCache: persistentLocalCache() tallentaa Firestore-datan selaimen IndexedDB:hen,
     // jolloin preferenssit ovat luettavissa ja kirjoitettavissa myös offline-tilassa.
-    // Kutsu tehdään heti autentikoinnin jälkeen — ennen ensimmäistäkään getDoc/setDoc-kutsua.
-    _db = getFirestore(app);
-    enableIndexedDbPersistence(_db).catch((err) => {
-      if (err.code === 'failed-precondition') {
-        // Useampi välilehti auki samanaikaisesti — offline-persistointi toimii vain yhdellä.
-        console.warn('[prefs] Firestore-offline ei käytössä (useampi välilehti auki).');
-      } else if (err.code === 'unimplemented') {
-        // Selain (esim. vanha Safari) ei tue IndexedDB:tä.
-        console.warn('[prefs] Selain ei tue Firestore-offline-tallennusta.');
-      }
-    });
+    try {
+      _db = initializeFirestore(app, {
+        localCache: persistentLocalCache()
+      });
+    } catch (err) {
+      // Jos alustettu jo aiemmin (esim. ulos- ja sisäänkirjautumisesta johtuva uudelleenalustus),
+      // käytetään olemassa olevaa instanssia.
+      _db = getFirestore(app);
+    }
   } else {
     // Kirjautumaton käyttäjä: vain localStorage käytössä, ei Firestore-yhteyttä.
     _db = null;

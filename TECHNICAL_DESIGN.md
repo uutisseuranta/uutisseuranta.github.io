@@ -15,7 +15,7 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 | 2026-07-03 | Hybrid localStorage + Firestore preferensseille | localStorage: nopeus ja offline-tuki, UI piirtyy ilman verkkoviivettä. Firestore: kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset SSO-tunnuksen mukana kaikille laitteille. Pelkkä localStorage ei riitä monilaite-käyttöön; pelkkä Firestore olisi hidas. | Pelkkä localStorage (nopea mutta ei monilaite) / Pelkkä Firestore (monilaite mutta hidas) | Jos Firestore poistetaan käytöstä tai siirrytään toiseen backendiin | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
 | 2026-07-03 | Firebase SDK versio pinnattu `10.12.0`, SRI ei käytössä (tietoinen päätös) | Googlen CDN on luotettu lähde; SRI-hashin ylläpito jokaisen SDK-päivityksen yhteydessä lisää operatiivista taakkaa. Hyväksytty riski tässä vaiheessa. | SRI-hash käytössä | Jos projekti kasvaa tai tietoturvavaatimukset tiukkenevat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
 | 2026-07-03 | Analytics käytössä vain suostumuksen jälkeen (Google Consent Mode v2) | EU ePrivacy + GDPR vaatii suostumuksen ennen analytiikkaa | Analytics aina päällä | Jos lainsäädäntövaatimukset muuttuvat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
-| 2026-07-03 | `enableIndexedDbPersistence` → tullaan siirtymään `initializeFirestore` + `persistentLocalCache` | `enableIndexedDbPersistence` on merkitty `@deprecated` Firebase SDK 10.x:ssä. Toimii vielä, mutta migraatio tehdään iteraatio 3:ssa. | Jatketaan `enableIndexedDbPersistence`:lla | SDK 10.x EOL tai breaking change | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
+| 2026-07-26 | `initializeFirestore` + `persistentLocalCache` offline-persistoinnille | `enableIndexedDbPersistence` on korvattu uudella API:lla race conditionien välttämiseksi ja offline-persistoinnin varmistamiseksi. Migraatio tehty PR #65 yhteydessä. | `enableIndexedDbPersistence` (deprecated) | — | [#65](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/65) |
 | 2026-07-02 | SCREAMING_SNAKE_CASE sopimusdokumenteille | Yhtenäinen nimeäminen kaikkien repojen välillä; erottaa sopimukset ops-tiedostoista | kebab-case kaikille | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | Cross-repo -linkit absoluuttisina GitHub-URL:eina | Relatiiviset polut eivät toimi GitHubissa cross-repo | Relatiiviset polut | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | AS2-first, ei täyttä ActivityPub | ActivityPub vaatii Actor-endpointit ja federaation; AS2 riittää | Täysi ActivityPub | Jos tarvitaan federoitu verkosto | [#26](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/26) |
@@ -126,8 +126,15 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInWithPopup, signOut, deleteUser,
          GoogleAuthProvider } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
-import { getFirestore, getDoc, setDoc, deleteDoc, onSnapshot,
-         doc, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, getDoc, setDoc, deleteDoc, onSnapshot, doc } from 'firebase/firestore';
+
+const app = initializeApp(firebaseConfig);
+
+// persistentLocalCache() korvaa @deprecated enableIndexedDbPersistence().
+// Kutsutaan initializeApp():n jälkeen, ennen mitään getDoc/setDoc-kutsuja.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
 ```
 
 > ⚠️ **Kaksoismalli-vaara:** `index.html` ei saa sisältää Firebase CDN -importteja. Jos `index.html`:ssä on `<script type="module">` joka importtaa `https://www.gstatic.com/firebasejs/...` **ja** `src/main.js` käyttää npm-versiota, Firebase alustetaan kahdesti. `initializeApp()` heittää virheen `"Firebase App named '[DEFAULT]' already exists"`. Kaikki Firebase-alustus tapahtuu **yksinomaan** `src/main.js`:ssä npm-importteina. `index.html` sisältää vain yhden `<script type="module" src="/src/main.js">` -tagin.
@@ -162,9 +169,10 @@ Preferenssien tallennus on toteutettu kaksitasoisena:
 - **Lukujärjestys käynnistyksessä:** ensin `localStorage` (synkroninen, UI piirtyy heti) → sitten Firestore (asynkroninen, korvaa jos palvelimen tila on uudempi)
 - **PWA-käyttö:** Firestore IndexedDB-persistointi mahdollistaa preferenssien luvun ja kirjoituksen myös offline-tilassa. Service Worker huolehtii staattisista resursseista; `prefs.js` huolehtii datan offline-pysyvyydestä. Yhdessä ne muodostavat täyden PWA-offline-kokemuksen.
 
-> **⚠️ Deprecaatiohuomio:** `enableIndexedDbPersistence()` on merkitty `@deprecated` Firebase SDK 10.x:ssä.
-> Suositeltava korvaaja on `initializeFirestore(app, { localCache: persistentLocalCache() })`.
-> Migraatio on suunniteltu iteraatio 3:een — tähän asti toiminnallisuus säilyy ennallaan.
+> **ℹ️ Offline-persistointi (L-008 & L-012):** `initializeFirestore(app, { localCache: persistentLocalCache() })`
+> mahdollistaa Firestore-kirjoitusten jonottamisen IndexedDB:hen offline-tilassa.
+> Kirjoitukset synkronoidaan automaattisesti kun verkkoyhteys palautuu.
+> `enableIndexedDbPersistence()` (vanha API) on poistettu — sitä ei käytetä.
 
 Toteutus: `prefs.js`
 
@@ -316,10 +324,11 @@ onSnapshot(docRef, callback);
 **Tunnetut rajoitteet ja tietoinen valinta:**
 
 ```js
-// enableIndexedDbPersistence on @deprecated SDK 10.x:ssä.
-// Korvaaja: initializeFirestore({ localCache: persistentLocalCache() })
-// Migraatio: iteraatio 3. Tähän asti toimii — ei tarvita kiireellistä korjausta.
-enableIndexedDbPersistence(db);
+// persistentLocalCache korvaa deprecated enableIndexedDbPersistence:n.
+// Tehty PR #65 yhteydessä race conditionien ja offline-ongelmien estämiseksi.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
 ```
 
 ---
