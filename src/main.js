@@ -186,6 +186,38 @@ onPrefsChange((prefs) => {
 const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL || 'https://query-api-yq2o6p5wqa-lz.a.run.app';
 const WRITE_API_URL = import.meta.env.VITE_WRITE_API_URL || 'https://write-api-yq2o6p5wqa-lz.a.run.app';
 
+// ---- HOMEPAGE DYNAMIC STATS ----
+async function loadHomepageStats() {
+  try {
+    const res = await fetch(`${QUERY_API_URL}/ap/stats`);
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    const elSources = document.getElementById('stat-sources');
+    if (elSources && data.sources_count) {
+      elSources.textContent = `${data.sources_count}+`;
+    }
+    
+    const elArticles = document.getElementById('stat-articles');
+    if (elArticles && data.articles_last_24h) {
+      const count = data.articles_last_24h;
+      if (count >= 1000) {
+        elArticles.textContent = `${(count / 1000).toFixed(1)}k+`;
+      } else {
+        elArticles.textContent = `${count}`;
+      }
+    }
+    
+    const elInterval = document.getElementById('stat-interval');
+    if (elInterval && data.update_interval_minutes) {
+      elInterval.textContent = `${data.update_interval_minutes} min`;
+    }
+  } catch (err) {
+    console.warn('Tilastojen haku epäonnistui:', err);
+  }
+}
+loadHomepageStats();
+
 let currentTagFilter = null;
 let cachedArticles = [];
 
