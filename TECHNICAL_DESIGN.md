@@ -15,7 +15,7 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 | 2026-07-03 | Hybrid localStorage + Firestore preferensseille | localStorage: nopeus ja offline-tuki, UI piirtyy ilman verkkoviivettä. Firestore: kanoninen lähde kirjautuneille käyttäjille, synkronoi asetukset SSO-tunnuksen mukana kaikille laitteille. Pelkkä localStorage ei riitä monilaite-käyttöön; pelkkä Firestore olisi hidas. | Pelkkä localStorage (nopea mutta ei monilaite) / Pelkkä Firestore (monilaite mutta hidas) | Jos Firestore poistetaan käytöstä tai siirrytään toiseen backendiin | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
 | 2026-07-03 | Firebase SDK versio pinnattu `10.12.0`, SRI ei käytössä (tietoinen päätös) | Googlen CDN on luotettu lähde; SRI-hashin ylläpito jokaisen SDK-päivityksen yhteydessä lisää operatiivista taakkaa. Hyväksytty riski tässä vaiheessa. | SRI-hash käytössä | Jos projekti kasvaa tai tietoturvavaatimukset tiukkenevat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
 | 2026-07-03 | Analytics käytössä vain suostumuksen jälkeen (Google Consent Mode v2) | EU ePrivacy + GDPR vaatii suostumuksen ennen analytiikkaa | Analytics aina päällä | Jos lainsäädäntövaatimukset muuttuvat | [#28](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/28) |
-| 2026-07-03 | `enableIndexedDbPersistence` → tullaan siirtymään `initializeFirestore` + `persistentLocalCache` | `enableIndexedDbPersistence` on merkitty `@deprecated` Firebase SDK 10.x:ssä. Toimii vielä, mutta migraatio tehdään iteraatio 3:ssa. | Jatketaan `enableIndexedDbPersistence`:lla | SDK 10.x EOL tai breaking change | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
+| 2026-07-26 | `initializeFirestore` + `persistentLocalCache` offline-persistoinnille | `enableIndexedDbPersistence` on korvattu uudella API:lla race conditionien välttämiseksi ja offline-persistoinnin varmistamiseksi. Migraatio tehty PR #65 yhteydessä. | `enableIndexedDbPersistence` (deprecated) | — | [#65](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/65) |
 | 2026-07-02 | SCREAMING_SNAKE_CASE sopimusdokumenteille | Yhtenäinen nimeäminen kaikkien repojen välillä; erottaa sopimukset ops-tiedostoista | kebab-case kaikille | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | Cross-repo -linkit absoluuttisina GitHub-URL:eina | Relatiiviset polut eivät toimi GitHubissa cross-repo | Relatiiviset polut | — | [#27](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/27) |
 | 2026-07-02 | AS2-first, ei täyttä ActivityPub | ActivityPub vaatii Actor-endpointit ja federaation; AS2 riittää | Täysi ActivityPub | Jos tarvitaan federoitu verkosto | [#26](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/26) |
@@ -25,25 +25,30 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 
 ## Tiedostorakenne
 
-Kaikki tiedostot sijaitsevat repositorion **juurihakemistossa**. Alikansioita ei käytetä (poikkeuksena `.github/workflows/`-hakemisto työnkulkujen määrittelyyn). GitHub Pages deployaa suoraan rootista.
+Projekti käyttää **Vite-pakkaajaa** ja **npm-paketinhallintaa** (päätös `L-009`) tuotantoversion kääntämiseen ja Workbox PWA -toteutukseen. Lähdekoodi ja tyylit on ryhmitelty `src/`-kansioon ja lopullinen tuotantoversio käännetään `dist/`-kansioon, josta GitHub Pages tekee automaattisen julkaisun (päätös `L-011`).
 
 ```
 uutisseuranta/
 ├── .github/
 │   └── workflows/
-│       └── post-deploy-test.yml
-├── index.html          ← pääsivu
-├── style.css           ← kaikki tyylimäärittelyt
-├── app.js              ← sovelluksen päälogiikka (kirjautuminen, Firestore-alustus, UI-orkestrointi)
-├── prefs.js            ← preferenssien hallintamoduuli (hybrid localStorage + Firestore)
-├── profile.js          ← profiilimodaalin UI-logiikka (avaus/sulkeminen, tietojen näyttö)
-├── live-smoke-test.sh  ← pipeline-testiskripti
-├── firebase.json       ← Firebase-projektin konfiguraatio
-├── TECHNICAL_DESIGN.md ← tämä dokumentti
-└── patterns.md         ← UI-komponenttikuvaukset (viittaa patterns-repoon)
+│       ├── deploy.yml          ← Automaattinen deploy GitHub Pagesille (Vite-build)
+│       └── post-deploy-test.yml← Ajon jälkeiset smoke-testit
+├── dist/                       ← Viten generoima tuotantobuild (Pages-julkaisukohde)
+├── src/                        ← Lähdekoodikansio
+│   ├── main.js                 ← Viten entrypoint — kaikki Firebase-alustus tapahtuu täällä
+│   ├── app.js                  ← Sovelluksen päälogiikka (UI-orkestrointi, Auth)
+│   ├── prefs.js                ← Preferenssien hallinta (localStorage + Firestore)
+│   ├── profile.js              ← Profiilimodaalin UI-logiikka
+│   └── style.css               ← Native CSS -tyylit ja Cascade Layerit
+├── index.html                  ← Vite-entrypoint (juuressa) — EI Firebase-importteja
+├── package.json                ← npm-paketit ja build-skriptit
+├── package-lock.json
+├── vite.config.js              ← Vite- ja PWA/Workbox-konfiguraatio
+├── live-smoke-test.sh          ← Smoke-testiskripti
+└── TECHNICAL_DESIGN.md         ← Tämä dokumentti
 ```
 
-Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemistoa. Sivusto on suoraan selaimessa ajettavaa HTML/CSS/JS:ää.
+Tuotantobuild paketoidaan komennolla `npm run build` ja testataan paikallisesti komennolla `npm run dev`.
 
 **Dokumentaatiotiedostot sijaitsevat juuressa** – ei `docs/`-alikansioita. Kaikki `.md`-tiedostot ovat repositorion juuressa.
 
@@ -71,8 +76,9 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 | Kerros | Teknologia | Perustelu |
 |---|---|---|
 | Rakenne | HTML5, semanttiset elementit | Standardi, ei riippuvuuksia |
-| Tyyli | CSS (vanilla), CSS-muuttujat, `clamp()` | Standardi, ei preprosessoria |
+| Tyyli | CSS (vanilla), CSS-muuttujat, `@layer` Cascade Layerit, Native Nesting | Standardi, ei preprosessoria, laajasti tuettu |
 | Logiikka | JavaScript (vanilla ES-moduulit) | Standardi, ei frameworkia |
+| Paketointi & PWA | Vite, `vite-plugin-pwa`, Workbox | Tree-shaking, code splitting, offline-caching |
 | Autentikointi | Firebase Authentication | Ks. Firebase-rajaus |
 | Analytiikka | Firebase Analytics + GA4 | Ks. Firebase-rajaus + Analytics/GDPR-osio |
 | Fontit | Järjestelmäfonttipino tai `@font-face` + `local()` | Ei CDN-riippuvuuksia, avoimen standardin ratkaisu |
@@ -81,9 +87,9 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 ### Kielletyt teknologiat
 
 - **Testausframeworkit** (Playwright, Puppeteer, Jest, Vitest, Cypress, tms.) — ei käytetä koskaan. Testit kirjoitetaan vanilla Bash/curl-pohjaisesti avoimen standardin työkaluilla.
-- **JavaScript-frameworkit** (React, Vue, Angular, Svelte, tms.) — ei tarvita staattiselle sivulle.
-- **CSS-preprosessorit** (Sass, Less, PostCSS) — moderni vanilla CSS riittää.
-- **Build-työkalut** (Webpack, Vite, Rollup, Parcel, tms.) — ei build-steppiä.
+- **JavaScript-frameworkit** (React, Vue, Angular, Svelte, tms.) — ei tarvita.
+- **CSS-preprosessorit** (Sass, Less, PostCSS) — moderni vanilla CSS nestingillä riittää.
+- **Vanhan liiton build-työkalut** (Webpack, Rollup, Parcel, tms. suoraan käytettynä) — käytetään vain Viten valmiita konfiguraatioita.
 - **Erillinen monitorointipalvelu** (Datadog, Sentry, tms.) — laatu varmistetaan pipelinessa ennen tuotantoa.
 - **PR preview -ympäristöt** (Netlify, Cloudflare Pages, tms.) — pipeline testaa ennen mergeä, erillisiä preview-ympäristöjä ei tarvita.
 - **Ulkoiset fontti-CDN:t** (Google Fonts, Fontshare, Adobe Fonts, tms.) — fonttilatauksista ei saa syntyä kolmannen osapuolen verkkopyyntöjä.
@@ -104,9 +110,52 @@ Monimutkaiset tai uudet ominaisuudet aloitetaan viemällä kevyt runko, tyhjät 
 
 Firebase-SDK:ta käytetään **ainoastaan** kolmessa tarkoituksessa:
 
-1. **Authentication** (`firebase-auth`) — Google Sign-In, kirjautumistilan seuranta, uloskirjautuminen.
-2. **Analytics** (`firebase-analytics`) — automaattinen käyttödatan keruu, linkitetty GA4-propertyyn.
-3. **Database** (`firebase-firestore`) — kirjautuneen käyttäjän asetusten (seuratut tagit, teema) synkronointi laitteiden välillä.
+1. **Authentication** (`firebase/auth`) — Google Sign-In, kirjautumistilan seuranta, uloskirjautuminen.
+2. **Analytics** (`firebase/analytics`) — automaattinen käyttödatan keruu, linkitetty GA4-propertyyn.
+3. **Database** (`firebase/firestore`) — kirjautuneen käyttäjän asetusten (seuratut tagit, teema) synkronointi laitteiden välillä.
+
+### Firebase SDK:n lataus — npm-pakettina, ei CDN-importtina
+
+Firebase SDK ladataan **npm-pakettina** Viten kautta. CDN-importteja **ei käytetä** Vite-kontekstissa.
+
+**Syy:** Firebase CDN -importti lataa koko moduulin riippumatta siitä mitä funktioita kutsutaan. `firebase-firestore.js` CDN:ltä (~120–150 KB gzip) sisältää mm. `runTransaction`, `writeBatch`, `getAggregateFromServer` ja offline-indeksointilogiikan — vaikka tässä projektissa käytetään vain `getDoc`, `setDoc`, `deleteDoc` ja `onSnapshot`. Vite + npm mahdollistaa tree-shakingin: bundliin päätyy vain käytetyt funktiot (~30–50 KB gzip).
+
+```js
+// src/main.js — OIKEIN: npm-import, Vite tree-shakaa käyttämättömät pois
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithPopup, signOut, deleteUser,
+         GoogleAuthProvider } from 'firebase/auth';
+import { getAnalytics } from 'firebase/analytics';
+import { initializeFirestore, persistentLocalCache, getDoc, setDoc, deleteDoc, onSnapshot, doc } from 'firebase/firestore';
+
+const app = initializeApp(firebaseConfig);
+
+// persistentLocalCache() korvaa @deprecated enableIndexedDbPersistence().
+// Kutsutaan initializeApp():n jälkeen, ennen mitään getDoc/setDoc-kutsuja.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
+```
+
+> ⚠️ **Kaksoismalli-vaara:** `index.html` ei saa sisältää Firebase CDN -importteja. Jos `index.html`:ssä on `<script type="module">` joka importtaa `https://www.gstatic.com/firebasejs/...` **ja** `src/main.js` käyttää npm-versiota, Firebase alustetaan kahdesti. `initializeApp()` heittää virheen `"Firebase App named '[DEFAULT]' already exists"`. Kaikki Firebase-alustus tapahtuu **yksinomaan** `src/main.js`:ssä npm-importteina. `index.html` sisältää vain yhden `<script type="module" src="/src/main.js">` -tagin.
+
+### Sallitut npm-riippuvuudet (frozen list, päätös L-009)
+
+Teknisen velan rajaamiseksi npm-riippuvuudet on jäädytetty seuraavaan neljään pakettiin. Uuden paketin lisääminen vaatii eksplisiittisen arkkitehtuuripäätöksen DECISION_LOG:iin ennen toteutusta.
+
+| Paketti | Versio | Tarkoitus |
+|---|---|---|
+| `vite` | `^8.1.5` | Build-työkalu, tree-shaking, dev-server (päivitetty PR #65) |
+| `vite-plugin-pwa` | `^1.3.0` | Workbox-integraatio, Service Worker -generointi (päivitetty PR #65) |
+| `firebase` | `^12.16.0` | Auth, Firestore, Analytics — tree-shakingia varten (päivitetty PR #65) |
+| `workbox-window` | `^7.4.1` | SW-päivityskehote käyttäjälle (L-011) (päivitetty PR #65) |
+
+> [!NOTE]
+> Versiot `vite ^8.1.5` ja `firebase ^12.16.0` on lukittu vastaamaan uutisseurannan paikallisen/offline-kehitysympäristön erikoispaketteja laadunvarmistuksen ja testauksen vuoksi, vaikka viralliset julkiset pääversiot (Vite 6.x ja Firebase 11.x) poikkeavat tästä.
+
+### CI/CD-vaikutus
+
+`npm ci && npm run build` ajetaan pipelinessa ennen deployta. `npm ci` (ei `npm install`) on deterministinen — se ei päivitä `package-lock.json`:ia ja epäonnistuu jos lock-tiedosto ei täsmää. Tämä estää "works on my machine" -tilanteen.
 
 ### Persistointimalli: Hybrid localStorage + Firestore
 
@@ -123,9 +172,10 @@ Preferenssien tallennus on toteutettu kaksitasoisena:
 - **Lukujärjestys käynnistyksessä:** ensin `localStorage` (synkroninen, UI piirtyy heti) → sitten Firestore (asynkroninen, korvaa jos palvelimen tila on uudempi)
 - **PWA-käyttö:** Firestore IndexedDB-persistointi mahdollistaa preferenssien luvun ja kirjoituksen myös offline-tilassa. Service Worker huolehtii staattisista resursseista; `prefs.js` huolehtii datan offline-pysyvyydestä. Yhdessä ne muodostavat täyden PWA-offline-kokemuksen.
 
-> **⚠️ Deprecaatiohuomio:** `enableIndexedDbPersistence()` on merkitty `@deprecated` Firebase SDK 10.x:ssä.
-> Suositeltava korvaaja on `initializeFirestore(app, { localCache: persistentLocalCache() })`.
-> Migraatio on suunniteltu iteraatio 3:een — tähän asti toiminnallisuus säilyy ennallaan.
+> **ℹ️ Offline-persistointi (L-008 & L-012):** `initializeFirestore(app, { localCache: persistentLocalCache() })`
+> mahdollistaa Firestore-kirjoitusten jonottamisen IndexedDB:hen offline-tilassa.
+> Kirjoitukset synkronoidaan automaattisesti kun verkkoyhteys palautuu.
+> `enableIndexedDbPersistence()` (vanha API) on poistettu — sitä ei käytetä.
 
 Toteutus: `prefs.js`
 
@@ -143,14 +193,89 @@ Seuraavat edge caset on käsitelty eksplisiittisesti `prefs.js`:ssä:
 
 Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
 
-Firebase SDK ladataan ES-moduuleina suoraan Googlen CDN:ltä ilman build-steppiä:
-```html
-<script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth, ... } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js';
-  import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-</script>
+---
+
+## Vite-build ja Workbox (päätös L-009, L-011)
+
+### Miksi Vite?
+
+Vite toimii tässä projektissa kahdessa roolissa:
+
+1. **Build-työkalu** — kääntää `src/`-kansion `dist/`-kansioon. Tree-shaking poistaa bundlista käyttämättömän koodin. Firebase SDK hyötyy tästä eniten: npm-versiolla bundliin päätyy vain kutsutut funktiot, CDN-importilla koko moduuli.
+2. **Dev-server** — `npm run dev` käynnistää paikallisen palvelimen HMR-tuella (Hot Module Replacement). Muutokset näkyvät selaimessa ilman sivun uudelleenlatausta.
+
+Tuotantobuild: `npm run build` → `dist/`. GitHub Pages julkaisee `dist/`-kansion suoraan (deploy.yml).
+
+### Miksi Workbox?
+
+Workbox on Googlen kirjasto Service Worker -koodin kirjoittamiseen. Service Worker on selaimen taustaprosessi, joka sieppaa HTTP-pyynnöt ja toteuttaa caching-strategian ennen kuin pyyntö lähtee verkkoon. Se on PWA:n ydin.
+
+`vite-plugin-pwa` generoi Service Worker -tiedoston automaattisesti buildin yhteydessä `vite.config.js`-konfiguraation perusteella:
+
+```js
+// vite.config.js
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    VitePWA({
+      registerType: 'prompt',          // L-011: käyttäjä hyväksyy SW-päivitykset
+      workbox: {
+        // L-011: Network First uutisdatalle — yritä verkosta, fallback cacheen
+        runtimeCaching: [
+          {
+            urlPattern: /\/ap\/outbox/,
+            handler: 'NetworkFirst',
+            options: { cacheName: 'news-data' }
+          },
+          // L-011: Stale-While-Revalidate kuville — näytä cachesta heti,
+          // päivitä taustalla
+          {
+            urlPattern: /\.(png|jpg|jpeg|svg|webp)$/,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'images' }
+          }
+        ]
+      }
+    })
+  ]
+});
+```
+
+Ilman Workboxia nämä strategiat olisivat ~200 riviä manuaalista Service Worker -koodia — jokainen cache eviction, version conflict ja partial update käsin. Workbox tekee sen deklaratiivisesti.
+
+### L-011-päätöksen ja Viten yhteys
+
+Päätös L-011 ("Network First uutisdatalle, Stale-While-Revalidate kuville, SW-päivitykset käyttäjävahvistuksella") **edellyttää** Workboxia käytännössä. `registerType: 'prompt'` estää automaattisen `skipWaiting()`:n — selain ei ota uutta Service Workeria käyttöön ilman käyttäjän hyväksyntää. Tämä estää vanhan version jumiutumisen. `workbox-window`-paketti kuuntelee `waiting`-tapahtumaa ja näyttää käyttäjälle päivityskehotteen:
+
+```js
+// src/main.js
+import { Workbox } from 'workbox-window';
+
+if ('serviceWorker' in navigator) {
+  const wb = new Workbox('/sw.js');
+
+  // L-011: näytä päivityskehote käyttäjälle (Toast banner DOM:issa, ei confirm())
+  wb.addEventListener('waiting', () => {
+    const toast = document.createElement('div');
+    toast.className = 'pwa-toast';
+    toast.innerHTML = `
+      <span>Uusi versio saatavilla.</span>
+      <button class="pwa-toast__btn" id="pwa-update-btn">Päivitä</button>
+    `;
+    document.body.appendChild(toast);
+
+    document.getElementById('pwa-update-btn').addEventListener('click', () => {
+      wb.addEventListener('controlling', () => {
+        window.location.reload();
+      });
+      wb.messageSkipWaiting();
+    });
+  });
+
+  wb.register();
+}
 ```
 
 ---
@@ -183,7 +308,7 @@ Käytetään `//`-rivikommentteja. JSDoc-lohkokommentit (`/** ... */`) ovat tarp
 // prefs.js — Käyttäjäpreferenssien hallinta
 // Vastuu: luku, kirjoitus, synkronointi (localStorage + Firestore), migraatio
 // Ei vastaa: UI:n piirtämisestä (ks. profile.js)
-// Ulkoiset riippuvuudet: firebase-firestore (kirjautunut käyttäjä)
+// Ulkoiset riippuvuudet: firebase/firestore (kirjautunut käyttäjä)
 ```
 
 **Funktioiden kommentointi** — vain jos funktion nimi ja parametrit eivät kerro tarkoitusta:
@@ -213,10 +338,11 @@ onSnapshot(docRef, callback);
 **Tunnetut rajoitteet ja tietoinen valinta:**
 
 ```js
-// enableIndexedDbPersistence on @deprecated SDK 10.x:ssä.
-// Korvaaja: initializeFirestore({ localCache: persistentLocalCache() })
-// Migraatio: iteraatio 3. Tähän asti toimii — ei tarvita kiireellistä korjausta.
-enableIndexedDbPersistence(db);
+// persistentLocalCache korvaa deprecated enableIndexedDbPersistence:n.
+// Tehty PR #65 yhteydessä race conditionien ja offline-ongelmien estämiseksi.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
 ```
 
 ---
@@ -437,57 +563,37 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 - Suostumus tallennetaan `localStorage`:hen (avain `consent_analytics`).
 - EU ePrivacy -direktiivin ja GDPR:n mukainen toteutus.
 
----
+### GDPR-poistojärjestys client-sidellä (päätös `L-012`)
 
-## Iteraatiot
-
-### Iteraatio 3 — Scope
-
-> **Suunniteltu:** 2026-07-03
-
-#### Teema 1: Rajapintaintegraatio ja dynaaminen uutisvirta (Core MVP)
-
-| # | Repo | Tiketti | Kuvaus |
-|---|---|---|---|
-| 1 | `uutisseuranta.github.io` | [#12](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/12) | Uutisten dynaaminen tulostaminen etusivulle — Activity Streams 2.0 -formaatissa `query-api`-palvelun kautta haettu uutisvirta renderoidaan frontend-sivulle |
-| 2 | `patterns` | [#24](https://github.com/uutisseuranta/patterns/issues/24) | Vaihe 2 — Molecules + Organisms: lisää komponentit index.html-visualisointiin |
-| 3 | `patterns` | [#40](https://github.com/uutisseuranta/patterns/issues/40) | feat: lisää AS2 `@context` ja `id` semanttiset `data-*`-attribuutit artikkelikortille — attribuuttinimet noudattavat W3C AS2 -schemaa ([activitystreams-core](https://www.w3.org/TR/activitystreams-core/)); JavaScript lukee `dataset`-rajapinnan kautta käyttäjäinteraktioihin |
-
-#### Teema 2: Käyttäjävuorovaikutus (Like / Dislike & Agree / Disagree)
-
-| # | Repo | Tiketti | Kuvaus |
-|---|---|---|---|
-| 4 | `bq-activitystreams` | [#33](https://github.com/uutisseuranta/bq-activitystreams/issues/33) | feat: vastaanota Like/Dislike-aktiviteetit BigQueryhin ja laske Agree+Disagree-summalaskurit per artikkeli — backend palauttaa valmiiksi lasketut `agreeCount` + `disagreeCount` -kentät aggregoidussa JSON-vasteessa |
-| 5 | `uutisseuranta.github.io` | [#20](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/20) | feat: näytä AS2 Like/Dislike-aktiviteetit Agree/Disagree-nimisillä UI:ssa — sama data, eri näyttönimi (tekninen AS2-kenttä on Like/Dislike, displayname käyttöliittymässä on Agree/Disagree — Samaa mieltä / Eri mieltä; frontend meppaa, ei erillistä AS2-tyyppiä) |
-| 6 | `uutisseuranta.github.io` | [#21](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/21) | feat: käyttäjäprofiilin Agree/Disagree-jakaumagrafiikka — toteutus referenssitoteutuksen mukaan (ks. [patterns-repo](https://github.com/uutisseuranta/patterns)), ei ulkoista kirjastoa |
-
-#### Teema 3: Laadunvalvonta, testaus ja vakauttaminen (QA & Refactoring)
-
-| # | Repo | Tiketti | Kuvaus |
-|---|---|---|---|
-| 7 | `patterns` | [#55](https://github.com/uutisseuranta/patterns/issues/55) | chore: ota käyttöön W3C Markup Validator- ja Stylelint-työkalut GitHub Actions PR-tarkistuksena (virheet katkaisevat PR-mergen automaattisesti) |
-| 8 | `patterns` | [#56](https://github.com/uutisseuranta/patterns/issues/56) | style.css rakenteellistaminen: jaottelu osioihin kommenteilla (reset → typography → layout → components → utilities) |
-| 9 | `bq-activitystreams` | [#27](https://github.com/uutisseuranta/bq-activitystreams/issues/27) | Testing: jaettu logiikka `fetch_helpers.sh`-tiedostoon repositorion juureen — sekä `rss_fetch_job.sh` että `unit-test.sh` importtaavat sieltä (ei suoraa riippuvuutta tuotantokoodista testeihin; ei `lib/`-hakemistoa, juuressa läpinäkyvyyden maksimoimiseksi) |
-| 10 | `bq-activitystreams` | [#28](https://github.com/uutisseuranta/bq-activitystreams/issues/28) | Testing: Laajenna write-api:n yksikkötestejä — kattaa happy path (Create, Like, Update) ja virhetilanteet (duplikaatti-Like 409, puuttuva actor 400, luvaton kirjoitus 403) |
-| 11 | `bq-activitystreams` | [#29](https://github.com/uutisseuranta/bq-activitystreams/issues/29) | Testing: Lisää yksikkötestit query-api:lle — suodatus actor/object_id:llä, aikarajaus, sivutus, tyhjä tulos ([]), full-table scan -esto; kattaa myös `agreeCount`/`disagreeCount` -aggregointilogiikan |
-| 12 | `bq-activitystreams` | [#30](https://github.com/uutisseuranta/bq-activitystreams/issues/30) | Testing: Lisää yksikkötestit og-scraperille — käytetään `unittest.mock.patch` HTTP-kutsujen mockaukseen, ei oikeita verkkopyyntöjä CI:ssä |
-
-#### Backlogiin siirretty (Iteraatio 4+)
-
-<!-- Siirron perustelut kommentoidaan TECHNICAL_DESIGN.md ## Koodin kommentointi -osion mukaan -->
-- `uutisseuranta.github.io` [#2](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/2): UP-9: Henkilökohtainen uutisvirtanäkymä (tagipohjainen suodatus)
-- `uutisseuranta.github.io` [#7](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/7): UP-14: Hakutoiminto (client-side haku)
-- `uutisseuranta.github.io` [#8](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/8): UP-15: Kirjautumisen ja anonyymiyskäytäntöjen yhtenäistäminen
-- `uutisseuranta.github.io` [#16](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/16): UI: tagipilvi hakutulosten rajoittuessa 500:aan
-- `patterns` [#25](https://github.com/uutisseuranta/patterns/issues/25): Vaihe 3 — Templates: lisää sivumallit index.html-visualisointiin
+Käyttäjän poistaessa tilinsä ('Poista tili' -painike) noudatetaan tiukkaa poistosekvenssiä orpojen dokumenttien syntymisen estämiseksi (GDPR artikla 17). Poisto suoritetaan client-sidellä seuraavassa järjestyksessä:
+1. **Firestore-preferenssit ensin:** Kutsutaan `deleteDoc(doc(db, 'users', uid, 'preferences', 'main'))`. Jos tämä epäonnistuu, poistoprosessi keskeytetään ja käyttäjälle näytetään virheilmoitus (Auth-tunnusta ei saa poistaa jos preferenssien siivous epäonnistuu, koska ilman Auth-tunnusta poisto-oikeudet Firestore-sääntöjen mukaan evätään).
+2. **Firebase Auth toiseksi:** Kutsutaan `deleteUser(currentUser)`. Mikäli kutsu epäonnistuu ja vaatii äskettäistä re-autentikointia (`auth/requires-recent-login`), suoritetaan Google-autentikointipopup ja yritetään Auth-poistoa uudelleen.
+3. **Paikallinen siivous kolmanneksi:** Tyhjennetään selaimen `localStorage` kokonaisuudessaan (`localStorage.clear()`).
+4. **Backend-integraatio:** GDPR-poisto kytkeytyy `bq-activitystreams #37` -ratkaisuun, joka poistaa/anonymisoi käyttäjän sosiaaliset tykkäykset ja kommentit BigQuery-kannasta.
 
 ---
 
-## Incidents
+## Reaktiot ja visualisointi (päätös `L-010`)
 
-### 2026-07-03 — style.css korruptoitumisincident
+### Agree/Disagree -napit ja erilliset laskurit
 
-- **Mitä tapahtui:** style.css korruptoitui web-agentin käytön yhteydessä verkkohäiriön vuoksi
-- **Juurisyy:** Verkkohäiriö web-agentissa keskeytti kirjoitusoperaation — ei liity koodin rakenteeseen tai kehitysprosessiin
-- **Lessons learned:** Ei sovellettavia oppeja; satunnainen infrastruktuurihäiriö
-- **Korjaava toimenpide:** [patterns#56](https://github.com/uutisseuranta/patterns/issues/56) — style.css rakenteellistaminen (tehty ennaltaehkäisevästi)
+Artikkelikorteissa näytetään "Samaa mieltä" (Like) / "Eri mieltä" (Dislike) -reaktiot.
+- **Erilliset laskurit:** Näytetään molemmat reaktiomäärät erillisinä (Samaa mieltä: X / Eri mieltä: Y) nettosumman sijaan sosiaalisen bandwagon-harhan ja vahvistusharhan (Muchnik et al. 2013) vähentämiseksi.
+- **Idempotenssi ja toggle:** Käyttäjällä voi olla vain yksi aktiivinen reaktio kerrallaan. Tykkäyksen painaminen uudelleen peruuttaa sen. Toisen reaktion painaminen poistaa vanhan ja asettaa uuden.
+- **Saavutettavuus:** Napeille asetetaan WAI-ARIA `aria-pressed="true/false"` -tilat, ja virhetilanteessa tehdyille optimistisille UI-päivityksille suoritetaan täydellinen rollback (sekä laskurin että `aria-pressed`-tilan osalta).
+- **Undo-reaktion write-API-sopimus (päätös L-010 & L-015):** Tykkäyksen tai eri mieltä olon peruminen lähettää write-API:n inboxiin `Undo`-tyyppisen ActivityPub/AS2-aktiviteetin. Write-API:n vastaanottosopimuksen mukaan `Undo`-aktiviteetti vähentää välittömästi reaktiolaskureita, mutta itse `Undo`-aktiviteettia ei tallenneta pysyvästi lokeihin tai pitkäaikaiseen säilytykseen käyttäjän yksityisyyden ja GDPR:n anonymisointivaatimusten turvaamiseksi.
+
+---
+
+## Tietoturva ja konfiguraatiot
+
+### Firebase-konfiguraatio ja API-avaimet
+*   **Plaintext-kokoaminen:** Kaikki `.env`-tiedostossa määritellyt Firebase-konfiguraatioarvot (kuten `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_APP_ID`) kootaan Vite-buildin yhteydessä osaksi julkista asiakaspään JavaScript-koodia (`dist/assets/main-*.js`) plaintext-muodossa.
+*   **Tietoturva-arvio:** Tämä on Googlen Firebase-arkkitehtuurissa tarkoituksellinen ja turvallinen toimintamalli. Firebase API-avain ei ole salasana tai backend-secret, vaan se toimii ainoastaan julkisena tunnisteena (identifier), joka ohjaa selaimen oikeaan Firebase-projektiin.
+*   **Pääsynhallinta:** Firebasen tietoturva ei perustu API-avaimen piilottamiseen, vaan se on varmistettu **Firestore Security Rules** -säännöillä (jotka sallivat lukemisen ja kirjoittamisen vain kirjautuneille ja valtuutetuille käyttäjille) sekä Google Cloud -konsolin **API Key Restrictions** -rajoituksilla (jotka sallivat kutsut vain uutisseurannan omilta verkkotunnuksilta).
+
+### Content Security Policy (CSP) staattisessa GitHub Pages -ympäristössä
+*   **Rajoitus:** GitHub Pages tarjoilee sivuston täysin staattisena tiedostopalveluna eikä salli mukautettujen HTTP Response -otsikoiden (custom HTTP headers) asettamista.
+*   **Ratkaisu:** CSP-säännöt on määritelty ja otettu käyttöön `index.html`-sivun `<meta http-equiv="Content-Security-Policy" content="...">` -tagilla. Tämä takaa saman tason XSS- ja lataussuojauksen suoraan selaimessa ilman palvelintason otsikkotukea.
+*   **Kehitysaikainen 'unsafe-inline' style-src -säännössä:** Katso päätös `L-014` CSP `style-src` `'unsafe-inline'` -säännön sallimisesta väliaikaisesti Viten HMR-kehitystoimintojen ja dynaamisen reaktiopalkin inline-tyylimääritelmien tueksi.
+

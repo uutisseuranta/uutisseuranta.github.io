@@ -18,7 +18,7 @@ Tämä ohjeisto jakautuu kahteen pääosaan:
 1. **Kanoniset (yhteiset) käytännöt** (Tiedostorakenne, nimeäminen, linkit, versionhallinta, commitit) — koskevat kaikkia organisaation repositorioita.
 2. **Repokohtaiset käytännöt** (Kommentointi, linttaustyökalut) — sovelletaan kunkin repon käyttämän teknologiapinon mukaan.
 
-Jokainen repositorio ylläpitää omaa paikallista `DESIGN_GUIDELINES.md` ja `STANDARDS.md` -ohjeistoaan, jotka kuvaavat vain kyseisen palvelun omia käyttöliittymä-, asettelu- ja teknologiapinostandardeja (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-004).
+Jokainen repositorio ylläpitää omaa paikallista `DESIGN_GUIDELINES.md` ja `STANDARDS.md` -ohjeistoaan, jotka kuvaavat vain kyseisen palvelun omia käyttöliittymä-, asettelu- ja teknologiapinostandardeja (katso [DECISION_LOG.csv](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/DECISION_LOG.csv) -> G-004).
 
 ---
 
@@ -31,6 +31,7 @@ Jokainen repositorio ylläpitää omaa paikallista `DESIGN_GUIDELINES.md` ja `ST
 Sallitut poikkeukset kaikissa repoissa:
 
 - `.github/` — GitHubin omaa infrastruktuuria varten (Actions-workflowt, issue-templatet, Dependabot-konfiguraatio jne.). `.github/` ei ole tarkoitettu repon omille tiedostoille — sinne ei sijoiteta dokumentaatiota, skriptejä, konfiguraatioita eikä muita projektin tiedostoja.
+- `src/` — **vain `uutisseuranta.github.io`-repossa**: Vite-pakkaajalla käännettävä lähdekoodisto (päätös `L-009`), joka sisältää `app.js`, `prefs.js`, `profile.js` ja `style.css` -tiedostot.
 - `skill-*/` — **vain `skills`-repossa**: Perplexity-agenttiskillit hakemistorakenteella `skill-<nimi>/SKILL.md`. Muissa repoissa ei käytetä `skill-*/`-hakemistoja.
 
 ```
@@ -38,6 +39,11 @@ repo/
 ├── .github/               ← VAIN GitHub-infrastruktuuri (Actions, issue-templatet)
 │   └── workflows/
 │       └── *.yml
+├── src/                   ← VAIN uutisseuranta.github.io: Vite-lähdekoodisto (L-009)
+│   ├── app.js
+│   ├── prefs.js
+│   ├── profile.js
+│   └── style.css
 ├── skill-<nimi>/          ← VAIN skills-repossa: Perplexity-skill-hakemistot
 │   └── SKILL.md
 ├── skill-(käyttötarkoitus).yml  ← MML/ops-konfiguraatiot, juuressa (kaikki repot)
@@ -46,7 +52,7 @@ repo/
 └── ...
 ```
 
-Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-001): Projekteissa on vähän tiedostoja. Hakemistorakenne ei tuo lisäarvoa — se lisää navigaatiokulua ilman hyötyä. Kaikki tiedostot löytyvät yhdestä paikasta. `skill-*/`-poikkeus on skills-repokohtainen ja perusteltu: Perplexity-skillit ovat itsenäisiä dokumentaatioyksikköjä, jotka tarvitsevat oman hakemiston `load_skill`-mekanismin vuoksi.
+Perustelu (katso [DECISION_LOG.csv](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/DECISION_LOG.csv) -> G-001 ja L-009): Projekteissa on vähän tiedostoja ja pääsääntöisesti litteä rakenne pitää ylläpidon yksinkertaisena. Web-käyttöliittymässä (`uutisseuranta.github.io`) siirryttiin kuitenkin Vite-käännöstekniikkaan, joka edellyttää `src/`-kansiota lähdekoodille, jotta `dist/`-tuotantoversio voidaan rakentaa puhtaasti. Tämä on sallittu ja dokumentoitu poikkeus.
 
 ---
 
@@ -66,7 +72,7 @@ PATTERNS_CATALOG.md
 USER_PATHS.md
 ```
 
-Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-002): Erottaa sopimukset ja normatiiviset dokumentit ops-tiedostoista ja lähdekoodista. Yhtenäinen nimeäminen kaikkien repojen välillä.
+Perustelu (katso [DECISION_LOG.csv](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/DECISION_LOG.csv) -> G-002): Erottaa sopimukset ja normatiiviset dokumentit ops-tiedostoista ja lähdekoodista. Yhtenäinen nimeäminen kaikkien repojen välillä.
 
 ### Skill-tiedostot — kaksi formaattia
 
@@ -167,7 +173,7 @@ Kaikki viittaukset toisiin repositorioihin kirjoitetaan **absoluuttisina GitHub-
 [TECHNICAL_DESIGN.md](../jira-github-integration/TECHNICAL_DESIGN.md)
 ```
 
-Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-002): Relatiiviset polut eivät toimi GitHubissa cross-repo-viittauksissa.
+Perustelu (katso [DECISION_LOG.csv](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/DECISION_LOG.csv) -> G-002): Relatiiviset polut eivät toimi GitHubissa cross-repo-viittauksissa.
 
 ---
 
@@ -189,7 +195,7 @@ Git-tagit luodaan tällä muodolla. GitHub Releases käyttää samaa tunnistetta
 | Uusi toiminnallisuus, taaksepäin yhteensopiva | `vX.Y+1.0` | minor |
 | Breaking change, API-muutos | `vX+1.0.0` | major |
 
-Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-002): Yhtenäiset julkaisukäytännöt kaikkien repojen välillä.
+Perustelu (katso [DECISION_LOG.csv](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/DECISION_LOG.csv) -> G-002): Yhtenäiset julkaisukäytännöt kaikkien repojen välillä.
 
 ---
 
@@ -223,7 +229,7 @@ chore(deps): päivitä firebase 10.x → 11.x
 ci: lisää yamllint-tarkistus workflowhin
 ```
 
-Perustelu (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> G-003): Yhdenmukainen commit-historia mahdollistaa automaattisen CHANGELOG-generoinnin ja helpottaa `git log`-selailua. Kytkeytyy suoraan DECISION_LOG-merkintöihin.
+Perustelu (katso [DECISION_LOG.csv](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/DECISION_LOG.csv) -> G-003): Yhdenmukainen commit-historia mahdollistaa automaattisen CHANGELOG-generoinnin ja helpottaa `git log`-selailua. Kytkeytyy suoraan DECISION_LOG-merkintöihin.
 
 ---
 
@@ -337,7 +343,7 @@ Perustelu: Repojen kielivalikoima vaihtelee — `bq-activitystreams` tarvitsee e
 
 ## Päätösloki
 
-Kaikki arkkitehtuuripäätökset kirjataan repokohtaiseen [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -tiedostoon.
+Kaikki arkkitehtuuripäätökset kirjataan repokohtaiseen [DECISION_LOG.csv](https://github.com/uutisseuranta/uutisseuranta.github.io/blob/main/DECISION_LOG.csv) -tiedostoon.
 
 Esimerkki uutisseuranta.github.io -repositorion päätöksistä:
 ```csv

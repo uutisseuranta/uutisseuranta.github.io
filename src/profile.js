@@ -1,13 +1,13 @@
 /**
- * profile.js – Profiilimodaali ja datanvienti (PWA-offline-tuella)
+ * profile.js – Profiilimodaali ja datanvienti (PWA-offline-tuella) / Profile Modal and Data Export (with PWA offline support)
  *
- * Vastaa profiilimodaalin renderöinnistä ja
- * käyttäjätietojen JSON-viennistä.
+ * Vastaa profiilimodaalin renderöinnistä ja / Responsible for rendering the profile modal and
+ * käyttäjätietojen JSON-viennistä. / exporting user preferences to JSON format.
  *
- * Riippuvuudet:
+ * Riippuvuudet / Dependencies:
  *   – prefs.js  (getPrefs, exportPrefsAsJson, followTag,
  *                unfollowTag, isFollowing, onPrefsChange)
- *   – Firebase Auth user-objekti
+ *   – Firebase Auth user-objekti / Firebase Auth user object
  */
 
 import {
@@ -15,10 +15,11 @@ import {
   exportPrefsAsJson,
   unfollowTag,
   onPrefsChange,
-  updatePrefs
+  updatePrefs,
+  deleteUserPrefs
 } from './prefs.js';
 
-import { getAuth, signOut, deleteUser } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getAuth, signOut, deleteUser } from 'firebase/auth';
 
 let _user    = null;
 let _modal   = null;
@@ -210,26 +211,85 @@ function _renderContent() {
     closeProfileModal();
   });
 
-  // Poista tili
-  body.querySelector('#btn-delete-account')?.addEventListener('click', async () => {
-    if (confirm("Haluatko varmasti poistaa tilisi ja kaikki asetuksesi pysyvästi? Tätä toimintoa ei voi peruuttaa.")) {
+  // Poista tili (GDPR L-012)
+  body.querySelector('#btn-delete-account')?.addEventListener('click', () => {
+    showConfirm("Haluatko varmasti poistaa tilisi ja kaikki asetuksesi pysyvästi? Tätä toimintoa ei voi peruuttaa.", async () => {
       try {
         const uid = _user.uid;
+        
+        // 1. Firestore-preferenssit ensin (varmistetaan ennen kuin auth-oikeudet poistuvat)
+        await deleteUserPrefs();
+        
+        // 2. Firebase Auth toiseksi
+        await deleteUser(_user);
+        
+        // 3. Paikallinen siivous kolmanneksi (GDPR / selective clean to avoid wiping unrelated keys)
         localStorage.removeItem(`prefs_${uid}`);
         localStorage.removeItem(`seen_${uid}`);
         
-        await deleteUser(_user);
-        alert("Tili ja paikalliset asetukset poistettu onnistuneesti.");
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith(`reaction_${uid}_`) || key.startsWith(`prefs_${uid}`) || key.startsWith(`seen_${uid}`))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+        localStorage.removeItem('consent_analytics');
+        
+        showToast("Tili ja kaikki asetuksesi on poistettu onnistuneesti.");
         closeProfileModal();
+        setTimeout(() => window.location.reload(), 1500);
       } catch (err) {
         console.error("Tilin poisto epäonnistui", err);
         if (err.code === 'auth/requires-recent-login') {
-          alert("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä uudelleen.");
+          showToast("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä tilin poistoa uudelleen.", true);
         } else {
-          alert("Tilin poistaminen epäonnistui: " + err.message);
+          showToast("Tilin poistaminen epäonnistui: " + err.message, true);
         }
       }
-    }
+    });
+  });
+}
+
+function showToast(message, isError = false) {
+  const toast = document.createElement('div');
+  toast.className = 'pwa-toast';
+  if (isError) {
+    toast.style.borderColor = '#e11d48';
+    toast.style.borderLeft = '4px solid #e11d48';
+  }
+  toast.innerHTML = `<span>${message}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.5s ease';
+    setTimeout(() => toast.remove(), 500);
+  }, 3500);
+}
+
+function showConfirm(message, onConfirm) {
+  const box = document.createElement('div');
+  box.className = 'pwa-toast';
+  box.style.flexDirection = 'column';
+  box.style.alignItems = 'flex-start';
+  box.style.gap = 'var(--space-2)';
+  box.style.maxWidth = '340px';
+  box.innerHTML = `
+    <span style="font-weight:600;">${message}</span>
+    <div style="display:flex; gap:var(--space-3); margin-top:var(--space-2); width:100%;">
+      <button class="pwa-toast__btn" id="confirm-yes-btn" style="background:#e11d48;">Kyllä</button>
+      <button class="pwa-toast__btn" id="confirm-no-btn" style="background:var(--color-surface-offset); color:var(--color-text); border:1px solid var(--color-border);">Peruuta</button>
+    </div>
+  `;
+  document.body.appendChild(box);
+  
+  box.querySelector('#confirm-yes-btn').addEventListener('click', () => {
+    box.remove();
+    onConfirm();
+  });
+  box.querySelector('#confirm-no-btn').addEventListener('click', () => {
+    box.remove();
   });
 }
 
