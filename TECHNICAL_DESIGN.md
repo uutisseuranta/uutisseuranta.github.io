@@ -25,25 +25,30 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 
 ## Tiedostorakenne
 
-Kaikki tiedostot sijaitsevat repositorion **juurihakemistossa**. Alikansioita ei käytetä (poikkeuksena `.github/workflows/`-hakemisto työnkulkujen määrittelyyn). GitHub Pages deployaa suoraan rootista.
+Projekti käyttää **Vite-pakkaajaa** ja **npm-paketinhallintaa** (päätös `L-009`) tuotantoversion kääntämiseen ja Workbox PWA -toteutukseen. Lähdekoodi ja tyylit on ryhmitelty `src/`-kansioon ja lopullinen tuotantoversio käännetään `dist/`-kansioon, josta GitHub Pages tekee automaattisen julkaisun (päätös `L-011`).
 
 ```
 uutisseuranta/
 ├── .github/
 │   └── workflows/
-│       └── post-deploy-test.yml
-├── index.html          ← pääsivu
-├── style.css           ← kaikki tyylimäärittelyt
-├── app.js              ← sovelluksen päälogiikka (kirjautuminen, Firestore-alustus, UI-orkestrointi)
-├── prefs.js            ← preferenssien hallintamoduuli (hybrid localStorage + Firestore)
-├── profile.js          ← profiilimodaalin UI-logiikka (avaus/sulkeminen, tietojen näyttö)
-├── live-smoke-test.sh  ← pipeline-testiskripti
-├── firebase.json       ← Firebase-projektin konfiguraatio
-├── TECHNICAL_DESIGN.md ← tämä dokumentti
-└── patterns.md         ← UI-komponenttikuvaukset (viittaa patterns-repoon)
+│       ├── deploy.yml          ← Automaattinen deploy GitHub Pagesille (Vite-build)
+│       └── post-deploy-test.yml← Ajon jälkeiset smoke-testit
+├── dist/                       ← Viten generoima tuotantobuild (Pages-julkaisukohde)
+├── src/                        ← Lähdekoodikansio
+│   ├── main.js                 ← Viten entrypoint
+│   ├── app.js                  ← Sovelluksen päälogiikka (UI-orkestrointi, Auth)
+│   ├── prefs.js                ← Preferenssien hallinta (localStorage + Firestore)
+│   ├── profile.js              ← Profiilimodaalin UI-logiikka
+│   └── style.css               ← Native CSS -tyylit ja Cascade Layerit
+├── index.html                  ← Vite-entrypoint (juuressa)
+├── package.json                ← npm-paketit ja build-skriptit
+├── package-lock.json
+├── vite.config.js              ← Vite- ja PWA/Workbox-konfiguraatio
+├── live-smoke-test.sh          ← Smoke-testiskripti
+└── TECHNICAL_DESIGN.md         ← Tämä dokumentti
 ```
 
-Ei build-tooleja, ei paketinhallintaa (`package.json`), ei `node_modules`-hakemistoa. Sivusto on suoraan selaimessa ajettavaa HTML/CSS/JS:ää.
+Tuotantobuild paketoidaan komennolla `npm run build` ja testataan paikallisesti komennolla `npm run dev`.
 
 **Dokumentaatiotiedostot sijaitsevat juuressa** – ei `docs/`-alikansioita. Kaikki `.md`-tiedostot ovat repositorion juuressa.
 
@@ -71,8 +76,9 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 | Kerros | Teknologia | Perustelu |
 |---|---|---|
 | Rakenne | HTML5, semanttiset elementit | Standardi, ei riippuvuuksia |
-| Tyyli | CSS (vanilla), CSS-muuttujat, `clamp()` | Standardi, ei preprosessoria |
+| Tyyli | CSS (vanilla), CSS-muuttujat, `@layer` Cascade Layerit, Native Nesting | Standardi, ei preprosessoria, laajasti tuettu |
 | Logiikka | JavaScript (vanilla ES-moduulit) | Standardi, ei frameworkia |
+| Paketointi & PWA | Vite, `vite-plugin-pwa`, Workbox | Tree-shaking, code splitting, offline-caching |
 | Autentikointi | Firebase Authentication | Ks. Firebase-rajaus |
 | Analytiikka | Firebase Analytics + GA4 | Ks. Firebase-rajaus + Analytics/GDPR-osio |
 | Fontit | Järjestelmäfonttipino tai `@font-face` + `local()` | Ei CDN-riippuvuuksia, avoimen standardin ratkaisu |
@@ -81,9 +87,9 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 ### Kielletyt teknologiat
 
 - **Testausframeworkit** (Playwright, Puppeteer, Jest, Vitest, Cypress, tms.) — ei käytetä koskaan. Testit kirjoitetaan vanilla Bash/curl-pohjaisesti avoimen standardin työkaluilla.
-- **JavaScript-frameworkit** (React, Vue, Angular, Svelte, tms.) — ei tarvita staattiselle sivulle.
-- **CSS-preprosessorit** (Sass, Less, PostCSS) — moderni vanilla CSS riittää.
-- **Build-työkalut** (Webpack, Vite, Rollup, Parcel, tms.) — ei build-steppiä.
+- **JavaScript-frameworkit** (React, Vue, Angular, Svelte, tms.) — ei tarvita.
+- **CSS-preprosessorit** (Sass, Less, PostCSS) — moderni vanilla CSS nestingillä riittää.
+- **Vanhan liiton build-työkalut** (Webpack, Rollup, Parcel, tms. suoraan käytettynä) — käytetään vain Viten valmiita konfiguraatioita.
 - **Erillinen monitorointipalvelu** (Datadog, Sentry, tms.) — laatu varmistetaan pipelinessa ennen tuotantoa.
 - **PR preview -ympäristöt** (Netlify, Cloudflare Pages, tms.) — pipeline testaa ennen mergeä, erillisiä preview-ympäristöjä ei tarvita.
 - **Ulkoiset fontti-CDN:t** (Google Fonts, Fontshare, Adobe Fonts, tms.) — fonttilatauksista ei saa syntyä kolmannen osapuolen verkkopyyntöjä.
@@ -436,6 +442,80 @@ Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen
 - Analytics aktivoituu vasta kun käyttäjä hyväksyy suostumuksen.
 - Suostumus tallennetaan `localStorage`:hen (avain `consent_analytics`).
 - EU ePrivacy -direktiivin ja GDPR:n mukainen toteutus.
+
+### GDPR-poistojärjestys client-sidellä (päätös `L-012`)
+
+Käyttäjän poistaessa tilinsä ('Poista tili' -painike) noudatetaan tiukkaa poistosekvenssiä orpojen dokumenttien syntymisen estämiseksi (GDPR artikla 17). Poisto suoritetaan client-sidellä seuraavassa järjestyksessä:
+1. **Firestore-preferenssit ensin:** Kutsutaan `deleteDoc(doc(db, 'users', uid, 'preferences', 'main'))`. Jos tämä epäonnistuu, poistoprosessi keskeytetään ja käyttäjälle näytetään virheilmoitus (Auth-tunnusta ei saa poistaa jos preferenssien siivous epäonnistuu, koska ilman Auth-tunnusta poisto-oikeudet Firestore-sääntöjen mukaan evätään).
+2. **Firebase Auth toiseksi:** Kutsutaan `deleteUser(currentUser)`. Mikäli kutsu epäonnistuu ja vaatii äskettäistä re-autentikointia (`auth/requires-recent-login`), suoritetaan Google-autentikointipopup ja yritetään Auth-poistoa uudelleen.
+3. **Paikallinen siivous kolmanneksi:** Tyhjennetään selaimen `localStorage` kokonaisuudessaan (`localStorage.clear()`).
+4. **Backend-integraatio:** GDPR-poisto kytkeytyy `bq-activitystreams #37` -ratkaisuun, joka poistaa/anonymisoi käyttäjän sosiaaliset tykkäykset ja kommentit BigQuery-kannasta.
+
+---
+
+## Reaktiot ja visualisointi (päätös `L-010`)
+
+### Agree/Disagree -napit ja erilliset laskurit
+
+Artikkelikorteissa näytetään "Samaa mieltä" (Like) / "Eri mieltä" (Dislike) -reaktiot. 
+- **Erilliset laskurit:** Näytetään molemmat reaktiomäärät erillisinä (Samaa mieltä: X / Eri mieltä: Y) nettosumman sijaan sosiaalisen bandwagon-harhan ja vahvistusharhan (Muchnik et al. 2013) vähentämiseksi.
+- **Idempotenssi ja toggle:** Käyttäjällä voi olla vain yksi aktiivinen reaktio kerrallaan. Tykkäyksen painaminen uudelleen peruuttaa sen. Toisen reaktion painaminen poistaa vanhan ja asettaa uuden.
+- **Saavutettavuus:** Napeille asetetaan WAI-ARIA `aria-pressed="true/false"` -tilat, ja virhetilanteessa tehdyille optimistisille UI-päivityksille suoritetaan täydellinen rollback (sekä laskurin että `aria-pressed`-tilan osalta).
+
+### Jakaumagrafiikka (palkki)
+
+Kun artikkelilla on vähintään yksi Like- tai Dislike-reaktio, artikkelin alle piirretään horisontaalinen jakaumapalkki:
+- Jakaumaprosentit lasketaan kaavalla: `agreePct = Math.round(likes / (likes + dislikes) * 100)` ja `disagreePct = 100 - agreePct`.
+- Palkki toteutetaan CSS-siirtymillä ja se kunnioittaa `prefers-reduced-motion` -asetusta.
+- Saavutettavuuden varmistamiseksi palkilla on `role="img"` ja dynaaminen `aria-label` joka kuvaa tarkasti jakauman prosentin ja raakaäänimäärät (esim. `aria-label="Reaktiot: 75% samaa mieltä (3 ääntä), 25% eri mieltä (1 ääni)"`).
+
+---
+
+## Moderni CSS — Cascade Layers ja Native Nesting (päätös `L-013`)
+
+Sivuston tyylitiedosto `src/style.css` on järjestetty `@layer` Cascade Layer -säännöillä CSS-prioriteettiongelmien ratkaisemiseksi ilman `!important`-sääntöjen käyttöä:
+
+```css
+@layer reset, tokens, components, utilities;
+```
+
+1. **reset:** Nollaa oletusselaintyylit.
+2. **tokens:** Määrittelee Teal-Magenta -väripaletin, Comfortaa/Muli-fontit ja muut CSS-muuttujat.
+3. **components:** Määrittelee uutiskortit (`molecules-media`), keskusteluketjut (`organisms-discussion`) ja muut käyttöliittymäkomponentit natiivia CSS-nestausta (nesting) hyödyntäen.
+4. **utilities:** Sisältää apuluokat (kuten `.sr-only` ja `.visually-hidden`), jotka voittavat komponenttityylit viimeisen prioriteettiasemansa ansiosta.
+
+---
+
+## PWA ja Service Worker (päätös `L-011`)
+
+Offline-toiminnallisuus ja assettien välimuistitus (caching) toteutetaan `vite-plugin-pwa`:n ja Workboxin avulla HTTPS-ympäristössä (GitHub Pages).
+
+### Välimuististrategiat (caching)
+
+| Resurssi | Workbox-strategia | Perustelu |
+|---|---|---|
+| `/ap/outbox` (uutisdata) | **Network First** | Uutiset vanhentuvat nopeasti; offline-tilassa näytetään välimuisti. |
+| `/src/assets/` (JS, CSS, fontit) | **Cache First** | Muuttuvat harvoin; erittäin nopea sivulataus. |
+| Kuvat | **Stale-While-Revalidate** | Nopein ensiesitys välimuistista, päivitys taustalla. |
+
+### Päivitysilmoitus käyttäjälle
+
+Sivustolle ladataan uusi Service Worker -revisio taustalla. Käyttäjälle näytetään eksplisiittinen päivityskehote ("Uusi versio saatavilla — lataa uudelleen?"). SW-koodin `skipWaiting()` ja `clients.claim()` -kutsut ajetaan ainoastaan käyttäjän painettua vahvistusta, jotta vältetään vanhojen välilehtien jumiutuminen ja parannetaan uutisvirran ajantasaisuutta.
+
+---
+
+## Jira–GitHub -integraation meta-säännöt (Meta #47)
+
+Repositorioiden ja Jiran synkronoinnissa noudatetaan seuraavia sääntöjä:
+- **D-001 (Master-jako):** GitHub omistaa sisällön ja koodin (ml. issuet), Jira omistaa työnkulut ja sprintit.
+- **D-002 (Silmukan esto):** Kommenttien synkronoinnissa ristiin käytetään `[GitHub]` / `[Jira]` -etuliitteitä ja ensisijaisesti webhookin `sender.login` -tunnistusta robottisilmukan estämiseksi.
+- **D-003 (Tilasynkronointi):** GitHub issue `closed` $\rightarrow$ Jira task `Done`.
+- **D-004 (Labelit):** GitHub-labelit (`mvp`, `hardened`, `production`, `0-sprint`) ovat kanonisia ja ne peilautuvat Jiran komponenteiksi.
+- **D-005 (Commit-viittaukset):** Commiteissa viitataan Jira-tunnukseen (`UUTISET-123`).
+- **D-006 (PR-synkronointi):** GitHub PR avaus $\rightarrow$ Jira `In Review`, PR merge $\rightarrow$ Jira `Done`.
+- **D-007 (Milestone-jako):** Milestonet luodaan GitHubissa, Jiran `fixVersions` peilaa niitä.
+
+---
 
 ---
 
