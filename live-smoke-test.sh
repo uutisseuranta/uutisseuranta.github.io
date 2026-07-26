@@ -43,16 +43,25 @@ for URL in "${URLS[@]}"; do
         fi
     fi
     
+    # Resolve the effective URL after following redirects
+    if [ -n "$TOKEN_HEADER" ]; then
+        EFFECTIVE_URL=$(curl -sL -o /dev/null -w "%{url_effective}" -H "$TOKEN_HEADER" "$URL")
+    else
+        EFFECTIVE_URL=$(curl -sL -o /dev/null -w "%{url_effective}" "$URL")
+    fi
+    EFFECTIVE_URL="${EFFECTIVE_URL%/}"
+    echo "Effective URL after redirects: $EFFECTIVE_URL"
+
     # Fetch content
     if [ -n "$TOKEN_HEADER" ]; then
-        CONTENT=$(curl -sSL -f -H "$TOKEN_HEADER" "$URL")
+        CONTENT=$(curl -sSL -f -H "$TOKEN_HEADER" "$EFFECTIVE_URL")
     else
-        CONTENT=$(curl -sSL -f "$URL")
+        CONTENT=$(curl -sSL -f "$EFFECTIVE_URL")
     fi
     
     # Check for login button
     if ! echo "$CONTENT" | grep -q "btn-login"; then
-        echo "ERROR: Could not find 'btn-login' element at $URL"
+        echo "ERROR: Could not find 'btn-login' element at $EFFECTIVE_URL"
         exit 1
     fi
     
@@ -63,22 +72,22 @@ for URL in "${URLS[@]}"; do
         echo "Found legacy/non-Vite deployment structure. Checking app.js..."
         # Check app.js HTTP status first to avoid failing on 404 during CDN propagation
         if [ -n "$TOKEN_HEADER" ]; then
-            APP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "$TOKEN_HEADER" "$URL/app.js")
+            APP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "$TOKEN_HEADER" "$EFFECTIVE_URL/app.js")
         else
-            APP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/app.js")
+            APP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$EFFECTIVE_URL/app.js")
         fi
         
         if [ "$APP_STATUS" -eq 404 ]; then
             echo "WARNING: app.js returned 404. CDN propagation or cache mismatch in progress. Skipping app.js verification."
         else
             if [ -n "$TOKEN_HEADER" ]; then
-                APP_CONTENT=$(curl -sSL -f -H "$TOKEN_HEADER" "$URL/app.js")
+                APP_CONTENT=$(curl -sSL -f -H "$TOKEN_HEADER" "$EFFECTIVE_URL/app.js")
             else
-                APP_CONTENT=$(curl -sSL -f "$URL/app.js")
+                APP_CONTENT=$(curl -sSL -f "$EFFECTIVE_URL/app.js")
             fi
             
             if ! echo "$APP_CONTENT" | grep -q "firebase-app.js"; then
-                echo "ERROR: Could not find 'firebase-app.js' import in app.js at $URL"
+                echo "ERROR: Could not find 'firebase-app.js' import in app.js at $EFFECTIVE_URL"
                 exit 1
             fi
             echo "Legacy app.js checks passed."
@@ -86,14 +95,14 @@ for URL in "${URLS[@]}"; do
     else
         echo "Found Vite main bundle: $JS_PATH"
         if [ -n "$TOKEN_HEADER" ]; then
-            JS_CONTENT=$(curl -sSL -f -H "$TOKEN_HEADER" "$URL$JS_PATH")
+            JS_CONTENT=$(curl -sSL -f -H "$TOKEN_HEADER" "$EFFECTIVE_URL$JS_PATH")
         else
-            JS_CONTENT=$(curl -sSL -f "$URL$JS_PATH")
+            JS_CONTENT=$(curl -sSL -f "$EFFECTIVE_URL$JS_PATH")
         fi
         
         # Check for prefs functions inside the bundled JS
         if ! echo "$JS_CONTENT" | grep -q -E "exportPrefsAsJson|deleteUserPrefs|updatePrefs"; then
-            echo "ERROR: Could not find preferences management functions in main bundle at $URL"
+            echo "ERROR: Could not find preferences management functions in main bundle at $EFFECTIVE_URL"
             exit 1
         fi
         echo "Vite main bundle integration OK."
@@ -104,7 +113,7 @@ for URL in "${URLS[@]}"; do
     AUTH_DOMAIN=$(echo "$CONTENT" | grep -o -E 'authDomain: "[^"]*"|authDomain:"[^"]*"' | cut -d'"' -f2)
     
     if [ -n "$API_KEY" ] && [ -n "$AUTH_DOMAIN" ]; then
-        echo "Validating Google Auth provider configuration for $URL ..."
+        echo "Validating Google Auth provider configuration for $EFFECTIVE_URL ..."
         AUTH_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"providerId\": \"google.com\", \"continueUri\": \"https://$AUTH_DOMAIN/__/auth/handler\"}" "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$API_KEY")
         
         if ! echo "$AUTH_RESPONSE" | grep -q "authUri"; then
@@ -114,7 +123,7 @@ for URL in "${URLS[@]}"; do
         fi
         echo "Google Auth provider configuration OK."
     else
-        echo "WARNING: Could not extract apiKey or authDomain from $URL to test provider config."
+        echo "WARNING: Could not extract apiKey or authDomain from $EFFECTIVE_URL to test provider config."
     fi
     
     echo "Check OK for $URL"
