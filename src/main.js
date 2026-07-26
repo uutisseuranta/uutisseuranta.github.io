@@ -22,7 +22,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
-import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs } from './prefs.js';
+import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs, exportPrefsAsJson, deleteUserPrefs } from './prefs.js';
 import { initProfileModal, openProfileModal } from './profile.js';
 import { Workbox } from 'workbox-window';
 
@@ -793,5 +793,11 @@ if (document.readyState === 'loading') {
 } else {
   initSPARouter();
 }
+
+// Altistetaan preferenssifunktiot globaalisti smoke-testiä varten / Expose preference functions globally for smoke tests
+window.updatePrefs = updatePrefs;
+window.exportPrefsAsJson = exportPrefsAsJson;
+window.deleteUserPrefs = deleteUserPrefs;
+
 
 
