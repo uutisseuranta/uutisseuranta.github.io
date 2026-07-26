@@ -208,6 +208,23 @@ if ('serviceWorker' in navigator && !import.meta.env.DEV) {
   wb.register().catch(err => console.error('Service Worker registration failed:', err));
 }
 
+// Generic non-blocking notification helper using PWA toast styling
+function showNotification(message, isError = false) {
+  const toast = document.createElement('div');
+  toast.className = 'pwa-toast';
+  if (isError) {
+    toast.style.borderColor = '#e11d48';
+    toast.style.borderLeft = '4px solid #e11d48';
+  }
+  toast.innerHTML = `<span>${message}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.5s ease';
+    setTimeout(() => toast.remove(), 500);
+  }, 3500);
+}
+
 // ---- FETCH OUTBOX WITH RATE-LIMIT HANDLING (Issue #60 / L-011) ----
 async function fetchOutbox(tag = null, retryCount = 0) {
   let url = `${QUERY_API_URL}/ap/outbox`;
@@ -415,6 +432,15 @@ function renderFeed(articles) {
         dislikeBtn.setAttribute('aria-pressed', newReaction === 'Dislike' ? 'true' : 'false');
         dislikeBtn.innerHTML = `👎 Eri mieltä (${currentDislikes})`;
 
+        // Synkronoidaan uudet laskurit cachedArticles-taulukkoon (Blocker-korjaus)
+        const cachedArticle = cachedArticles.find(a => a.id === articleId);
+        if (cachedArticle) {
+          if (!cachedArticle.likes) cachedArticle.likes = { totalItems: 0 };
+          if (!cachedArticle.dislikes) cachedArticle.dislikes = { totalItems: 0 };
+          cachedArticle.likes.totalItems = currentLikes;
+          cachedArticle.dislikes.totalItems = currentDislikes;
+        }
+
         // Update the progress bar if present
         const statsBar = card.querySelector('.vote-stats');
         const total = currentLikes + currentDislikes;
@@ -446,6 +472,16 @@ function renderFeed(articles) {
           } else {
             localStorage.removeItem(`reaction_${articleId}`);
           }
+          
+          // Rollback cachedArticles-taulukkoon virhetilanteessa (Blocker-korjaus)
+          const cachedArticle = cachedArticles.find(a => a.id === articleId);
+          if (cachedArticle) {
+            if (!cachedArticle.likes) cachedArticle.likes = { totalItems: 0 };
+            if (!cachedArticle.dislikes) cachedArticle.dislikes = { totalItems: 0 };
+            cachedArticle.likes.totalItems = likesCount;
+            cachedArticle.dislikes.totalItems = dislikesCount;
+          }
+
           // Rollback DOM elements
           likeBtn.setAttribute('aria-pressed', prevReaction === 'Like' ? 'true' : 'false');
           likeBtn.innerHTML = `👍 Samaa mieltä (${likesCount})`;
@@ -462,7 +498,7 @@ function renderFeed(articles) {
               statsBar.style.display = 'none';
             }
           }
-          alert("Virhe reaktion tallennuksessa. Tila palautettu.");
+          showNotification("Virhe reaktion tallennuksessa. Tila palautettu.", true);
         }
       });
     });
@@ -588,7 +624,4 @@ onPrefsChange((prefs) => {
   // Kun preferenssit latautuvat tai muuttuvat, haetaan uutiset (personoitu uutisvirta huomioiden)
   refreshFeed();
 });
-
-// Ensimmäinen uutisten lataus
-refreshFeed();
 
