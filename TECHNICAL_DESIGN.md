@@ -35,12 +35,12 @@ uutisseuranta/
 │       └── post-deploy-test.yml← Ajon jälkeiset smoke-testit
 ├── dist/                       ← Viten generoima tuotantobuild (Pages-julkaisukohde)
 ├── src/                        ← Lähdekoodikansio
-│   ├── main.js                 ← Viten entrypoint
+│   ├── main.js                 ← Viten entrypoint — kaikki Firebase-alustus tapahtuu täällä
 │   ├── app.js                  ← Sovelluksen päälogiikka (UI-orkestrointi, Auth)
 │   ├── prefs.js                ← Preferenssien hallinta (localStorage + Firestore)
 │   ├── profile.js              ← Profiilimodaalin UI-logiikka
 │   └── style.css               ← Native CSS -tyylit ja Cascade Layerit
-├── index.html                  ← Vite-entrypoint (juuressa)
+├── index.html                  ← Vite-entrypoint (juuressa) — EI Firebase-importteja
 ├── package.json                ← npm-paketit ja build-skriptit
 ├── package-lock.json
 ├── vite.config.js              ← Vite- ja PWA/Workbox-konfiguraatio
@@ -110,9 +110,42 @@ Monimutkaiset tai uudet ominaisuudet aloitetaan viemällä kevyt runko, tyhjät 
 
 Firebase-SDK:ta käytetään **ainoastaan** kolmessa tarkoituksessa:
 
-1. **Authentication** (`firebase-auth`) — Google Sign-In, kirjautumistilan seuranta, uloskirjautuminen.
-2. **Analytics** (`firebase-analytics`) — automaattinen käyttödatan keruu, linkitetty GA4-propertyyn.
-3. **Database** (`firebase-firestore`) — kirjautuneen käyttäjän asetusten (seuratut tagit, teema) synkronointi laitteiden välillä.
+1. **Authentication** (`firebase/auth`) — Google Sign-In, kirjautumistilan seuranta, uloskirjautuminen.
+2. **Analytics** (`firebase/analytics`) — automaattinen käyttödatan keruu, linkitetty GA4-propertyyn.
+3. **Database** (`firebase/firestore`) — kirjautuneen käyttäjän asetusten (seuratut tagit, teema) synkronointi laitteiden välillä.
+
+### Firebase SDK:n lataus — npm-pakettina, ei CDN-importtina
+
+Firebase SDK ladataan **npm-pakettina** Viten kautta. CDN-importteja **ei käytetä** Vite-kontekstissa.
+
+**Syy:** Firebase CDN -importti lataa koko moduulin riippumatta siitä mitä funktioita kutsutaan. `firebase-firestore.js` CDN:ltä (~120–150 KB gzip) sisältää mm. `runTransaction`, `writeBatch`, `getAggregateFromServer` ja offline-indeksointilogiikan — vaikka tässä projektissa käytetään vain `getDoc`, `setDoc`, `deleteDoc` ja `onSnapshot`. Vite + npm mahdollistaa tree-shakingin: bundliin päätyy vain käytetyt funktiot (~30–50 KB gzip).
+
+```js
+// src/main.js — OIKEIN: npm-import, Vite tree-shakaa käyttämättömät pois
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithPopup, signOut, deleteUser,
+         GoogleAuthProvider } from 'firebase/auth';
+import { getAnalytics } from 'firebase/analytics';
+import { getFirestore, getDoc, setDoc, deleteDoc, onSnapshot,
+         doc, enableIndexedDbPersistence } from 'firebase/firestore';
+```
+
+> ⚠️ **Kaksoismalli-vaara:** `index.html` ei saa sisältää Firebase CDN -importteja. Jos `index.html`:ssä on `<script type="module">` joka importtaa `https://www.gstatic.com/firebasejs/...` **ja** `src/main.js` käyttää npm-versiota, Firebase alustetaan kahdesti. `initializeApp()` heittää virheen `"Firebase App named '[DEFAULT]' already exists"`. Kaikki Firebase-alustus tapahtuu **yksinomaan** `src/main.js`:ssä npm-importteina. `index.html` sisältää vain yhden `<script type="module" src="/src/main.js">` -tagin.
+
+### Sallitut npm-riippuvuudet (frozen list, päätös L-009)
+
+Teknisen velan rajaamiseksi npm-riippuvuudet on jäädytetty seuraavaan neljään pakettiin. Uuden paketin lisääminen vaatii eksplisiittisen arkkitehtuuripäätöksen DECISION_LOG:iin ennen toteutusta.
+
+| Paketti | Versio | Tarkoitus |
+|---|---|---|
+| `vite` | `^5.x` | Build-työkalu, tree-shaking, dev-server |
+| `vite-plugin-pwa` | `^0.x` | Workbox-integraatio, Service Worker -generointi |
+| `firebase` | `^10.12.0` | Auth, Firestore, Analytics — npm-versio tree-shakingia varten |
+| `workbox-window` | `^7.x` | SW-päivityskehote käyttäjälle (L-011) |
+
+### CI/CD-vaikutus
+
+`npm ci && npm run build` ajetaan pipelinessa ennen deployta. `npm ci` (ei `npm install`) on deterministinen — se ei päivitä `package-lock.json`:ia ja epäonnistuu jos lock-tiedosto ei täsmää. Tämä estää "works on my machine" -tilanteen.
 
 ### Persistointimalli: Hybrid localStorage + Firestore
 
@@ -149,14 +182,78 @@ Seuraavat edge caset on käsitelty eksplisiittisesti `prefs.js`:ssä:
 
 Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
 
-Firebase SDK ladataan ES-moduuleina suoraan Googlen CDN:ltä ilman build-steppiä:
-```html
-<script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getAuth, ... } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-  import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js';
-  import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-</script>
+---
+
+## Vite-build ja Workbox (päätös L-009, L-011)
+
+### Miksi Vite?
+
+Vite toimii tässä projektissa kahdessa roolissa:
+
+1. **Build-työkalu** — kääntää `src/`-kansion `dist/`-kansioon. Tree-shaking poistaa bundlista käyttämättömän koodin. Firebase SDK hyötyy tästä eniten: npm-versiolla bundliin päätyy vain kutsutut funktiot, CDN-importilla koko moduuli.
+2. **Dev-server** — `npm run dev` käynnistää paikallisen palvelimen HMR-tuella (Hot Module Replacement). Muutokset näkyvät selaimessa ilman sivun uudelleenlatausta.
+
+Tuotantobuild: `npm run build` → `dist/`. GitHub Pages julkaisee `dist/`-kansion suoraan (deploy.yml).
+
+### Miksi Workbox?
+
+Workbox on Googlen kirjasto Service Worker -koodin kirjoittamiseen. Service Worker on selaimen taustaprosessi, joka sieppaa HTTP-pyynnöt ja toteuttaa caching-strategian ennen kuin pyyntö lähtee verkkoon. Se on PWA:n ydin.
+
+`vite-plugin-pwa` generoi Service Worker -tiedoston automaattisesti buildin yhteydessä `vite.config.js`-konfiguraation perusteella:
+
+```js
+// vite.config.js
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    VitePWA({
+      registerType: 'prompt',          // L-011: käyttäjä hyväksyy SW-päivitykset
+      workbox: {
+        // L-011: Network First uutisdatalle — yritä verkosta, fallback cacheen
+        runtimeCaching: [
+          {
+            urlPattern: /\/ap\/outbox/,
+            handler: 'NetworkFirst',
+            options: { cacheName: 'news-data' }
+          },
+          // L-011: Stale-While-Revalidate kuville — näytä cachesta heti,
+          // päivitä taustalla
+          {
+            urlPattern: /\.(png|jpg|jpeg|svg|webp)$/,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'images' }
+          }
+        ]
+      }
+    })
+  ]
+});
+```
+
+Ilman Workboxia nämä strategiat olisivat ~200 riviä manuaalista Service Worker -koodia — jokainen cache eviction, version conflict ja partial update käsin. Workbox tekee sen deklaratiivisesti.
+
+### L-011-päätöksen ja Viten yhteys
+
+Päätös L-011 ("Network First uutisdatalle, Stale-While-Revalidate kuville, SW-päivitykset käyttäjävahvistuksella") **edellyttää** Workboxia käytännössä. `registerType: 'prompt'` estää automaattisen `skipWaiting()`:n — selain ei ota uutta Service Workeria käyttöön ilman käyttäjän hyväksyntää. Tämä estää vanhan version jumiutumisen. `workbox-window`-paketti kuuntelee `waiting`-tapahtumaa ja näyttää käyttäjälle päivityskehotteen:
+
+```js
+// src/main.js
+import { Workbox } from 'workbox-window';
+
+if ('serviceWorker' in navigator) {
+  const wb = new Workbox('/sw.js');
+
+  // L-011: näytä päivityskehote käyttäjälle ennen skipWaiting
+  wb.addEventListener('waiting', () => {
+    if (confirm('Uusi versio saatavilla. Päivitä nyt?')) {
+      wb.messageSkipWaiting();
+    }
+  });
+
+  wb.register();
+}
 ```
 
 ---
@@ -189,7 +286,7 @@ Käytetään `//`-rivikommentteja. JSDoc-lohkokommentit (`/** ... */`) ovat tarp
 // prefs.js — Käyttäjäpreferenssien hallinta
 // Vastuu: luku, kirjoitus, synkronointi (localStorage + Firestore), migraatio
 // Ei vastaa: UI:n piirtämisestä (ks. profile.js)
-// Ulkoiset riippuvuudet: firebase-firestore (kirjautunut käyttäjä)
+// Ulkoiset riippuvuudet: firebase/firestore (kirjautunut käyttäjä)
 ```
 
 **Funktioiden kommentointi** — vain jos funktion nimi ja parametrit eivät kerro tarkoitusta:
@@ -457,117 +554,7 @@ Käyttäjän poistaessa tilinsä ('Poista tili' -painike) noudatetaan tiukkaa po
 
 ### Agree/Disagree -napit ja erilliset laskurit
 
-Artikkelikorteissa näytetään "Samaa mieltä" (Like) / "Eri mieltä" (Dislike) -reaktiot. 
+Artikkelikorteissa näytetään "Samaa mieltä" (Like) / "Eri mieltä" (Dislike) -reaktiot.
 - **Erilliset laskurit:** Näytetään molemmat reaktiomäärät erillisinä (Samaa mieltä: X / Eri mieltä: Y) nettosumman sijaan sosiaalisen bandwagon-harhan ja vahvistusharhan (Muchnik et al. 2013) vähentämiseksi.
 - **Idempotenssi ja toggle:** Käyttäjällä voi olla vain yksi aktiivinen reaktio kerrallaan. Tykkäyksen painaminen uudelleen peruuttaa sen. Toisen reaktion painaminen poistaa vanhan ja asettaa uuden.
 - **Saavutettavuus:** Napeille asetetaan WAI-ARIA `aria-pressed="true/false"` -tilat, ja virhetilanteessa tehdyille optimistisille UI-päivityksille suoritetaan täydellinen rollback (sekä laskurin että `aria-pressed`-tilan osalta).
-
-### Jakaumagrafiikka (palkki)
-
-Kun artikkelilla on vähintään yksi Like- tai Dislike-reaktio, artikkelin alle piirretään horisontaalinen jakaumapalkki:
-- Jakaumaprosentit lasketaan kaavalla: `agreePct = Math.round(likes / (likes + dislikes) * 100)` ja `disagreePct = 100 - agreePct`.
-- Palkki toteutetaan CSS-siirtymillä ja se kunnioittaa `prefers-reduced-motion` -asetusta.
-- Saavutettavuuden varmistamiseksi palkilla on `role="img"` ja dynaaminen `aria-label` joka kuvaa tarkasti jakauman prosentin ja raakaäänimäärät (esim. `aria-label="Reaktiot: 75% samaa mieltä (3 ääntä), 25% eri mieltä (1 ääni)"`).
-
----
-
-## Moderni CSS — Cascade Layers ja Native Nesting (päätös `L-013`)
-
-Sivuston tyylitiedosto `src/style.css` on järjestetty `@layer` Cascade Layer -säännöillä CSS-prioriteettiongelmien ratkaisemiseksi ilman `!important`-sääntöjen käyttöä:
-
-```css
-@layer reset, tokens, components, utilities;
-```
-
-1. **reset:** Nollaa oletusselaintyylit.
-2. **tokens:** Määrittelee Teal-Magenta -väripaletin, Comfortaa/Muli-fontit ja muut CSS-muuttujat.
-3. **components:** Määrittelee uutiskortit (`molecules-media`), keskusteluketjut (`organisms-discussion`) ja muut käyttöliittymäkomponentit natiivia CSS-nestausta (nesting) hyödyntäen.
-4. **utilities:** Sisältää apuluokat (kuten `.sr-only` ja `.visually-hidden`), jotka voittavat komponenttityylit viimeisen prioriteettiasemansa ansiosta.
-
----
-
-## PWA ja Service Worker (päätös `L-011`)
-
-Offline-toiminnallisuus ja assettien välimuistitus (caching) toteutetaan `vite-plugin-pwa`:n ja Workboxin avulla HTTPS-ympäristössä (GitHub Pages).
-
-### Välimuististrategiat (caching)
-
-| Resurssi | Workbox-strategia | Perustelu |
-|---|---|---|
-| `/ap/outbox` (uutisdata) | **Network First** | Uutiset vanhentuvat nopeasti; offline-tilassa näytetään välimuisti. |
-| `/src/assets/` (JS, CSS, fontit) | **Cache First** | Muuttuvat harvoin; erittäin nopea sivulataus. |
-| Kuvat | **Stale-While-Revalidate** | Nopein ensiesitys välimuistista, päivitys taustalla. |
-
-### Päivitysilmoitus käyttäjälle
-
-Sivustolle ladataan uusi Service Worker -revisio taustalla. Käyttäjälle näytetään eksplisiittinen päivityskehote ("Uusi versio saatavilla — lataa uudelleen?"). SW-koodin `skipWaiting()` ja `clients.claim()` -kutsut ajetaan ainoastaan käyttäjän painettua vahvistusta, jotta vältetään vanhojen välilehtien jumiutuminen ja parannetaan uutisvirran ajantasaisuutta.
-
----
-
-## Jira–GitHub -integraation meta-säännöt (Meta #47)
-
-Repositorioiden ja Jiran synkronoinnissa noudatetaan seuraavia sääntöjä:
-- **D-001 (Master-jako):** GitHub omistaa sisällön ja koodin (ml. issuet), Jira omistaa työnkulut ja sprintit.
-- **D-002 (Silmukan esto):** Kommenttien synkronoinnissa ristiin käytetään `[GitHub]` / `[Jira]` -etuliitteitä ja ensisijaisesti webhookin `sender.login` -tunnistusta robottisilmukan estämiseksi.
-- **D-003 (Tilasynkronointi):** GitHub issue `closed` $\rightarrow$ Jira task `Done`.
-- **D-004 (Labelit):** GitHub-labelit (`mvp`, `hardened`, `production`, `0-sprint`) ovat kanonisia ja ne peilautuvat Jiran komponenteiksi.
-- **D-005 (Commit-viittaukset):** Commiteissa viitataan Jira-tunnukseen (`UUTISET-123`).
-- **D-006 (PR-synkronointi):** GitHub PR avaus $\rightarrow$ Jira `In Review`, PR merge $\rightarrow$ Jira `Done`.
-- **D-007 (Milestone-jako):** Milestonet luodaan GitHubissa, Jiran `fixVersions` peilaa niitä.
-
----
-
----
-
-## Iteraatiot
-
-### Iteraatio 3 — Scope
-
-> **Suunniteltu:** 2026-07-03
-
-#### Teema 1: Rajapintaintegraatio ja dynaaminen uutisvirta (Core MVP)
-
-| # | Repo | Tiketti | Kuvaus |
-|---|---|---|---|
-| 1 | `uutisseuranta.github.io` | [#12](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/12) | Uutisten dynaaminen tulostaminen etusivulle — Activity Streams 2.0 -formaatissa `query-api`-palvelun kautta haettu uutisvirta renderoidaan frontend-sivulle |
-| 2 | `patterns` | [#24](https://github.com/uutisseuranta/patterns/issues/24) | Vaihe 2 — Molecules + Organisms: lisää komponentit index.html-visualisointiin |
-| 3 | `patterns` | [#40](https://github.com/uutisseuranta/patterns/issues/40) | feat: lisää AS2 `@context` ja `id` semanttiset `data-*`-attribuutit artikkelikortille — attribuuttinimet noudattavat W3C AS2 -schemaa ([activitystreams-core](https://www.w3.org/TR/activitystreams-core/)); JavaScript lukee `dataset`-rajapinnan kautta käyttäjäinteraktioihin |
-
-#### Teema 2: Käyttäjävuorovaikutus (Like / Dislike & Agree / Disagree)
-
-| # | Repo | Tiketti | Kuvaus |
-|---|---|---|---|
-| 4 | `bq-activitystreams` | [#33](https://github.com/uutisseuranta/bq-activitystreams/issues/33) | feat: vastaanota Like/Dislike-aktiviteetit BigQueryhin ja laske Agree+Disagree-summalaskurit per artikkeli — backend palauttaa valmiiksi lasketut `agreeCount` + `disagreeCount` -kentät aggregoidussa JSON-vasteessa |
-| 5 | `uutisseuranta.github.io` | [#20](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/20) | feat: näytä AS2 Like/Dislike-aktiviteetit Agree/Disagree-nimisillä UI:ssa — sama data, eri näyttönimi (tekninen AS2-kenttä on Like/Dislike, displayname käyttöliittymässä on Agree/Disagree — Samaa mieltä / Eri mieltä; frontend meppaa, ei erillistä AS2-tyyppiä) |
-| 6 | `uutisseuranta.github.io` | [#21](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/21) | feat: käyttäjäprofiilin Agree/Disagree-jakaumagrafiikka — toteutus referenssitoteutuksen mukaan (ks. [patterns-repo](https://github.com/uutisseuranta/patterns)), ei ulkoista kirjastoa |
-
-#### Teema 3: Laadunvalvonta, testaus ja vakauttaminen (QA & Refactoring)
-
-| # | Repo | Tiketti | Kuvaus |
-|---|---|---|---|
-| 7 | `patterns` | [#55](https://github.com/uutisseuranta/patterns/issues/55) | chore: ota käyttöön W3C Markup Validator- ja Stylelint-työkalut GitHub Actions PR-tarkistuksena (virheet katkaisevat PR-mergen automaattisesti) |
-| 8 | `patterns` | [#56](https://github.com/uutisseuranta/patterns/issues/56) | style.css rakenteellistaminen: jaottelu osioihin kommenteilla (reset → typography → layout → components → utilities) |
-| 9 | `bq-activitystreams` | [#27](https://github.com/uutisseuranta/bq-activitystreams/issues/27) | Testing: jaettu logiikka `fetch_helpers.sh`-tiedostoon repositorion juureen — sekä `rss_fetch_job.sh` että `unit-test.sh` importtaavat sieltä (ei suoraa riippuvuutta tuotantokoodista testeihin; ei `lib/`-hakemistoa, juuressa läpinäkyvyyden maksimoimiseksi) |
-| 10 | `bq-activitystreams` | [#28](https://github.com/uutisseuranta/bq-activitystreams/issues/28) | Testing: Laajenna write-api:n yksikkötestejä — kattaa happy path (Create, Like, Update) ja virhetilanteet (duplikaatti-Like 409, puuttuva actor 400, luvaton kirjoitus 403) |
-| 11 | `bq-activitystreams` | [#29](https://github.com/uutisseuranta/bq-activitystreams/issues/29) | Testing: Lisää yksikkötestit query-api:lle — suodatus actor/object_id:llä, aikarajaus, sivutus, tyhjä tulos ([]), full-table scan -esto; kattaa myös `agreeCount`/`disagreeCount` -aggregointilogiikan |
-| 12 | `bq-activitystreams` | [#30](https://github.com/uutisseuranta/bq-activitystreams/issues/30) | Testing: Lisää yksikkötestit og-scraperille — käytetään `unittest.mock.patch` HTTP-kutsujen mockaukseen, ei oikeita verkkopyyntöjä CI:ssä |
-
-#### Backlogiin siirretty (Iteraatio 4+)
-
-<!-- Siirron perustelut kommentoidaan TECHNICAL_DESIGN.md ## Koodin kommentointi -osion mukaan -->
-- `uutisseuranta.github.io` [#2](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/2): UP-9: Henkilökohtainen uutisvirtanäkymä (tagipohjainen suodatus)
-- `uutisseuranta.github.io` [#7](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/7): UP-14: Hakutoiminto (client-side haku)
-- `uutisseuranta.github.io` [#8](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/8): UP-15: Kirjautumisen ja anonyymiyskäytäntöjen yhtenäistäminen
-- `uutisseuranta.github.io` [#16](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/16): UI: tagipilvi hakutulosten rajoittuessa 500:aan
-- `patterns` [#25](https://github.com/uutisseuranta/patterns/issues/25): Vaihe 3 — Templates: lisää sivumallit index.html-visualisointiin
-
----
-
-## Incidents
-
-### 2026-07-03 — style.css korruptoitumisincident
-
-- **Mitä tapahtui:** style.css korruptoitui web-agentin käytön yhteydessä verkkohäiriön vuoksi
-- **Juurisyy:** Verkkohäiriö web-agentissa keskeytti kirjoitusoperaation — ei liity koodin rakenteeseen tai kehitysprosessiin
-- **Lessons learned:** Ei sovellettavia oppeja; satunnainen infrastruktuurihäiriö
-- **Korjaava toimenpide:** [patterns#56](https://github.com/uutisseuranta/patterns/issues/56) — style.css rakenteellistaminen (tehty ennaltaehkäisevästi)
