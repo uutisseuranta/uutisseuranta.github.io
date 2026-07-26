@@ -94,7 +94,6 @@ let _listeners = [];
 export function initPrefs(app, uid) {
   _uid = uid;
   _prefs = { ...DEFAULT_PREFS };
-  _listeners = [];
 
   if (uid) {
     // Otetaan Firestore offline-persistointi käyttöön kirjautuneelle käyttäjälle.
