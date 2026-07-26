@@ -1,6 +1,6 @@
 # TESTING.md — Uutisseuranta Testausstrategia & CI/CD Parhaat Käytännöt
 
-Tämä dokumentti kuvaa uutisseuranta.github.io -projektin testausstrategian, workflow-rakenteen ja laadunvarmistuksen standardit. Standardivaatimusten osalta katso [STANDARDS.md](STANDARDS.md) ja koodauskäytännöistä [CODE_CONVENTIONS.md](CODE_CONVENTIONS.md).
+Tämä dokumentti kuvaa uutisseuranta.github.io -projektin testausstrategian, workflow-rakenteen ja laadunvarmistuksen standardit. Standardivaatimusten osalta katso [STANDARDS.md](STANDARDS.md), koodauskäytännöistä [CODE_CONVENTIONS.md](CODE_CONVENTIONS.md) ja teknisistä linjauksista [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md).
 
 ---
 
@@ -17,7 +17,7 @@ Uutisseurannan testaus noudattaa **Shift-Left** -periaatetta ja jaettua testausp
          /----------=\
         /  PERF/SEO   \ <- Lighthouse CI (budjettivalvonta, ajoitetusti)
        /--------------\
-      /     INTEG      \ <- integration-test.sh (Mock API + Vite build)
+      /     INTEG      \ <- Playwright + page.route API mock (PR-vaihe)
      /------------------\
     /   STAATTINEN/LINT  \ <- ESLint, tsc, lychee (linkit), Vite build
    /----------------------\
@@ -27,9 +27,10 @@ Uutisseurannan testaus noudattaa **Shift-Left** -periaatetta ja jaettua testausp
 |---|---|---|---|
 | **1. Staattinen analyysi** | Koodin laatu, tyypitys, kääntyminen, rikkinäiset linkit | Jokainen PR ennen mergeä | ESLint, TypeScript (`tsc`), Vite Build, **lychee** |
 | **2. Saavutettavuus (a11y)** | WCAG 2.2 AA -rikkomukset automaattisesti | Jokainen PR (Playwright + axe-core) | `@axe-core/playwright` |
-| **3. Post-deploy E2E** | Live-sivuston kriittisimmät toiminnot selaimessa | GitHub Pages julkaisu valmis | Playwright (Chromium) |
-| **4. Suorituskyky & laatu** | Core Web Vitals, suorituskykybudjetti, SEO, best practices | Ajoitetusti (Weekly) + manuaalisesti | Lighthouse CI (`lhci`) |
-| **5. Visuaalinen regressio** | Layout-muutokset, CSS-regressiot | Harkitusti isoissa muutoksissa | Playwright screenshot diff |
+| **3. Integraatiotestit** | API-mock, suodatus, virheenkäsittely, reunatapaukset | Jokainen PR | Playwright + `page.route` |
+| **4. Post-deploy E2E** | Live-sivuston kriittisimmät toiminnot selaimessa | GitHub Pages julkaisu valmis | Playwright (Chromium) |
+| **5. Suorituskyky & laatu** | Core Web Vitals, suorituskykybudjetti, SEO, best practices | Ajoitetusti (Weekly) + manuaalisesti | Lighthouse CI (`lhci`) |
+| **6. Visuaalinen regressio** | Layout-muutokset, CSS-regressiot, teema, mobile | Harkitusti isoissa muutoksissa | Playwright screenshot diff |
 
 > **Huomio a11y-kattavuudesta:** Automaattiset työkalut kattavat noin 30–40 % WCAG-kriteereistä. Manuaalinen testaus näppäimistöllä ja ruudunlukijalla (VoiceOver/NVDA) on välttämätöntä täydelliselle saavutettavuudelle.
 
@@ -60,7 +61,7 @@ Estämme testien ajamisen vanhaa live-versiota vasten kytkemällä smoke-testit 
 
 ### 2.4 CI-välimuistit: npm ja Playwright-selaimet
 
-Välimuistit lyhentävät merkittävästi CI-aika. Käytä kahta erillistä tasoa:
+Välimuistit lyhentävät merkittävästi CI-aikaa. Käytä kahta tasoa:
 
 1. **npm-latausvälimuisti** — `actions/setup-node`-actionin `cache: npm` -optio välimuistaa `~/.npm`-kansion. Tämä nopeuttaa `npm ci` -asennusta estämällä pakettilataukset verkosta joka kerta.
 2. **Playwright-selainvälimuisti** — Playwright lataa Chromium-binaarin (`~/.cache/ms-playwright`) jokaista CI-ajoa varten, ellei sitä ole välimuistissa. Tallenna se `actions/cache`-actionilla avaimella `${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}`. Asenna selain vain, jos välimuisti ei osunut (`cache-hit != 'true'`).
@@ -85,6 +86,8 @@ Välimuistit lyhentävät merkittävästi CI-aika. Käytä kahta erillistä taso
   run: npx playwright install --with-deps chromium
 ```
 
+> **Huomio Playwright-selainvälimuistista:** Playwright-tiimi [ei suosittele selainbinaarin välimuistamista](https://playwright.dev/docs/ci#caching-browsers) yleisesti, koska cache-miss vaatii silti täydellisen binäärilatauksen ja `--with-deps` asentaa lisäksi OS-tason riippuvuudet. Jos GitHub Actions -minuuttikustannus ei ole kriittinen, yksinkertaisin lähestymistapa on ajaa `npx playwright install --with-deps chromium` joka kerta ilman välimuistia. Mittaa ensin — optimoi vasta, jos CI on liian hidas.
+
 > **Huomio `node_modules`-välimuistista:** `node_modules`:n suora välimuistaminen on vaihtoehto, mutta se on OS-riippuvainen ja voi kasvaa suureksi. Aloita `~/.npm` + Playwright-selainvälimuistilla; lisää `node_modules`-taso vain jos CI on edelleen liian hidas.
 
 ### 2.5 Flaky-testien hallinta
@@ -102,7 +105,7 @@ Playwright-testit voivat olla epävakaita asynkronisen DOM:n takia:
 
 ### 3.1 PR-validointi (`pr-validate.yml`)
 
-Estää rikkinäisen koodin pääsyn `main`-haaraan. Neljä rinnakkaista jobia: staattinen analyysi, riippuvuustarkistus, linkkitarkistus ja saavutettavuus.
+Estää rikkinäisen koodin pääsyn `main`-haaraan. Viisi rinnakkaista jobia: staattinen analyysi, riippuvuustarkistus, linkkitarkistus, saavutettavuus ja integraatiotestit.
 
 ```yaml
 name: PR Validate
@@ -172,14 +175,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
       # webServer käynnistää "npm run build && npm run preview" playwright.config.ts:ssä
       - name: Run axe-core accessibility audit
@@ -193,9 +189,34 @@ jobs:
           name: a11y-report
           path: playwright-report/
           retention-days: 7
+
+  integration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.2.0
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run integration tests
+        run: npx playwright test tests/integration/
+        env:
+          CI: true
+      - name: Upload integration report
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea2af6b81c8a70187a9dad191 # v4.4.3
+        if: failure()
+        with:
+          name: integration-report
+          path: playwright-report/
+          retention-days: 7
 ```
 
-> **Huomio jobeista:** Kaikki neljä jobia ajetaan rinnakkain (ei `needs:`-riippuvuutta) CI-ajan minimoimiseksi. `dependency-review`-job vaatii, että repository on julkinen tai GitHub Advanced Security on käytössä.
+> **Huomio jobeista:** Kaikki viisi jobia ajetaan rinnakkain (ei `needs:`-riippuvuutta) CI-ajan minimoimiseksi. `dependency-review`-job vaatii, että repository on julkinen tai GitHub Advanced Security on käytössä.
 
 ### 3.2 Post-deploy Smoke-testit (`post-deploy-test.yml`)
 
@@ -223,14 +244,7 @@ jobs:
       - run: npm ci
       - name: Wait for deployment HTTP success
         run: ./live-smoke-test.sh
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
       - name: Run Playwright Smoke Tests
         run: |
@@ -247,6 +261,8 @@ jobs:
           path: playwright-report/
           retention-days: 7
 ```
+
+> **Huomio cache-poistoista:** Post-deploy-testit ajetaan live-sivustoa vasten (`EFFECTIVE_URL` asetettu), joten `webServer` jää pois konfiguraatiosta automaattisesti. Playwright-binaari asennetaan suoraan ilman välimuistia — katso kohta 2.4.
 
 ### 3.3 Lighthouse CI -suorituskykyauditointi (`lighthouse.yml`)
 
@@ -457,22 +473,142 @@ test.describe('Uutisseuranta — smoke', () => {
 
 ---
 
-## 6. Visuaalinen regressiotestaus
+## 6. Integraatiotestit: API-mock `page.route`:lla (`tests/integration/`)
 
-Visuaalinen regressiotestaus sopii käytettäväksi merkittävien CSS/layout-muutosten yhteydessä. Playwright sisältää screenshot-vertailun ilman lisäriippuvuuksia.
+Nykyiset E2E-smoke-testit käyttävät todellista `/ap/outbox`-rajapintaa. Tämä tekee testeistä ei-deterministisiä: verkko-ongelmat tai muuttuva data voi kaataa testin syystä, joka ei liity sovelluskoodiin. Integraatiotestit käyttävät Playwright:n `page.route`-APIa kaappaamaan verkkoliikennettä ja palauttamaan kontrolloidun mock-datan — ei ulkoista pyyntöä tehdä lainkaan.
+
+**Miksi `page.route` eikä MSW tai muu kirjasto?**
+Playwright:n oma `page.route` on projektille sopiva ratkaisu: se ei vaadi uusia npm-paketteja (TECHNICAL_DESIGN.md § Sallitut npm-riippuvuudet: frozen list), toimii selaintasolla (sieppaa myös `fetch`- ja XHR-pyynnöt), ja sen käyttö on identtistä lokaali- ja CI-ympäristöissä.
+
+**`tests/integration/api-mock.spec.ts`:**
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+// Deterministinen fixture — sama data joka ajolla
+const MOCK_OUTBOX = {
+  '@context': 'https://www.w3.org/ns/activitystreams',
+  type: 'OrderedCollection',
+  totalItems: 2,
+  orderedItems: [
+    {
+      type: 'Article',
+      id: 'https://uutisseuranta.net/articles/1',
+      name: 'Testi-uutinen yksi',
+      url: 'https://example.com/uutinen-1',
+      tag: [{ type: 'Hashtag', name: '#teknologia' }],
+    },
+    {
+      type: 'Article',
+      id: 'https://uutisseuranta.net/articles/2',
+      name: 'Testi-uutinen kaksi',
+      url: 'https://example.com/uutinen-2',
+      tag: [{ type: 'Hashtag', name: '#tiede' }],
+    },
+  ],
+};
+
+test.describe('Integraatiotestit — API mock', () => {
+  test.beforeEach(async ({ page }) => {
+    // Sieppaa /ap/outbox ENNEN goto():ta — tapahtumat rekisteröidään ennen navigointia
+    await page.route('**/ap/outbox**', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/activity+json',
+        body: JSON.stringify(MOCK_OUTBOX),
+      })
+    );
+  });
+
+  test('uutisvirta renderöityy mock-datalla', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByText('Testi-uutinen yksi')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Testi-uutinen kaksi')).toBeVisible();
+  });
+
+  test('tagi-suodatus näyttää vain oikeat artikkelit', async ({ page }) => {
+    await page.goto('/');
+    // Klikkaa #teknologia-tagi
+    await page.getByRole('button', { name: /#teknologia/i }).click();
+    await expect(page.getByText('Testi-uutinen yksi')).toBeVisible();
+    await expect(page.getByText('Testi-uutinen kaksi')).not.toBeVisible();
+  });
+
+  test('Error Boundary: 500-vastaus näyttää virhetilanteen', async ({ page }) => {
+    // Ylikirjoita beforeEach-mock vain tässä testissä
+    await page.route('**/ap/outbox**', route =>
+      route.fulfill({ status: 500, body: 'Internal Server Error' })
+    );
+    await page.goto('/');
+    // Sovelluksen tulee näyttää virheviesti — ei tyhjää sivua tai konsolivirheitä
+    await expect(
+      page.getByRole('alert').or(page.getByText(/virhe|error|ei voitu ladata/i))
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('tyhjä uutisvirta näyttää empty state -viestin', async ({ page }) => {
+    await page.route('**/ap/outbox**', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/activity+json',
+        body: JSON.stringify({ ...MOCK_OUTBOX, totalItems: 0, orderedItems: [] }),
+      })
+    );
+    await page.goto('/');
+    // Sovelluksen tulee näyttää tyhjä tila — ei kaatua
+    await expect(
+      page.getByText(/ei uutisia|no articles|tyhjä/i).or(page.locator('[data-empty-state]'))
+    ).toBeVisible({ timeout: 10_000 });
+  });
+});
+```
+
+> **Huomio `page.route`-rekisteröintiajasta:** `page.route`-kutsun täytyy tapahtua **ennen** `page.goto()`:ta, muuten selain on jo lähettänyt pyynnöt eikä sieppaus onnistu. Siksi mock rekisteröidään `test.beforeEach`-hookissa.
+
+> **Huomio testitiedostojen nimeämisestä:** TECHNICAL_DESIGN.md määrittää sallitut npm-riippuvuudet. Integraatiotestit toteutetaan Playwright:lla (`@playwright/test`), joka on jo mukana devDependencyissä. Uusia testauskirjastoja ei tarvita.
+
+---
+
+## 7. Visuaalinen regressiotestaus
+
+Visuaalinen regressiotestaus sopii käytettäväksi merkittävien CSS/layout-muutosten yhteydessä. Playwright sisältää screenshot-vertailun ilman lisäriippuvuuksia. Testit kattavat vaalean ja tumman teeman sekä mobiilinäkymän.
 
 **`tests/visual/snapshot.spec.ts`:**
 
 ```typescript
 import { test, expect } from '@playwright/test';
 
-test('etusivu — visuaalinen regressio', async ({ page }) => {
-  await page.goto('/');
-  // Odota, että artikkelit ovat latautuneet ennen kuvakaappausta
-  await expect(page.locator('.article-card').first()).toBeVisible({ timeout: 10_000 });
-  await expect(page).toHaveScreenshot('homepage.png', {
-    maxDiffPixelRatio: 0.02,  // 2 % pikseliero sallittu
-    fullPage: true,
+test.describe('Visuaalinen regressio', () => {
+  test('etusivu — vaalea teema', async ({ page }) => {
+    await page.goto('/');
+    // Aseta vaalea teema eksplisiittisesti
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+    // Odota, että artikkelit ovat latautuneet ennen kuvakaappausta
+    await expect(page.locator('.article-card').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveScreenshot('homepage-light.png', {
+      maxDiffPixelRatio: 0.02,
+      fullPage: true,
+    });
+  });
+
+  test('etusivu — tumma teema', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    await expect(page.locator('.article-card').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveScreenshot('homepage-dark.png', {
+      maxDiffPixelRatio: 0.02,
+      fullPage: true,
+    });
+  });
+
+  test('etusivu — mobiili (390px)', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await expect(page.locator('.article-card').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveScreenshot('homepage-mobile.png', {
+      maxDiffPixelRatio: 0.02,
+      fullPage: true,
+    });
   });
 });
 ```
@@ -489,7 +625,7 @@ Baseline-kuvakaappaukset tallennetaan repositorioon (`tests/visual/__snapshots__
 
 ---
 
-## 7. Rikkinäisten linkkien tarkistus (lychee)
+## 8. Rikkinäisten linkkien tarkistus (lychee)
 
 [lychee](https://lychee.cli.rs) on Rust-pohjainen, asynkroninen linkintarkistustyökalu, joka tukee natiivisti Markdown- ja HTML-tiedostoja. Se on suositeltavampi kuin `linkcheck` tai `hyperlink` GitHub Pages -projekteille, koska se käsittee myös ulkoiset linkit ja integroituu suoraan GitHub Actions -ekosysteemiin omana action-askeleenaan.
 
@@ -517,27 +653,29 @@ exclude = [
 
 ---
 
-## 8. Testitietojen ja ympäristöjen hallinta
+## 9. Testitietojen ja ympäristöjen hallinta
 
 - **Testit eivät saa käyttää tuotantodata-APIa kirjoitusoperaatioihin.** Uutisseuranta.net on lukutila-sovellus, mutta kirjautumistoiminto tulee testata mock- tai staging-ympäristöä vasten.
 - **Ympäristömuuttujat:** `EFFECTIVE_URL` siirtyy polling-skriptiltä Playwright-testeihin. Käytä `process.env.EFFECTIVE_URL ?? 'http://localhost:4173'` — älä kovakoodaa URL:ia.
 - **Selainten kattavuus:** CI ajaa vain Chromiumia nopeuden takia. Kriittiset muutokset voi tarkistaa manuaalisesti Firefoxilla ja Safarilla/WebKitillä.
+- **Integraatiotestien fixture-data:** Mock-data on määritelty testitiedostossa vakiofixtureksi (`MOCK_OUTBOX`). Älä viittaa ulkoisiin URL:eihin tai tiedostoihin mock-datassa — tämä tekisi testeistä jälleen ei-deterministisiä.
 
 ---
 
-## 9. Raportointi ja näkyvyys
+## 10. Raportointi ja näkyvyys
 
 | Artefakti | Missä | Säilytysaika |
 |---|---|---|
 | Playwright HTML-raportti (epäonnistuneet) | GitHub Actions Artifacts | 7 vrk |
 | axe-core a11y -raportti (epäonnistuneet) | GitHub Actions Artifacts | 7 vrk |
+| Integraatiotestiraportti (epäonnistuneet) | GitHub Actions Artifacts | 7 vrk |
 | Lighthouse CI -raportti | GitHub Actions Artifacts + temporary-public-storage | 30 vrk |
 | lychee link report | GitHub Actions Artifacts (epäonnistuneet) | 7 vrk |
 | Visuaaliset regressiokuvakaappaukset | Repositorio (`tests/visual/__snapshots__/`) | Git-historia |
 
 ---
 
-## 10. Viitteet
+## 11. Viitteet
 
 - [GitHub Actions: Security Hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)
 - [GitHub: Dependency Review Action](https://github.com/actions/dependency-review-action)
@@ -545,6 +683,7 @@ exclude = [
 - [OpenSSF: Securing CI/CD Pipelines After Supply Chain Attacks](https://openssf.org/blog/2025/06/11/maintainers-guide-securing-ci-cd-pipelines-after-the-tj-actions-and-reviewdog-supply-chain-attack/)
 - [Playwright: Best Practices](https://playwright.dev/docs/best-practices)
 - [Playwright: Accessibility Testing with axe-core](https://playwright.dev/docs/accessibility-testing)
+- [Playwright: Mock APIs (page.route)](https://playwright.dev/docs/mock)
 - [Playwright: Screenshot Comparison](https://playwright.dev/docs/screenshots)
 - [Playwright: webServer configuration](https://playwright.dev/docs/test-webserver)
 - [Playwright: Caching browsers in CI](https://playwright.dev/docs/ci#caching-browsers)
@@ -556,3 +695,4 @@ exclude = [
 - [lychee: Fast async link checker](https://lychee.cli.rs)
 - [STANDARDS.md](STANDARDS.md) — saavutettavuus- ja teknologiastandardit
 - [CODE_CONVENTIONS.md](CODE_CONVENTIONS.md) — koodauskäytännöt
+- [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md) — tekniset linjaukset ja sallitut riippuvuudet
