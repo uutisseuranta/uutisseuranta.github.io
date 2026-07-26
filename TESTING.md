@@ -31,7 +31,7 @@ Uutisseurannan testaus noudattaa **Shift-Left** -periaatetta ja jaettua testausp
 | **4. Suorituskyky & laatu** | Core Web Vitals, suorituskykybudjetti, SEO, best practices | Ajoitetusti (Weekly) + manuaalisesti | Lighthouse CI (`lhci`) |
 | **5. Visuaalinen regressio** | Layout-muutokset, CSS-regressiot | Harkitusti isoissa muutoksissa | Playwright screenshot diff |
 
-> **Huomio a11y-kattavuudesta:** Automaattiset työkalut kattavat noin 30–40 % WCAG-kriteereistä. Manuaalinen testaus näppäimistöllä ja ruudunlukijalla (VoiceOver/NVDA) on välttämätöntä täydelliselle saavutettavuudelle.
+> **Huomio a11y-kattavuudesta:** Automaattiset työkalut kattavat noin 30–40 % WCAG-kriteereistä. Manuaalinen testaus näppäimistöllä ja ruudunlukijalla (VoiceOver/NVDA) on välttämätöntä täydelliselle saavutettavuudelle.
 
 ---
 
@@ -41,7 +41,7 @@ Noudatamme Googlen, GitHubin, GitLabin ja OWASP:n suosittelemia standardeja.
 
 ### 2.1 Älykäs odotus (Polling) vs. `sleep 60`
 
-Kiinteät viiveet (`sleep 60`) ovat CI/CD-putkien hauraita anti-patterneja. Käytämme erillistä polling-skriptiä (`live-smoke-test.sh`), joka kysyy tuotantosivun tilaa (HTTP HEAD/GET) 10 sekunnin välein, kunnes sivu vastaa 200 OK. Sivun lopullinen URL tallennetaan tiedostoon `effective_url.txt`, jota E2E-testit käyttävät testikohteena.
+Kiinteät viiveet (`sleep 60`) ovat CI/CD-putkien hauraita anti-patterneja. Käytämme erillistä polling-skriptiä (`live-smoke-test.sh`), joka kysyy tuotantosivun tilaa (HTTP HEAD/GET) 10 sekunnin välein, kunnes sivu vastaa 200 OK. Sivun lopullinen URL tallennetaan tiedostoon `effective_url.txt`, jota E2E-testit käyttävät testikohteena.
 
 ### 2.2 Rinnakkaiskäynnistyksen hallinta (`workflow_run`)
 
@@ -55,9 +55,39 @@ Estämme testien ajamisen vanhaa live-versiota vasten kytkemällä smoke-testit 
   permissions:
     contents: read
   ```
+- **Dependency Review:** `actions/dependency-review-action` skannaa jokaisen PR:n riippuvuusmuutokset ja katkaisee CI:n, jos uusi paketti sisältää tunnetun haavoittuvuuden GitHub Advisory Databasessa. Katso [dependency-review-action](https://github.com/actions/dependency-review-action). Lisää `pr-validate.yml`:ään omana rinnakkaisena jobina (ks. kohta 3.1).
 - **Salaisuudet:** Ei salaisuuksia koodissa. Käytä `secrets.*`-viittauksia ja tarkista `GITHUB_TOKEN`-käyttöoikeudet erikseen jokaiselle workflowlle.
 
-### 2.4 Flaky-testien hallinta
+### 2.4 CI-välimuistit: npm ja Playwright-selaimet
+
+Välimuistit lyhentävät merkittävästi CI-aika. Käytä kahta erillistä tasoa:
+
+1. **npm-latausvälimuisti** — `actions/setup-node`-actionin `cache: npm` -optio välimuistaa `~/.npm`-kansion. Tämä nopeuttaa `npm ci` -asennusta estämällä pakettilataukset verkosta joka kerta.
+2. **Playwright-selainvälimuisti** — Playwright lataa Chromium-binaarin (`~/.cache/ms-playwright`) jokaista CI-ajoa varten, ellei sitä ole välimuistissa. Tallenna se `actions/cache`-actionilla avaimella `${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}`. Asenna selain vain, jos välimuisti ei osunut (`cache-hit != 'true'`).
+
+```yaml
+# Esimerkki: npm + Playwright-selainvälimuisti
+- uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.2.0
+  with:
+    node-version: 20
+    cache: npm
+- run: npm ci
+
+- name: Cache Playwright browsers
+  id: playwright-cache
+  uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+  with:
+    path: ~/.cache/ms-playwright
+    key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
+
+- name: Install Playwright Chromium
+  if: steps.playwright-cache.outputs.cache-hit != 'true'
+  run: npx playwright install --with-deps chromium
+```
+
+> **Huomio `node_modules`-välimuistista:** `node_modules`:n suora välimuistaminen on vaihtoehto, mutta se on OS-riippuvainen ja voi kasvaa suureksi. Aloita `~/.npm` + Playwright-selainvälimuistilla; lisää `node_modules`-taso vain jos CI on edelleen liian hidas.
+
+### 2.5 Flaky-testien hallinta
 
 Playwright-testit voivat olla epävakaita asynkronisen DOM:n takia:
 
@@ -72,7 +102,7 @@ Playwright-testit voivat olla epävakaita asynkronisen DOM:n takia:
 
 ### 3.1 PR-validointi (`pr-validate.yml`)
 
-Estää rikkinäisen koodin pääsyn `main`-haaraan. Rinnakkaiset jobit: staattinen analyysi + saavutettavuus.
+Estää rikkinäisen koodin pääsyn `main`-haaraan. Neljä rinnakkaista jobia: staattinen analyysi, riippuvuustarkistus, linkkitarkistus ja saavutettavuus.
 
 ```yaml
 name: PR Validate
@@ -95,6 +125,20 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npx tsc --noEmit
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # Skannaa PR:n riippuvuusmuutokset GitHub Advisory Databasea vasten.
+      # Katkaisee CI:n jos uusi paketti sisältää tunnetun haavoittuvuuden.
+      # https://github.com/actions/dependency-review-action
+      - name: Dependency Review
+        uses: actions/dependency-review-action@38ecb5b593bf0eb19e335c03a4f2a0bdd9f54e32 # v4.7.1
+        with:
+          fail-on-severity: moderate
 
   link-check:
     runs-on: ubuntu-latest
@@ -128,9 +172,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
-      # webServer käynnistää "npm run preview" playwright.config.ts:ssä — ei tarvitse erillistä build-askelta tässä
+      # webServer käynnistää "npm run build && npm run preview" playwright.config.ts:ssä
       - name: Run axe-core accessibility audit
         run: npx playwright test tests/a11y/
         env:
@@ -144,7 +195,7 @@ jobs:
           retention-days: 7
 ```
 
-> **Huomio `validate`-job + `accessibility`-job:** Molemmat jobit ajetaan rinnakkain (ei `needs:`-riippuvuutta) CI-ajan minimoimiseksi.
+> **Huomio jobeista:** Kaikki neljä jobia ajetaan rinnakkain (ei `needs:`-riippuvuutta) CI-ajan minimoimiseksi. `dependency-review`-job vaatii, että repository on julkinen tai GitHub Advanced Security on käytössä.
 
 ### 3.2 Post-deploy Smoke-testit (`post-deploy-test.yml`)
 
@@ -172,7 +223,14 @@ jobs:
       - run: npm ci
       - name: Wait for deployment HTTP success
         run: ./live-smoke-test.sh
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
       - name: Run Playwright Smoke Tests
         run: |
@@ -263,7 +321,7 @@ jobs:
 }
 ```
 
-> **Budjettien lähteet:** LCP ≤ 2 500 ms, CLS ≤ 0.1 ja INP ≤ 200 ms perustuvat Googlen Core Web Vitals "Good"-luokkaan. Tarkista ja kiristä arvoja neljännesvuosittain tuotantomittausten perusteella.
+> **Budjettien lähteet:** LCP ≤ 2 500 ms, CLS ≤ 0.1 ja INP ≤ 200 ms perustuvat Googlen Core Web Vitals "Good"-luokkaan. Tarkista ja kiristä arvoja neljännesvuosittain tuotantomittausten perusteella.
 
 ---
 
@@ -271,7 +329,7 @@ jobs:
 
 ### 4.1 Automaattinen testaus: axe-core + Playwright
 
-`@axe-core/playwright` kattaa noin 30–40 % WCAG-kriteereistä automaattisesti ja integroituu suoraan Playwright-testeihin. Akateeminen vertailu yhdeksästä a11y-työkalusta (axe, alfa, Continuum, WAVE jne.) osoittaa, että axe-core on laajimmin käytetty ja antaa vähintään päällekkäisyyksiä muiden työkalujen kanssa yksittäisen työkalun valinnassa.
+`@axe-core/playwright` kattaa noin 30–40 % WCAG-kriteereistä automaattisesti ja integroituu suoraan Playwright-testeihin. Akateeminen vertailu yhdeksästä a11y-työkalusta (axe, alfa, Continuum, WAVE jne.) osoittaa, että axe-core on laajimmin käytetty ja antaa vähintään päällekkäisyyksiä muiden työkalujen kanssa yksittäisen työkalun valinnassa.
 
 **Asenna:**
 
@@ -351,7 +409,7 @@ Automaattiset työkalut eivät tunnista kaikkia ongelmia. Tarkista manuaalisesti
 | Näppäimistönavigointi (Tab, Enter, Esc, nuolinäppäimet) | Selain | Jokainen uusi komponentti |
 | Ruudunlukija | VoiceOver (macOS/iOS), NVDA (Windows) | Merkittävät muutokset |
 | Värikontrasti | WebAIM Contrast Checker, browser DevTools | Designmuutokset |
-| Zoom 200 % (WCAG 1.4.4) | Selain | Layoutmuutokset |
+| Zoom 200 % (WCAG 1.4.4) | Selain | Layoutmuutokset |
 | Fokuksen näkyvyys | Selain, CSS-tarkistus | Jokainen uusi interaktiivinen elementti |
 
 ---
@@ -413,7 +471,7 @@ test('etusivu — visuaalinen regressio', async ({ page }) => {
   // Odota, että artikkelit ovat latautuneet ennen kuvakaappausta
   await expect(page.locator('.article-card').first()).toBeVisible({ timeout: 10_000 });
   await expect(page).toHaveScreenshot('homepage.png', {
-    maxDiffPixelRatio: 0.02,  // 2 % pikseliero sallittu
+    maxDiffPixelRatio: 0.02,  // 2 % pikseliero sallittu
     fullPage: true,
   });
 });
@@ -482,10 +540,14 @@ exclude = [
 ## 10. Viitteet
 
 - [GitHub Actions: Security Hardening](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)
+- [GitHub: Dependency Review Action](https://github.com/actions/dependency-review-action)
+- [GitHub: Configuring Dependency Review](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/manage-your-dependency-security/configure-dependency-review)
+- [OpenSSF: Securing CI/CD Pipelines After Supply Chain Attacks](https://openssf.org/blog/2025/06/11/maintainers-guide-securing-ci-cd-pipelines-after-the-tj-actions-and-reviewdog-supply-chain-attack/)
 - [Playwright: Best Practices](https://playwright.dev/docs/best-practices)
 - [Playwright: Accessibility Testing with axe-core](https://playwright.dev/docs/accessibility-testing)
 - [Playwright: Screenshot Comparison](https://playwright.dev/docs/screenshots)
 - [Playwright: webServer configuration](https://playwright.dev/docs/test-webserver)
+- [Playwright: Caching browsers in CI](https://playwright.dev/docs/ci#caching-browsers)
 - [OWASP: CI/CD Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/CI_CD_Security_Cheat_Sheet.html)
 - [Lighthouse CI (lhci)](https://github.com/GoogleChrome/lighthouse-ci)
 - [Google Core Web Vitals thresholds](https://web.dev/articles/vitals)
