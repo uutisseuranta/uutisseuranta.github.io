@@ -15,10 +15,11 @@ import {
   exportPrefsAsJson,
   unfollowTag,
   onPrefsChange,
-  updatePrefs
+  updatePrefs,
+  deleteUserPrefs
 } from './prefs.js';
 
-import { getAuth, signOut, deleteUser } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getAuth, signOut, deleteUser } from 'firebase/auth';
 
 let _user    = null;
 let _modal   = null;
@@ -210,21 +211,30 @@ function _renderContent() {
     closeProfileModal();
   });
 
-  // Poista tili
+  // Poista tili (GDPR L-012)
   body.querySelector('#btn-delete-account')?.addEventListener('click', async () => {
     if (confirm("Haluatko varmasti poistaa tilisi ja kaikki asetuksesi pysyvästi? Tätä toimintoa ei voi peruuttaa.")) {
       try {
         const uid = _user.uid;
+        
+        // 1. Firestore-preferenssit ensin (varmistetaan ennen kuin auth-oikeudet poistuvat)
+        await deleteUserPrefs();
+        
+        // 2. Firebase Auth toiseksi
+        await deleteUser(_user);
+        
+        // 3. Paikallinen siivous kolmanneksi
         localStorage.removeItem(`prefs_${uid}`);
         localStorage.removeItem(`seen_${uid}`);
+        localStorage.clear(); // GDPR-mukainen täysi nollaus
         
-        await deleteUser(_user);
-        alert("Tili ja paikalliset asetukset poistettu onnistuneesti.");
+        alert("Tili ja kaikki asetuksesi on poistettu onnistuneesti.");
         closeProfileModal();
+        window.location.reload();
       } catch (err) {
         console.error("Tilin poisto epäonnistui", err);
         if (err.code === 'auth/requires-recent-login') {
-          alert("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä uudelleen.");
+          alert("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä tilin poistoa uudelleen.");
         } else {
           alert("Tilin poistaminen epäonnistui: " + err.message);
         }

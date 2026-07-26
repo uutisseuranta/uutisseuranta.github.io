@@ -40,6 +40,7 @@ import {
   getDoc,
   setDoc,
   serverTimestamp,
+  deleteDoc,
 } from 'firebase/firestore';
 
 // Tietomallin versio — kasvata kun DEFAULT_PREFS:iin lisätään kenttiä.
@@ -330,4 +331,18 @@ function _notify() {
 function _migrate(remote) {
   // Versio 1 → 1: ei muutoksia, yhdistetään vain oletusarvot puuttuvien kenttien täydentämiseksi.
   return { ...DEFAULT_PREFS, ...remote, schemaVersion: SCHEMA_VERSION };
+}
+
+/**
+ * Poistaa kirjautuneen käyttäjän Firestore-preferenssidokumentin.
+ * GDPR L-012 mukainen toiminto.
+ */
+export async function deleteUserPrefs() {
+  if (!_db || !_uid) return;
+  const docRef = doc(_db, 'users', _uid, 'preferences', 'main');
+  await deleteDoc(docRef);
+  _uid = null;
+  _db = null;
+  _prefs = { ...DEFAULT_PREFS };
+  _notify();
 }
