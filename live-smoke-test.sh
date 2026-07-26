@@ -51,6 +51,8 @@ for URL in "${URLS[@]}"; do
     fi
     EFFECTIVE_URL="${EFFECTIVE_URL%/}"
     echo "Effective URL after redirects: $EFFECTIVE_URL"
+    echo "$EFFECTIVE_URL" > effective_url.txt
+
 
     # Fetch content
     if [ -n "$TOKEN_HEADER" ]; then
