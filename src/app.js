@@ -347,7 +347,10 @@ function renderFeed(articles) {
         const articleId = btn.getAttribute('data-id');
         const activeReaction = localStorage.getItem(`reaction_${articleId}`);
 
-        // Optimistic UI updates
+        // Pre-save previous state for rollback
+        const prevReaction = activeReaction;
+
+        // Optimistic update state
         let newReaction = null;
         if (activeReaction === action) {
           localStorage.removeItem(`reaction_${articleId}`);
@@ -356,22 +359,74 @@ function renderFeed(articles) {
           newReaction = action;
         }
 
-        // Re-render feed with optimistic update
+        // Instantly update DOM state (optimistic representation)
+        const likeBtn = card.querySelector('.btn-reaction[data-action="like"]');
+        const dislikeBtn = card.querySelector('.btn-reaction[data-action="dislike"]');
+        
+        // Current counts
+        let currentLikes = likesCount;
+        let currentDislikes = dislikesCount;
+
+        // Adjust counts locally based on transitions
+        if (prevReaction === 'Like') currentLikes--;
+        if (prevReaction === 'Dislike') currentDislikes--;
+        if (newReaction === 'Like') currentLikes++;
+        if (newReaction === 'Dislike') currentDislikes++;
+
+        // Update UI elements instantly
+        likeBtn.setAttribute('aria-pressed', newReaction === 'Like' ? 'true' : 'false');
+        likeBtn.innerHTML = `👍 Samaa mieltä (${currentLikes})`;
+        dislikeBtn.setAttribute('aria-pressed', newReaction === 'Dislike' ? 'true' : 'false');
+        dislikeBtn.innerHTML = `👎 Eri mieltä (${currentDislikes})`;
+
+        // Update the progress bar if present
+        const statsBar = card.querySelector('.vote-stats');
+        const total = currentLikes + currentDislikes;
+        if (statsBar) {
+          if (total > 0) {
+            const agree = Math.round(currentLikes / total * 100);
+            const disagree = 100 - agree;
+            statsBar.setAttribute('aria-label', `Reaktiot: ${agree}% samaa mieltä (${currentLikes} ääntä), ${disagree}% eri mieltä (${currentDislikes} ääntä)`);
+            statsBar.querySelector('.vote-stats__segment--agree').style.flex = agree;
+            statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagree;
+            statsBar.style.display = 'flex';
+          } else {
+            statsBar.style.display = 'none';
+          }
+        }
+
+        // Perform network request
         try {
           if (newReaction) {
             await postReaction(articleId, newReaction);
           } else {
             await deleteReaction(articleId, activeReaction);
           }
-          refreshFeed();
         } catch (err) {
-          console.error("Reaction failed, rolling back", err);
-          if (activeReaction) {
-            localStorage.setItem(`reaction_${articleId}`, activeReaction);
+          console.error("Reaction failed, rolling back UI", err);
+          // Rollback localStorage
+          if (prevReaction) {
+            localStorage.setItem(`reaction_${articleId}`, prevReaction);
           } else {
             localStorage.removeItem(`reaction_${articleId}`);
           }
-          alert("Virhe reaktion tallennuksessa.");
+          // Rollback DOM elements
+          likeBtn.setAttribute('aria-pressed', prevReaction === 'Like' ? 'true' : 'false');
+          likeBtn.innerHTML = `👍 Samaa mieltä (${likesCount})`;
+          dislikeBtn.setAttribute('aria-pressed', prevReaction === 'Dislike' ? 'true' : 'false');
+          dislikeBtn.innerHTML = `👎 Eri mieltä (${dislikesCount})`;
+          
+          if (statsBar) {
+            if (likesCount + dislikesCount > 0) {
+              statsBar.setAttribute('aria-label', `Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)`);
+              statsBar.querySelector('.vote-stats__segment--agree').style.flex = agreePct;
+              statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagreePct;
+              statsBar.style.display = 'flex';
+            } else {
+              statsBar.style.display = 'none';
+            }
+          }
+          alert("Virhe reaktion tallennuksessa. Tila palautettu.");
         }
       });
     });

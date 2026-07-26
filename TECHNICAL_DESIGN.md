@@ -145,10 +145,10 @@ Teknisen velan rajaamiseksi npm-riippuvuudet on jäädytetty seuraavaan neljää
 
 | Paketti | Versio | Tarkoitus |
 |---|---|---|
-| `vite` | `^5.x` | Build-työkalu, tree-shaking, dev-server |
-| `vite-plugin-pwa` | `^0.x` | Workbox-integraatio, Service Worker -generointi |
-| `firebase` | `^10.12.0` | Auth, Firestore, Analytics — npm-versio tree-shakingia varten |
-| `workbox-window` | `^7.x` | SW-päivityskehote käyttäjälle (L-011) |
+| `vite` | `^8.1.5` | Build-työkalu, tree-shaking, dev-server (päivitetty PR #65) |
+| `vite-plugin-pwa` | `^1.3.0` | Workbox-integraatio, Service Worker -generointi (päivitetty PR #65) |
+| `firebase` | `^12.16.0` | Auth, Firestore, Analytics — tree-shakingia varten (päivitetty PR #65) |
+| `workbox-window` | `^7.4.1` | SW-päivityskehote käyttäjälle (L-011) (päivitetty PR #65) |
 
 ### CI/CD-vaikutus
 
@@ -253,11 +253,22 @@ import { Workbox } from 'workbox-window';
 if ('serviceWorker' in navigator) {
   const wb = new Workbox('/sw.js');
 
-  // L-011: näytä päivityskehote käyttäjälle ennen skipWaiting
+  // L-011: näytä päivityskehote käyttäjälle (Toast banner DOM:issa, ei confirm())
   wb.addEventListener('waiting', () => {
-    if (confirm('Uusi versio saatavilla. Päivitä nyt?')) {
+    const toast = document.createElement('div');
+    toast.className = 'pwa-toast';
+    toast.innerHTML = `
+      <span>Uusi versio saatavilla.</span>
+      <button class="pwa-toast__btn" id="pwa-update-btn">Päivitä</button>
+    `;
+    document.body.appendChild(toast);
+
+    document.getElementById('pwa-update-btn').addEventListener('click', () => {
+      wb.addEventListener('controlling', () => {
+        window.location.reload();
+      });
       wb.messageSkipWaiting();
-    }
+    });
   });
 
   wb.register();
