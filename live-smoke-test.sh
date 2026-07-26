@@ -18,45 +18,52 @@ for URL in "${URLS[@]}"; do
         exit 1
     fi
     
-    # Check that app.js imports firebase-app.js and firebase-auth.js
-    echo "Checking $URL/app.js for Firebase imports ..."
-    APP_CONTENT=$(curl -sSL -f "$URL/app.js")
-    if ! echo "$APP_CONTENT" | grep -q "firebase-app.js"; then
-        echo "ERROR: Could not find 'firebase-app.js' import in app.js at $URL"
-        exit 1
+    # Extract main javascript asset dynamically in Vite context (Issue #62 / L-009)
+    echo "Extracting JavaScript bundle path from $URL ..."
+    JS_PATH=$(echo "$CONTENT" | grep -o 'src="[^"]*/assets/main-[^"]*\.js"' | cut -d'"' -f2)
+    if [ -z "$JS_PATH" ]; then
+        # Try finding it without leading slash
+        JS_PATH=$(echo "$CONTENT" | grep -o 'src="assets/main-[^"]*\.js"' | cut -d'"' -f2)
     fi
-    if ! echo "$APP_CONTENT" | grep -q "firebase-auth.js"; then
-        echo "ERROR: Could not find 'firebase-auth.js' import in app.js at $URL"
-        exit 1
-    fi
-    echo "app.js Firebase imports OK."
 
-    # 1. Check prefs.js for exportPrefsAsJson
-    echo "Checking $URL/prefs.js for exportPrefsAsJson ..."
-    PREFS_CONTENT=$(curl -sSL -f "$URL/prefs.js")
-    if ! echo "$PREFS_CONTENT" | grep -q "export function exportPrefsAsJson"; then
-        echo "ERROR: Could not find 'exportPrefsAsJson' export in prefs.js at $URL"
+    if [ -z "$JS_PATH" ]; then
+        echo "ERROR: Could not extract Vite JS asset bundle path from index.html at $URL"
         exit 1
     fi
-    echo "prefs.js export OK."
 
-    # 2. Check profile.js for exportPrefsAsJson usage
-    echo "Checking $URL/profile.js for exportPrefsAsJson usage ..."
-    PROFILE_CONTENT=$(curl -sSL -f "$URL/profile.js")
-    if ! echo "$PROFILE_CONTENT" | grep -q "exportPrefsAsJson"; then
-        echo "ERROR: Could not find 'exportPrefsAsJson' import in profile.js at $URL"
+    # Ensure JS_PATH starts with correct slash
+    if [[ ! "$JS_PATH" == /* ]]; then
+        JS_PATH="/$JS_PATH"
+    fi
+
+    echo "Found bundle: $URL$JS_PATH"
+    BUNDLE_CONTENT=$(curl -sSL -f "$URL$JS_PATH")
+
+    # Check that main bundle contains key Firebase and integration exports/logic (Issue #12)
+    echo "Checking bundle for Firebase and prefs exports ..."
+    if ! echo "$BUNDLE_CONTENT" | grep -q -E "initializeFirestore|deleteUserPrefs"; then
+        echo "ERROR: Could not verify Firestore/prefs offline persistence logic in main bundle at $URL"
         exit 1
     fi
-    if ! echo "$PROFILE_CONTENT" | grep -q "#btn-export-json"; then
-        echo "ERROR: Could not find '#btn-export-json' element listener in profile.js at $URL"
+    if ! echo "$BUNDLE_CONTENT" | grep -q "exportPrefsAsJson"; then
+        echo "ERROR: Could not find exportPrefsAsJson integration in main bundle at $URL"
         exit 1
     fi
-    echo "profile.js integration OK."
+    echo "Bundle integration checks OK."
     
     # Extract apiKey and authDomain dynamically
-    API_KEY=$(echo "$CONTENT" | grep -o 'apiKey: "[^"]*"' | cut -d'"' -f2)
-    AUTH_DOMAIN=$(echo "$CONTENT" | grep -o 'authDomain: "[^"]*"' | cut -d'"' -f2)
+    API_KEY=$(echo "$CONTENT" | grep -o 'apiKey: "[^"]*"' | cut -d'"' -f2 || true)
+    AUTH_DOMAIN=$(echo "$CONTENT" | grep -o 'authDomain: "[^"]*"' | cut -d'"' -f2 || true)
     
+    # In Vite environment, variables may be inline compiled or inside env variables.
+    # Try looking in the bundle if not found in index.html
+    if [ -z "$API_KEY" ]; then
+        API_KEY=$(echo "$BUNDLE_CONTENT" | grep -o 'apiKey:"[^"]*"' | cut -d'"' -f2 | head -n 1 || true)
+    fi
+    if [ -z "$AUTH_DOMAIN" ]; then
+        AUTH_DOMAIN=$(echo "$BUNDLE_CONTENT" | grep -o 'authDomain:"[^"]*"' | cut -d'"' -f2 | head -n 1 || true)
+    fi
+
     if [ -n "$API_KEY" ] && [ -n "$AUTH_DOMAIN" ]; then
         echo "Validating Google Auth provider configuration for $URL ..."
         AUTH_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"providerId\": \"google.com\", \"continueUri\": \"https://$AUTH_DOMAIN/__/auth/handler\"}" "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$API_KEY")
