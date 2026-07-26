@@ -652,17 +652,51 @@ async function refreshFeed() {
     grid.setAttribute('aria-busy', 'true');
   }
 
+  const startTime = Date.now();
+
   try {
     const articles = await fetchOutbox(currentTagFilter);
     cachedArticles = articles;
+
+    // Varmistetaan, että skeleton-loader näkyy vähintään 100ms (UX-vaatimus / Issue #12)
+    const elapsed = Date.now() - startTime;
+    if (elapsed < 100) {
+      await new Promise(resolve => setTimeout(resolve, 100 - elapsed));
+    }
+
     renderFeed(articles);
     if (!currentTagFilter) {
       renderTagCloud(articles);
     }
   } catch (err) {
+    console.error("Feed loading failed:", err);
     const grid = document.getElementById('feed-grid');
     if (grid) {
-      grid.innerHTML = `<div class="profile-empty" style="grid-column:1/-1; color:#c81e1e; text-align:center;">Uutisten lataus epäonnistui: ${err.message}</div>`;
+      grid.setAttribute('aria-busy', 'false');
+      // Virherajapinta / Error boundary uutisvirralle (Issue #58)
+      grid.innerHTML = `
+        <div class="error-boundary" style="grid-column: 1/-1; text-align: center; padding: var(--space-8); border: 2px dashed var(--color-error, #ff4d4d); border-radius: var(--radius-md); background: var(--color-bg-offset);">
+          <div style="font-size: var(--text-2xl); margin-bottom: var(--space-4);">⚠️</div>
+          <h3 style="margin-bottom: var(--space-2); color: var(--color-text-bright);">Uutisvirran lataus epäonnistui</h3>
+          <p style="color: var(--color-text-faint); margin-bottom: var(--space-6); font-size: var(--text-sm);">${sanitize(err.message || 'Yhteysongelma rajapintaan.')}</p>
+          <div style="display: flex; gap: var(--space-4); justify-content: center;">
+            <button class="btn btn--primary" id="btn-error-retry" style="padding: var(--space-2) var(--space-4); background: var(--color-primary); color: white; border: none; border-radius: var(--radius-sm); cursor: pointer;">Yritä uudelleen</button>
+            ${cachedArticles && cachedArticles.length > 0 ? `<button class="btn btn--secondary" id="btn-error-offline" style="padding: var(--space-2) var(--space-4); background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer;">Näytä offline-versio</button>` : ''}
+          </div>
+        </div>
+      `;
+
+      const retryBtn = document.getElementById('btn-error-retry');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => refreshFeed());
+      }
+
+      const offlineBtn = document.getElementById('btn-error-offline');
+      if (offlineBtn && cachedArticles && cachedArticles.length > 0) {
+        offlineBtn.addEventListener('click', () => {
+          renderFeed(cachedArticles);
+        });
+      }
     }
   }
 }
