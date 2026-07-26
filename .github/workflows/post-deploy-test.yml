@@ -26,6 +26,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Node for Browser Test
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Puppeteer
+        run: |
+          npm install puppeteer
+
+      - name: Run Headless Chrome Test
+        run: |
+          # Resolve target URL from smoke test
+          if [ -f effective_url.txt ]; then
+            export EFFECTIVE_URL=$(cat effective_url.txt)
+          else
+            export EFFECTIVE_URL="https://uutisseuranta.net"
+          fi
+          node live-browser-test.js
+
+
   notify-ops:
     needs: [smoke-test]
     if: always()
