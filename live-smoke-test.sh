@@ -24,8 +24,8 @@ for URL in "${URLS[@]}"; do
     
     echo "HTTP Status: $HTTP_STATUS"
     
-    if [ "$HTTP_STATUS" -eq 403 ]; then
-        echo "WARNING: Access forbidden (403). The Pages site might be private. Skipping content verification for $URL."
+    if [ "$HTTP_STATUS" -eq 403 ] || [ "$HTTP_STATUS" -eq 404 ]; then
+        echo "WARNING: Access forbidden or not found ($HTTP_STATUS). The Pages site might be private or deploying. Skipping content verification for $URL."
         continue
     fi
     

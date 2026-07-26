@@ -9,6 +9,9 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
