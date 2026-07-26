@@ -85,7 +85,7 @@ btnGoogleLogin.addEventListener('click', async () => {
   } catch (error) {
     console.error("Login failed", error);
     if (error.code === 'auth/unauthorized-domain') {
-      alert('Tämä verkkotunnus ei ole sallittu Firebase-konsolissa. Lisää se Authorized domains -listalle.');
+      showNotification('Tämä verkkotunnus ei ole sallittu Firebase-konsolissa. Lisää se Authorized domains -listalle.', true);
     }
   }
 });
@@ -244,7 +244,17 @@ async function fetchOutbox(tag = null, retryCount = 0) {
 
     if (response.status === 429) {
       if (retryCount < 3) {
-        const delay = Math.pow(2, retryCount) * 1000;
+        // Luetaan Retry-After-headeri (Issue #60)
+        const retryAfterHeader = response.headers.get('Retry-After');
+        let delay = Math.pow(2, retryCount) * 1000; // Alkuperäinen exponential backoff -fallback
+        
+        if (retryAfterHeader) {
+          const seconds = parseInt(retryAfterHeader, 10);
+          if (!isNaN(seconds)) {
+            delay = seconds * 1000;
+          }
+        }
+        
         console.warn(`Rate limited (429). Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return fetchOutbox(tag, retryCount + 1);
@@ -314,13 +324,14 @@ function renderFeed(articles) {
     // Comments count (Issue #11)
     const commentCount = item.replies && typeof item.replies.totalItems === 'number' ? item.replies.totalItems : 0;
 
-    // Reacting states
-    let localReaction = localStorage.getItem(`reaction_${item.id}`) || null;
+    // Reacting states - prefix with uid if authenticated to prevent cross-user leak (Issue #20 / L-015)
+    const reactionKey = auth.currentUser ? `reaction_${auth.currentUser.uid}_${item.id}` : `reaction_${item.id}`;
+    let localReaction = localStorage.getItem(reactionKey) || null;
 
     card.innerHTML = `
-      ${isLead ? `<a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${item.name}" loading="lazy" class="feed-item__image"></a>` : ''}
+      ${isLead ? `<a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${item.name}" loading="lazy" class="feed-item__image"></a>` : ''}
       <div class="feed-item__category"><span class="category-dot"></span>${category}</div>
-      <h3 class="feed-item__title"><a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}">${item.name}</a></h3>
+      <h3 class="feed-item__title"><a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow">${item.name}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${item.summary}</p>` : ''}
       
       ${hasReactions ? `
@@ -398,7 +409,8 @@ function renderFeed(articles) {
 
         const action = btn.getAttribute('data-action') === 'like' ? 'Like' : 'Dislike';
         const articleId = btn.getAttribute('data-id');
-        const activeReaction = localStorage.getItem(`reaction_${articleId}`);
+        const userReactionKey = `reaction_${auth.currentUser.uid}_${articleId}`;
+        const activeReaction = localStorage.getItem(userReactionKey);
 
         // Pre-save previous state for rollback
         const prevReaction = activeReaction;
@@ -406,9 +418,9 @@ function renderFeed(articles) {
         // Optimistic update state
         let newReaction = null;
         if (activeReaction === action) {
-          localStorage.removeItem(`reaction_${articleId}`);
+          localStorage.removeItem(userReactionKey);
         } else {
-          localStorage.setItem(`reaction_${articleId}`, action);
+          localStorage.setItem(userReactionKey, action);
           newReaction = action;
         }
 
@@ -468,9 +480,9 @@ function renderFeed(articles) {
           console.error("Reaction failed, rolling back UI", err);
           // Rollback localStorage
           if (prevReaction) {
-            localStorage.setItem(`reaction_${articleId}`, prevReaction);
+            localStorage.setItem(userReactionKey, prevReaction);
           } else {
-            localStorage.removeItem(`reaction_${articleId}`);
+            localStorage.removeItem(userReactionKey);
           }
           
           // Rollback cachedArticles-taulukkoon virhetilanteessa (Blocker-korjaus)

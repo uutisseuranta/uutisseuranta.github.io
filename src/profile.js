@@ -212,8 +212,8 @@ function _renderContent() {
   });
 
   // Poista tili (GDPR L-012)
-  body.querySelector('#btn-delete-account')?.addEventListener('click', async () => {
-    if (confirm("Haluatko varmasti poistaa tilisi ja kaikki asetuksesi pysyvästi? Tätä toimintoa ei voi peruuttaa.")) {
+  body.querySelector('#btn-delete-account')?.addEventListener('click', () => {
+    showConfirm("Haluatko varmasti poistaa tilisi ja kaikki asetuksesi pysyvästi? Tätä toimintoa ei voi peruuttaa.", async () => {
       try {
         const uid = _user.uid;
         
@@ -228,18 +228,59 @@ function _renderContent() {
         localStorage.removeItem(`seen_${uid}`);
         localStorage.clear(); // GDPR-mukainen täysi nollaus
         
-        alert("Tili ja kaikki asetuksesi on poistettu onnistuneesti.");
+        showToast("Tili ja kaikki asetuksesi on poistettu onnistuneesti.");
         closeProfileModal();
-        window.location.reload();
+        setTimeout(() => window.location.reload(), 1500);
       } catch (err) {
         console.error("Tilin poisto epäonnistui", err);
         if (err.code === 'auth/requires-recent-login') {
-          alert("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä tilin poistoa uudelleen.");
+          showToast("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä tilin poistoa uudelleen.", true);
         } else {
-          alert("Tilin poistaminen epäonnistui: " + err.message);
+          showToast("Tilin poistaminen epäonnistui: " + err.message, true);
         }
       }
-    }
+    });
+  });
+}
+
+function showToast(message, isError = false) {
+  const toast = document.createElement('div');
+  toast.className = 'pwa-toast';
+  if (isError) {
+    toast.style.borderColor = '#e11d48';
+    toast.style.borderLeft = '4px solid #e11d48';
+  }
+  toast.innerHTML = `<span>${message}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.5s ease';
+    setTimeout(() => toast.remove(), 500);
+  }, 3500);
+}
+
+function showConfirm(message, onConfirm) {
+  const box = document.createElement('div');
+  box.className = 'pwa-toast';
+  box.style.flexDirection = 'column';
+  box.style.alignItems = 'flex-start';
+  box.style.gap = 'var(--space-2)';
+  box.style.maxWidth = '340px';
+  box.innerHTML = `
+    <span style="font-weight:600;">${message}</span>
+    <div style="display:flex; gap:var(--space-3); margin-top:var(--space-2); width:100%;">
+      <button class="pwa-toast__btn" id="confirm-yes-btn" style="background:#e11d48;">Kyllä</button>
+      <button class="pwa-toast__btn" id="confirm-no-btn" style="background:var(--color-surface-offset); color:var(--color-text); border:1px solid var(--color-border);">Peruuta</button>
+    </div>
+  `;
+  document.body.appendChild(box);
+  
+  box.querySelector('#confirm-yes-btn').addEventListener('click', () => {
+    box.remove();
+    onConfirm();
+  });
+  box.querySelector('#confirm-no-btn').addEventListener('click', () => {
+    box.remove();
   });
 }
 
