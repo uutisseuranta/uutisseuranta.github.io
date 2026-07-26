@@ -81,42 +81,7 @@ btnLogin.addEventListener('click', openLogin);
 btnCloseLogin.addEventListener('click', closeLogin);
 btnSkipLogin.addEventListener('click', closeLogin);
 
-// ---- THEME TOGGLE LOGIC (Security: moved from inline index.html script to prevent unsafe-inline CSP rule) ----
-const themeToggleBtn = document.querySelector('[data-theme-toggle]');
-const htmlDoc = document.documentElement;
-let currentThemeVal = htmlDoc.getAttribute('data-theme') || 'light';
 
-if (themeToggleBtn) {
-  themeToggleBtn.setAttribute('aria-label', 'Vaihda ' + (currentThemeVal === 'dark' ? 'vaaleaan' : 'tummaan') + ' teemaan');
-  themeToggleBtn.innerHTML = currentThemeVal === 'dark'
-    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
-    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-
-  themeToggleBtn.addEventListener('click', () => {
-    currentThemeVal = currentThemeVal === 'dark' ? 'light' : 'dark';
-    htmlDoc.setAttribute('data-theme', currentThemeVal);
-    themeToggleBtn.setAttribute('aria-label', 'Vaihda ' + (currentThemeVal === 'dark' ? 'vaaleaan' : 'tummaan') + ' teemaan');
-    themeToggleBtn.innerHTML = currentThemeVal === 'dark'
-      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
-      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-
-    try {
-      let activeKey = 'prefs_anonymous';
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key.startsWith('prefs_')) {
-          activeKey = key;
-          break;
-        }
-      }
-      let val = {};
-      try { val = JSON.parse(localStorage.getItem(activeKey)) || {}; } catch(e){}
-      val.theme = currentThemeVal;
-      val.updatedAt = Date.now();
-      localStorage.setItem(activeKey, JSON.stringify(val));
-    } catch(e){}
-  });
-}
 
 btnGoogleLogin.addEventListener('click', async () => {
   closeLogin();
@@ -321,6 +286,22 @@ function sanitize(str) {
   return div.innerHTML;
 }
 
+// URL-osoitteiden sanitointiapufunktio javascript: -skripti-injektioiden estämiseksi (Security / XSS)
+function sanitizeUrl(urlStr) {
+  if (!urlStr) return '#';
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch (e) {
+    if (urlStr.startsWith('/') || urlStr.startsWith('#')) {
+      return urlStr;
+    }
+  }
+  return '#';
+}
+
 // ---- RENDERING LOGIC (Issue #12, #20, #21, #24) ----
 function renderFeed(articles) {
   const grid = document.getElementById('feed-grid');
@@ -376,9 +357,9 @@ function renderFeed(articles) {
     let localReaction = localStorage.getItem(reactionKey) || null;
 
     card.innerHTML = `
-      ${isLead ? `<a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" class="feed-item__image"></a>` : ''}
+      ${isLead ? `<a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" class="feed-item__image"></a>` : ''}
       <div class="feed-item__category"><span class="category-dot"></span>${sanitize(category)}</div>
-      <h3 class="feed-item__title"><a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
+      <h3 class="feed-item__title"><a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       
       ${hasReactions ? `
@@ -398,52 +379,16 @@ function renderFeed(articles) {
         <span style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto;">💬 ${commentCount}</span>
       </div>
 
-      <div class="feed-item__meta" style="margin-top:var(--space-4);">
+      <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%;">
         <span class="feed-item__source">${sourceName}</span>
         <span class="feed-item__time">${timeStr}</span>
+        ${item.url_archive ? `
+          <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-text-faint); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
+            📎 Arkisto
+          </a>
+        ` : ''}
       </div>
     `;
-
-    // Intercept clicks on article links to check connectivity (Issue #24)
-    card.querySelectorAll('.article-link').forEach(link => {
-      link.addEventListener('click', async (e) => {
-        e.preventDefault();
-        
-        // Show visual processing state
-        const originalOpacity = link.style.opacity;
-        const originalCursor = link.style.cursor;
-        link.style.opacity = '0.6';
-        link.style.cursor = 'wait';
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1000); // 1.0s timeout
-        
-        try {
-          // Rapid background check with mode 'no-cors'
-          await fetch(originalUrl, {
-            mode: 'no-cors',
-            signal: controller.signal,
-            referrerPolicy: 'no-referrer'
-          });
-          // Site is reachable (resolves successfully even if opaque)
-          clearTimeout(timeoutId);
-          window.open(originalUrl, '_blank', 'noopener,noreferrer');
-        } catch (err) {
-          clearTimeout(timeoutId);
-          if (err.name === 'AbortError') {
-            // Timeout - assuming host is slow but alive
-            window.open(originalUrl, '_blank', 'noopener,noreferrer');
-          } else {
-            // TypeError / Network error - site is down/offline. Redirect to archive.
-            console.warn("Original link unreachable, redirecting to archive:", err);
-            window.open(archiveUrl, '_blank', 'noopener,noreferrer');
-          }
-        } finally {
-          link.style.opacity = originalOpacity;
-          link.style.cursor = originalCursor;
-        }
-      });
-    });
 
     // Reaction click handlers (Issue #20 & #21)
     card.querySelectorAll('.btn-reaction').forEach(btn => {
