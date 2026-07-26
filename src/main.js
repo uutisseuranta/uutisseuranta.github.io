@@ -81,6 +81,43 @@ btnLogin.addEventListener('click', openLogin);
 btnCloseLogin.addEventListener('click', closeLogin);
 btnSkipLogin.addEventListener('click', closeLogin);
 
+// ---- THEME TOGGLE LOGIC (Security: moved from inline index.html script to prevent unsafe-inline CSP rule) ----
+const themeToggleBtn = document.querySelector('[data-theme-toggle]');
+const htmlDoc = document.documentElement;
+let currentThemeVal = htmlDoc.getAttribute('data-theme') || 'light';
+
+if (themeToggleBtn) {
+  themeToggleBtn.setAttribute('aria-label', 'Vaihda ' + (currentThemeVal === 'dark' ? 'vaaleaan' : 'tummaan') + ' teemaan');
+  themeToggleBtn.innerHTML = currentThemeVal === 'dark'
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+  themeToggleBtn.addEventListener('click', () => {
+    currentThemeVal = currentThemeVal === 'dark' ? 'light' : 'dark';
+    htmlDoc.setAttribute('data-theme', currentThemeVal);
+    themeToggleBtn.setAttribute('aria-label', 'Vaihda ' + (currentThemeVal === 'dark' ? 'vaaleaan' : 'tummaan') + ' teemaan');
+    themeToggleBtn.innerHTML = currentThemeVal === 'dark'
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+    try {
+      let activeKey = 'prefs_anonymous';
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('prefs_')) {
+          activeKey = key;
+          break;
+        }
+      }
+      let val = {};
+      try { val = JSON.parse(localStorage.getItem(activeKey)) || {}; } catch(e){}
+      val.theme = currentThemeVal;
+      val.updatedAt = Date.now();
+      localStorage.setItem(activeKey, JSON.stringify(val));
+    } catch(e){}
+  });
+}
+
 btnGoogleLogin.addEventListener('click', async () => {
   closeLogin();
   try {
@@ -290,7 +327,7 @@ function renderFeed(articles) {
   if (!grid) return;
 
   grid.innerHTML = '';
-  grid.removeAttribute('aria-busy');
+  grid.setAttribute('aria-busy', 'false');
 
   if (articles.length === 0) {
     grid.innerHTML = '<div class="profile-empty" style="grid-column: 1/-1; text-align: center;">Ei uutisia valituilla kriteereillä.</div>';

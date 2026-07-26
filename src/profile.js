@@ -223,10 +223,19 @@ function _renderContent() {
         // 2. Firebase Auth toiseksi
         await deleteUser(_user);
         
-        // 3. Paikallinen siivous kolmanneksi
+        // 3. Paikallinen siivous kolmanneksi (GDPR / selective clean to avoid wiping unrelated keys)
         localStorage.removeItem(`prefs_${uid}`);
         localStorage.removeItem(`seen_${uid}`);
-        localStorage.clear(); // GDPR-mukainen täysi nollaus
+        
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith(`reaction_${uid}_`) || key.startsWith(`prefs_${uid}`) || key.startsWith(`seen_${uid}`))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+        localStorage.removeItem('consent_analytics');
         
         showToast("Tili ja kaikki asetuksesi on poistettu onnistuneesti.");
         closeProfileModal();
