@@ -582,3 +582,18 @@ Artikkelikorteissa näytetään "Samaa mieltä" (Like) / "Eri mieltä" (Dislike)
 - **Idempotenssi ja toggle:** Käyttäjällä voi olla vain yksi aktiivinen reaktio kerrallaan. Tykkäyksen painaminen uudelleen peruuttaa sen. Toisen reaktion painaminen poistaa vanhan ja asettaa uuden.
 - **Saavutettavuus:** Napeille asetetaan WAI-ARIA `aria-pressed="true/false"` -tilat, ja virhetilanteessa tehdyille optimistisille UI-päivityksille suoritetaan täydellinen rollback (sekä laskurin että `aria-pressed`-tilan osalta).
 - **Undo-reaktion write-API-sopimus (päätös L-010 & L-015):** Tykkäyksen tai eri mieltä olon peruminen lähettää write-API:n inboxiin `Undo`-tyyppisen ActivityPub/AS2-aktiviteetin. Write-API:n vastaanottosopimuksen mukaan `Undo`-aktiviteetti vähentää välittömästi reaktiolaskureita, mutta itse `Undo`-aktiviteettia ei tallenneta pysyvästi lokeihin tai pitkäaikaiseen säilytykseen käyttäjän yksityisyyden ja GDPR:n anonymisointivaatimusten turvaamiseksi.
+
+---
+
+## Tietoturva ja konfiguraatiot
+
+### Firebase-konfiguraatio ja API-avaimet
+*   **Plaintext-kokoaminen:** Kaikki `.env`-tiedostossa määritellyt Firebase-konfiguraatioarvot (kuten `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_APP_ID`) kootaan Vite-buildin yhteydessä osaksi julkista asiakaspään JavaScript-koodia (`dist/assets/main-*.js`) plaintext-muodossa.
+*   **Tietoturva-arvio:** Tämä on Googlen Firebase-arkkitehtuurissa tarkoituksellinen ja turvallinen toimintamalli. Firebase API-avain ei ole salasana tai backend-secret, vaan se toimii ainoastaan julkisena tunnisteena (identifier), joka ohjaa selaimen oikeaan Firebase-projektiin.
+*   **Pääsynhallinta:** Firebasen tietoturva ei perustu API-avaimen piilottamiseen, vaan se on varmistettu **Firestore Security Rules** -säännöillä (jotka sallivat lukemisen ja kirjoittamisen vain kirjautuneille ja valtuutetuille käyttäjille) sekä Google Cloud -konsolin **API Key Restrictions** -rajoituksilla (jotka sallivat kutsut vain uutisseurannan omilta verkkotunnuksilta).
+
+### Content Security Policy (CSP) staattisessa GitHub Pages -ympäristössä
+*   **Rajoitus:** GitHub Pages tarjoilee sivuston täysin staattisena tiedostopalveluna eikä salli mukautettujen HTTP Response -otsikoiden (custom HTTP headers) asettamista.
+*   **Ratkaisu:** CSP-säännöt on määritelty ja otettu käyttöön `index.html`-sivun `<meta http-equiv="Content-Security-Policy" content="...">` -tagilla. Tämä takaa saman tason XSS- ja lataussuojauksen suoraan selaimessa ilman palvelintason otsikkotukea.
+*   **Kehitysaikainen 'unsafe-inline' style-src -säännössä:** Katso päätös `L-014` CSP `style-src` `'unsafe-inline'` -säännön sallimisesta väliaikaisesti Viten HMR-kehitystoimintojen ja dynaamisen reaktiopalkin inline-tyylimääritelmien tueksi.
+
