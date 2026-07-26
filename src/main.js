@@ -390,6 +390,50 @@ function renderFeed(articles) {
       </div>
     `;
 
+    // Intercept clicks on article links to check connectivity via Query API (Issue #24 / backend proxy check)
+    card.querySelectorAll('.article-link').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Show visual processing state
+        const originalOpacity = link.style.opacity;
+        const originalCursor = link.style.cursor;
+        link.style.opacity = '0.6';
+        link.style.cursor = 'wait';
+        
+        const checkUrl = `${QUERY_API_URL}/ap/check-status?url=${encodeURIComponent(originalUrl)}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2.0s timeout
+        
+        let alive = true;
+        try {
+          const res = await fetch(checkUrl, {
+            signal: controller.signal
+          });
+          if (res.ok) {
+            const data = await res.json();
+            alive = data.alive;
+          } else {
+            alive = false;
+          }
+        } catch (err) {
+          console.warn("Backend check failed, fallback to archive:", err);
+          alive = false;
+        } finally {
+          clearTimeout(timeoutId);
+          link.style.opacity = originalOpacity;
+          link.style.cursor = originalCursor;
+        }
+
+        if (alive) {
+          window.open(originalUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          console.warn("Original link unreachable, redirecting to archive:", archiveUrl);
+          window.open(archiveUrl, '_blank', 'noopener,noreferrer');
+        }
+      });
+    });
+
     // Reaction click handlers (Issue #20 & #21)
     card.querySelectorAll('.btn-reaction').forEach(btn => {
       btn.addEventListener('click', async (e) => {
