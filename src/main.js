@@ -712,9 +712,54 @@ async function refreshFeed() {
   }
 }
 
-// ---- CUSTOM USER FEED SYNC (Issue #51) ----
+// ---- CUSTOM USER FEED SYNC (Issue #51) & SPA ROUTER ----
 onPrefsChange((prefs) => {
-  // Kun preferenssit latautuvat tai muuttuvat, haetaan uutiset (personoitu uutisvirta huomioiden)
-  refreshFeed();
+  const view = prefs.currentView || 'home';
+  document.body.className = `view-${view}`;
+  
+  const homeLink = document.getElementById('nav-link-home');
+  const newsLink = document.getElementById('nav-link-news');
+  
+  if (homeLink) homeLink.classList.toggle('nav__link--active', view === 'home');
+  if (newsLink) newsLink.classList.toggle('nav__link--active', view === 'news');
+  
+  // Ladataan uutiset vain uutissivulla
+  if (view === 'news') {
+    refreshFeed();
+  }
 });
+
+// ---- SPA ROUTER CLICK HANDLERS ----
+const initSPARouter = () => {
+  const homeLink = document.getElementById('nav-link-home');
+  const newsLink = document.getElementById('nav-link-news');
+  const featuresLink = document.getElementById('nav-link-features');
+  const logoLink = document.querySelector('.nav__logo');
+  
+  const setView = (view, e) => {
+    if (e) e.preventDefault();
+    updatePrefs({ currentView: view });
+  };
+
+  if (logoLink) logoLink.addEventListener('click', (e) => setView('home', e));
+  if (homeLink) homeLink.addEventListener('click', (e) => setView('home', e));
+  if (newsLink) newsLink.addEventListener('click', (e) => setView('news', e));
+  
+  if (featuresLink) {
+    featuresLink.addEventListener('click', () => {
+      updatePrefs({ currentView: 'home' });
+    });
+  }
+  
+  document.querySelectorAll('a[href="#uutiset"]').forEach(link => {
+    link.addEventListener('click', (e) => setView('news', e));
+  });
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initSPARouter);
+} else {
+  initSPARouter();
+}
+
 

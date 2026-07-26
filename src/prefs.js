@@ -51,6 +51,7 @@ export const SCHEMA_VERSION = 1;
 const DEFAULT_PREFS = {
   followedTags: [],
   theme: 'system',
+  currentView: 'home',
   updatedAt: null,
   schemaVersion: SCHEMA_VERSION,
 };

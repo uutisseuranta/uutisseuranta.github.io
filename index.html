@@ -29,8 +29,9 @@
         <span class="nav__logo-text">uutis<span>seuranta</span></span>
       </a>
       <nav class="nav__links" aria-label="Päänavigaatio">
-        <a href="#uutiset">Uutiset</a>
-        <a href="#ominaisuudet">Ominaisuudet</a>
+        <a href="#" id="nav-link-home">Etusivu</a>
+        <a href="#uutiset" id="nav-link-news">Uutiset</a>
+        <a href="#ominaisuudet" id="nav-link-features">Ominaisuudet</a>
       </nav>
       <div class="nav__actions">
         <button class="btn-theme" data-theme-toggle aria-label="Vaihda teemaa">
@@ -52,7 +53,7 @@
     </div>
   </nav>
 
-  <section class="hero">
+  <section class="hero view-home-only">
     <div class="container">
       <div class="hero__eyebrow">
         <span class="hero__eyebrow-dot"></span>
@@ -78,7 +79,7 @@
     </div>
   </section>
 
-  <section class="feed-section" id="uutiset">
+  <section class="feed-section view-news-only" id="uutiset">
     <div class="container--wide">
       <div class="section-header">
         <div class="section-label">Tuoreimmat</div>
@@ -110,7 +111,7 @@
     </div>
   </section>
 
-  <section class="features" id="ominaisuudet">
+  <section class="features view-home-only" id="ominaisuudet">
     <div class="container--wide">
       <div class="features-layout">
         <div>
@@ -147,7 +148,7 @@
 
 
 
-  <section class="cta-section">
+  <section class="cta-section view-home-only">
     <div class="container">
       <div class="section-label">Avoin lähdekoodi</div>
       <h2 class="section-title" style="max-width:18ch;">Rakennettu avoimesti – kehitä mukana</h2>
