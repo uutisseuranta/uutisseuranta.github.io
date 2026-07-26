@@ -301,16 +301,11 @@ function renderFeed(articles) {
     let localReaction = localStorage.getItem(`reaction_${item.id}`) || null;
 
     card.innerHTML = `
-      ${isLead ? `<img src="${imageUrl}" alt="${item.name}" loading="lazy" class="feed-item__image">` : ''}
+      ${isLead ? `<a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${item.name}" loading="lazy" class="feed-item__image"></a>` : ''}
       <div class="feed-item__category"><span class="category-dot"></span>${category}</div>
-      <h3 class="feed-item__title"><a href="${originalUrl}" target="_blank" rel="noopener noreferrer">${item.name}</a></h3>
+      <h3 class="feed-item__title"><a href="${originalUrl}" class="article-link" data-archive="${archiveUrl}">${item.name}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${item.summary}</p>` : ''}
       
-      <a href="${archiveUrl}" target="_blank" rel="noopener noreferrer" class="archive-badge" title="Katso arkistoitu versio (Wayback Machine)">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:2px; display:inline-block; vertical-align:middle;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        Arkisto
-      </a>
-
       ${hasReactions ? `
         <div class="vote-stats" role="img" aria-label="Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)">
           <div class="vote-stats__segment vote-stats__segment--agree" style="flex: ${agreePct}"></div>
@@ -333,6 +328,47 @@ function renderFeed(articles) {
         <span class="feed-item__time">${timeStr}</span>
       </div>
     `;
+
+    // Intercept clicks on article links to check connectivity (Issue #24)
+    card.querySelectorAll('.article-link').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Show visual processing state
+        const originalOpacity = link.style.opacity;
+        const originalCursor = link.style.cursor;
+        link.style.opacity = '0.6';
+        link.style.cursor = 'wait';
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1000); // 1.0s timeout
+        
+        try {
+          // Rapid background check with mode 'no-cors'
+          await fetch(originalUrl, {
+            mode: 'no-cors',
+            signal: controller.signal,
+            referrerPolicy: 'no-referrer'
+          });
+          // Site is reachable (resolves successfully even if opaque)
+          clearTimeout(timeoutId);
+          window.open(originalUrl, '_blank', 'noopener,noreferrer');
+        } catch (err) {
+          clearTimeout(timeoutId);
+          if (err.name === 'AbortError') {
+            // Timeout - assuming host is slow but alive
+            window.open(originalUrl, '_blank', 'noopener,noreferrer');
+          } else {
+            // TypeError / Network error - site is down/offline. Redirect to archive.
+            console.warn("Original link unreachable, redirecting to archive:", err);
+            window.open(archiveUrl, '_blank', 'noopener,noreferrer');
+          }
+        } finally {
+          link.style.opacity = originalOpacity;
+          link.style.cursor = originalCursor;
+        }
+      });
+    });
 
     // Reaction click handlers (Issue #20 & #21)
     card.querySelectorAll('.btn-reaction').forEach(btn => {
