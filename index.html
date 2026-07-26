@@ -105,35 +105,27 @@
         <h2 class="section-title">Päivän uutisvirtaesimerkki</h2>
         <p class="section-desc">Näin uutisseuranta näyttää koostettuna uutisvirran eri lähteistä.</p>
       </div>
-      <div class="feed-grid">
-        <a href="#" class="feed-item feed-item--lead">
-          <img src="https://picsum.photos/seed/news-politics-fi/800/450" alt="Uutiskuva politiikasta" width="800" height="450" loading="lazy" class="feed-item__image">
-          <div class="feed-item__category cat-politics"><span class="category-dot"></span>Politiikka</div>
-          <h3 class="feed-item__title">Hallitus julkaisee uuden talousarvion – leikkaukset koskevat useita ministeriöitä</h3>
-          <p class="feed-item__excerpt">Hallitus on sopinut ensi vuoden talousarviosta pitkällisten neuvottelujen jälkeen. Budjetti sisältää useita säästöjä sosiaaliturvaan ja koulutukseen, mutta panostaa puolustukseen.</p>
-          <div class="feed-item__meta">
-            <span class="feed-item__source">Yle Uutiset</span>
-            <span class="feed-item__time">2 t sitten</span>
-          </div>
-        </a>
-        <a href="#" class="feed-item feed-item--small">
-          <div class="feed-item__category cat-tech"><span class="category-dot"></span>Teknologia</div>
-          <h3 class="feed-item__title">Suomalainen tekoäly-startup kerää 20 miljoonan euron rahoituskierroksen</h3>
-          <p class="feed-item__excerpt">Helsinkiläinen startup on kerännyt merkittävän rahoituksen eurooppalaisilta pääomasijoittajilta.</p>
-          <div class="feed-item__meta">
-            <span class="feed-item__source">Kauppalehti</span>
-            <span class="feed-item__time">4 t sitten</span>
-          </div>
-        </a>
-        <a href="#" class="feed-item feed-item--small">
-          <div class="feed-item__category cat-economy"><span class="category-dot"></span>Talous</div>
-          <h3 class="feed-item__title">Helsingin pörssi nousi selvästi – energia-ala vetää vahvasti</h3>
-          <p class="feed-item__excerpt">Nasdaq Helsinki sulkeutui positiivisesti, kun energiasektori nousi enemmän kuin kaksi prosenttia.</p>
-          <div class="feed-item__meta">
-            <span class="feed-item__source">Helsingin Sanomat</span>
-            <span class="feed-item__time">1 t sitten</span>
-          </div>
-        </a>
+      <div class="tag-cloud" id="tag-cloud" style="display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-8); justify-content: center;">
+        <!-- Tag cloud dynamically rendered here -->
+      </div>
+      <div class="feed-grid" id="feed-grid" aria-busy="true" aria-live="polite">
+        <!-- Skeleton loaders shown initially -->
+        <div class="skeleton-card" aria-hidden="true">
+          <div class="skeleton-img"></div>
+          <div class="skeleton-title"></div>
+          <div class="skeleton-text"></div>
+          <div class="skeleton-text" style="width: 70%;"></div>
+        </div>
+        <div class="skeleton-card" aria-hidden="true">
+          <div class="skeleton-img"></div>
+          <div class="skeleton-title"></div>
+          <div class="skeleton-text"></div>
+        </div>
+        <div class="skeleton-card" aria-hidden="true">
+          <div class="skeleton-img"></div>
+          <div class="skeleton-title"></div>
+          <div class="skeleton-text"></div>
+        </div>
       </div>
     </div>
   </section>

@@ -24,6 +24,7 @@ import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signO
 import { getAnalytics } from 'firebase/analytics';
 import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs } from './prefs.js';
 import { initProfileModal, openProfileModal } from './profile.js';
+import { Workbox } from 'workbox-window';
 
 // ---- SCROLL OBSERVER ----
 const observer = new IntersectionObserver((entries) => {
@@ -174,3 +175,329 @@ onPrefsChange((prefs) => {
          </svg>`;
   }
 });
+
+// ---- API CONFIGURATION ----
+const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL || 'https://query-api-yq2o6p5wqa-lz.a.run.app';
+const WRITE_API_URL = import.meta.env.VITE_WRITE_API_URL || 'https://write-api-yq2o6p5wqa-lz.a.run.app';
+
+let currentTagFilter = null;
+let cachedArticles = [];
+
+// ---- PWA SERVICE WORKER REGISTRATION (Issue #19 / L-011) ----
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+  const wb = new Workbox('/sw.js');
+
+  wb.addEventListener('waiting', () => {
+    // Luodaan päivityskehote (PWA Toast)
+    const toast = document.createElement('div');
+    toast.className = 'pwa-toast';
+    toast.innerHTML = `
+      <span>Uusi versio uutispalvelusta on saatavilla.</span>
+      <button class="pwa-toast__btn" id="pwa-update-btn">Päivitä</button>
+    `;
+    document.body.appendChild(toast);
+
+    document.getElementById('pwa-update-btn').addEventListener('click', () => {
+      wb.addEventListener('controlling', () => {
+        window.location.reload();
+      });
+      wb.messageSkipWaiting();
+    });
+  });
+
+  wb.register().catch(err => console.error('Service Worker registration failed:', err));
+}
+
+// ---- FETCH OUTBOX WITH RATE-LIMIT HANDLING (Issue #60 / L-011) ----
+async function fetchOutbox(tag = null, retryCount = 0) {
+  let url = `${QUERY_API_URL}/ap/outbox`;
+  if (tag) {
+    url += `?tag=${encodeURIComponent(tag)}`;
+  }
+
+  const headers = {};
+  const user = auth.currentUser;
+  if (user) {
+    const token = await user.getIdToken();
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await fetch(url, { headers });
+
+    if (response.status === 429) {
+      if (retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.warn(`Rate limited (429). Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchOutbox(tag, retryCount + 1);
+      }
+      throw new Error('Liian monta pyyntöä (Rate limit). Yritä hetken kuluttua uudelleen.');
+    }
+
+    if (!response.ok) {
+      throw new Error(`Virhe uutisten haussa (HTTP ${response.status})`);
+    }
+
+    const data = await response.json();
+    return data.orderedItems || [];
+  } catch (error) {
+    console.error('Error fetching outbox:', error);
+    throw error;
+  }
+}
+
+// ---- RENDERING LOGIC (Issue #12, #20, #21, #24) ----
+function renderFeed(articles) {
+  const grid = document.getElementById('feed-grid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+  grid.removeAttribute('aria-busy');
+
+  if (articles.length === 0) {
+    grid.innerHTML = '<div class="profile-empty" style="grid-column: 1/-1; text-align: center;">Ei uutisia valituilla kriteereillä.</div>';
+    return;
+  }
+
+  // Luodaan uutiskortit
+  articles.forEach((item, index) => {
+    const isLead = index === 0 && !currentTagFilter;
+    const card = document.createElement('div');
+    card.className = `feed-item ${isLead ? 'feed-item--lead' : 'feed-item--small'}`;
+    
+    // AS2 metadata attributes for D-CENT patterns
+    card.setAttribute('data-id', item.id);
+    card.setAttribute('data-type', item.type);
+
+    const imageUrl = item.image && item.image.url ? item.image.url : 'https://picsum.photos/seed/news/800/450';
+    const category = item.tag && item.tag.find(t => !t.name.startsWith('likes:') && !t.name.startsWith('dislikes:'))?.name || 'Yleinen';
+    const sourceName = item.attributedTo && item.attributedTo.name ? item.attributedTo.name : 'Uutislähde';
+    
+    // Time rendering in local timezone (Issue #12)
+    let timeStr = 'Aika tuntematon';
+    if (item.published) {
+      try {
+        timeStr = new Intl.DateTimeFormat('fi-FI', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.published));
+      } catch (e) {}
+    }
+
+    // Wayback Machine wildcard-arkistolinkki (Issue #24)
+    const originalUrl = item.url || '#';
+    const archiveUrl = item.url_archive || `https://web.archive.org/web/*/${originalUrl}`;
+
+    // Reactions counts (Issue #20 & #21)
+    const likesCount = item.likes && typeof item.likes.totalItems === 'number' ? item.likes.totalItems : 0;
+    const dislikesCount = item.dislikes && typeof item.dislikes.totalItems === 'number' ? item.dislikes.totalItems : 0;
+    const hasReactions = likesCount + dislikesCount > 0;
+    
+    const agreePct = hasReactions ? Math.round(likesCount / (likesCount + dislikesCount) * 100) : 0;
+    const disagreePct = hasReactions ? 100 - agreePct : 0;
+
+    // Comments count (Issue #11)
+    const commentCount = item.replies && typeof item.replies.totalItems === 'number' ? item.replies.totalItems : 0;
+
+    // Reacting states
+    let localReaction = localStorage.getItem(`reaction_${item.id}`) || null;
+
+    card.innerHTML = `
+      ${isLead ? `<img src="${imageUrl}" alt="${item.name}" loading="lazy" class="feed-item__image">` : ''}
+      <div class="feed-item__category"><span class="category-dot"></span>${category}</div>
+      <h3 class="feed-item__title"><a href="${originalUrl}" target="_blank" rel="noopener noreferrer">${item.name}</a></h3>
+      ${item.summary ? `<p class="feed-item__excerpt">${item.summary}</p>` : ''}
+      
+      <a href="${archiveUrl}" target="_blank" rel="noopener noreferrer" class="archive-badge" title="Katso arkistoitu versio (Wayback Machine)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:2px; display:inline-block; vertical-align:middle;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Arkisto
+      </a>
+
+      ${hasReactions ? `
+        <div class="vote-stats" role="img" aria-label="Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)">
+          <div class="vote-stats__segment vote-stats__segment--agree" style="flex: ${agreePct}"></div>
+          <div class="vote-stats__segment vote-stats__segment--disagree" style="flex: ${disagreePct}"></div>
+        </div>
+      ` : ''}
+
+      <div class="reaction-container">
+        <button class="btn-reaction" data-action="like" data-id="${item.id}" aria-pressed="${localReaction === 'Like' ? 'true' : 'false'}">
+          👍 Samaa mieltä (${likesCount})
+        </button>
+        <button class="btn-reaction" data-action="dislike" data-id="${item.id}" aria-pressed="${localReaction === 'Dislike' ? 'true' : 'false'}">
+          👎 Eri mieltä (${dislikesCount})
+        </button>
+        <span style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto;">💬 ${commentCount}</span>
+      </div>
+
+      <div class="feed-item__meta" style="margin-top:var(--space-4);">
+        <span class="feed-item__source">${sourceName}</span>
+        <span class="feed-item__time">${timeStr}</span>
+      </div>
+    `;
+
+    // Reaction click handlers (Issue #20 & #21)
+    card.querySelectorAll('.btn-reaction').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!auth.currentUser) {
+          openLogin();
+          return;
+        }
+
+        const action = btn.getAttribute('data-action') === 'like' ? 'Like' : 'Dislike';
+        const articleId = btn.getAttribute('data-id');
+        const activeReaction = localStorage.getItem(`reaction_${articleId}`);
+
+        // Optimistic UI updates
+        let newReaction = null;
+        if (activeReaction === action) {
+          localStorage.removeItem(`reaction_${articleId}`);
+        } else {
+          localStorage.setItem(`reaction_${articleId}`, action);
+          newReaction = action;
+        }
+
+        // Re-render feed with optimistic update
+        try {
+          if (newReaction) {
+            await postReaction(articleId, newReaction);
+          } else {
+            await deleteReaction(articleId, activeReaction);
+          }
+          refreshFeed();
+        } catch (err) {
+          console.error("Reaction failed, rolling back", err);
+          if (activeReaction) {
+            localStorage.setItem(`reaction_${articleId}`, activeReaction);
+          } else {
+            localStorage.removeItem(`reaction_${articleId}`);
+          }
+          alert("Virhe reaktion tallennuksessa.");
+        }
+      });
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+// ---- SEND ACTIONS TO WRITE API (Issue #20) ----
+async function postReaction(articleId, type) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": type,
+      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+      "object": articleId
+    })
+  });
+  if (!res.ok) throw new Error("Reaction failed");
+}
+
+async function deleteReaction(articleId, type) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Undo",
+      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+      "object": {
+        "type": type,
+        "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+        "object": articleId
+      }
+    })
+  });
+  if (!res.ok) throw new Error("Undo reaction failed");
+}
+
+// ---- TAG CLOUD LOGIC (Issue #16) ----
+function renderTagCloud(articles) {
+  const container = document.getElementById('tag-cloud');
+  if (!container) return;
+
+  const counts = new Map();
+  articles.forEach(item => {
+    if (item.tag) {
+      item.tag.forEach(t => {
+        if (!t.name.startsWith('likes:') && !t.name.startsWith('dislikes:')) {
+          counts.set(t.name, (counts.get(t.name) || 0) + 1);
+        }
+      });
+    }
+  });
+
+  const sortedTags = Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15);
+
+  container.innerHTML = '';
+  
+  // All tags option
+  const allBtn = document.createElement('button');
+  allBtn.className = `tag-cloud__tag ${!currentTagFilter ? 'tag-cloud__tag--active' : ''}`;
+  allBtn.textContent = 'Kaikki';
+  allBtn.addEventListener('click', () => {
+    currentTagFilter = null;
+    refreshFeed();
+  });
+  container.appendChild(allBtn);
+
+  sortedTags.forEach(([tagName, count]) => {
+    const btn = document.createElement('button');
+    btn.className = `tag-cloud__tag ${currentTagFilter === tagName ? 'tag-cloud__tag--active' : ''}`;
+    btn.textContent = `${tagName} (${count})`;
+    btn.setAttribute('aria-label', `Tagi ${tagName}, ${count} uutista`);
+    btn.addEventListener('click', () => {
+      currentTagFilter = currentTagFilter === tagName ? null : tagName;
+      refreshFeed();
+    });
+    container.appendChild(btn);
+  });
+}
+
+async function refreshFeed() {
+  const grid = document.getElementById('feed-grid');
+  if (grid) {
+    grid.innerHTML = `
+      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+    `;
+    grid.setAttribute('aria-busy', 'true');
+  }
+
+  try {
+    const articles = await fetchOutbox(currentTagFilter);
+    cachedArticles = articles;
+    renderFeed(articles);
+    if (!currentTagFilter) {
+      renderTagCloud(articles);
+    }
+  } catch (err) {
+    const grid = document.getElementById('feed-grid');
+    if (grid) {
+      grid.innerHTML = `<div class="profile-empty" style="grid-column:1/-1; color:#c81e1e; text-align:center;">Uutisten lataus epäonnistui: ${err.message}</div>`;
+    }
+  }
+}
+
+// ---- CUSTOM USER FEED SYNC (Issue #51) ----
+onPrefsChange((prefs) => {
+  // Kun preferenssit latautuvat tai muuttuvat, haetaan uutiset (personoitu uutisvirta huomioiden)
+  refreshFeed();
+});
+
+// Ensimmäinen uutisten lataus
+refreshFeed();
+
