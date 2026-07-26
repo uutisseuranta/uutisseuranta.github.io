@@ -51,6 +51,7 @@ export const SCHEMA_VERSION = 1;
 const DEFAULT_PREFS = {
   followedTags: [],
   theme: 'system',
+  currentView: 'home',
   updatedAt: null,
   schemaVersion: SCHEMA_VERSION,
 };
@@ -94,7 +95,6 @@ let _listeners = [];
 export function initPrefs(app, uid) {
   _uid = uid;
   _prefs = { ...DEFAULT_PREFS };
-  _listeners = [];
 
   if (uid) {
     // Otetaan Firestore offline-persistointi käyttöön kirjautuneelle käyttäjälle.

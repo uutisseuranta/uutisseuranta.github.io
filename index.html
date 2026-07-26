@@ -29,8 +29,9 @@
         <span class="nav__logo-text">uutis<span>seuranta</span></span>
       </a>
       <nav class="nav__links" aria-label="Päänavigaatio">
-        <a href="#uutiset">Uutiset</a>
-        <a href="#ominaisuudet">Ominaisuudet</a>
+        <a href="#" id="nav-link-home">Etusivu</a>
+        <a href="#uutiset" id="nav-link-news">Uutiset</a>
+        <a href="#ominaisuudet" id="nav-link-features">Ominaisuudet</a>
       </nav>
       <div class="nav__actions">
         <button class="btn-theme" data-theme-toggle aria-label="Vaihda teemaa">
@@ -52,14 +53,14 @@
     </div>
   </nav>
 
-  <section class="hero">
+  <section class="hero view-home-only">
     <div class="container">
       <div class="hero__eyebrow">
         <span class="hero__eyebrow-dot"></span>
         Reaaliaikainen uutisseuranta
       </div>
       <h1 class="hero__heading">Seuraa <em>uutisia</em> älykkäästi</h1>
-      <p class="hero__sub">Uutisseuranta kokoaa tärkeimmät uutiset kaikista suomalaisista lähteistä yhteen paikkaan. Ei hälyä – vain se, mitä sinulle kuuluu tietää.</p>
+      <p class="hero__sub">Uutisseuranta kokoaa tärkeimmät uutiset eri lähteistä yhteen paikkaan. Sinä ohjaat algoritmia – näet mitä päätät nähdä.</p>
       <div class="hero__cta">
         <a href="https://github.com/jaakkokorhonen/uutisseuranta" target="_blank" rel="noopener noreferrer" class="btn-primary">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 3l14 9-14 9V3z"/></svg>
@@ -71,14 +72,14 @@
         </a>
       </div>
       <div class="hero__stats">
-        <div><div class="hero__stat-value">150+</div><div class="hero__stat-label">Uutislähdettä</div></div>
-        <div><div class="hero__stat-value">10k+</div><div class="hero__stat-label">Artikkelia päivässä</div></div>
-        <div><div class="hero__stat-value">Reaaliajassa</div><div class="hero__stat-label">Päivitysväli</div></div>
+        <div><div class="hero__stat-value" id="stat-sources">150+</div><div class="hero__stat-label">Uutislähdettä</div></div>
+        <div><div class="hero__stat-value" id="stat-articles">10k+</div><div class="hero__stat-label">Artikkelia päivässä</div></div>
+        <div><div class="hero__stat-value" id="stat-interval">5 min</div><div class="hero__stat-label">Päivitysväli</div></div>
       </div>
     </div>
   </section>
 
-  <section class="feed-section" id="uutiset">
+  <section class="feed-section view-news-only" id="uutiset">
     <div class="container--wide">
       <div class="section-header">
         <div class="section-label">Tuoreimmat</div>
@@ -110,7 +111,7 @@
     </div>
   </section>
 
-  <section class="features" id="ominaisuudet">
+  <section class="features view-home-only" id="ominaisuudet">
     <div class="container--wide">
       <div class="features-layout">
         <div>
@@ -147,7 +148,7 @@
 
 
 
-  <section class="cta-section">
+  <section class="cta-section view-home-only">
     <div class="container">
       <div class="section-label">Avoin lähdekoodi</div>
       <h2 class="section-title" style="max-width:18ch;">Rakennettu avoimesti – kehitä mukana</h2>

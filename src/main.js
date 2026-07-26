@@ -45,14 +45,15 @@ document.querySelectorAll('.feed-item, .feature-item').forEach(el => {
 
 // ---- FIREBASE INITIALIZATION ----
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "dummy-api-key-for-local-dev-only",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "dummy-project.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "dummy-project",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "dummy-project.appspot.com",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1234567890:web:1234567890abcdef",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-DUMMY"
 };
+
 
 const app = initializeApp(firebaseConfig);
 // Analytics alustetaan vain, jos measurementId on määritelty ja käyttäjä on antanut suostumuksensa (GDPR / L-009)
@@ -185,6 +186,38 @@ onPrefsChange((prefs) => {
 const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL || 'https://query-api-yq2o6p5wqa-lz.a.run.app';
 const WRITE_API_URL = import.meta.env.VITE_WRITE_API_URL || 'https://write-api-yq2o6p5wqa-lz.a.run.app';
 
+// ---- HOMEPAGE DYNAMIC STATS ----
+async function loadHomepageStats() {
+  try {
+    const res = await fetch(`${QUERY_API_URL}/ap/stats`);
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    const elSources = document.getElementById('stat-sources');
+    if (elSources && data.sources_count) {
+      elSources.textContent = `${data.sources_count}+`;
+    }
+    
+    const elArticles = document.getElementById('stat-articles');
+    if (elArticles && data.articles_last_24h) {
+      const count = data.articles_last_24h;
+      if (count >= 1000) {
+        elArticles.textContent = `${(count / 1000).toFixed(1)}k+`;
+      } else {
+        elArticles.textContent = `${count}`;
+      }
+    }
+    
+    const elInterval = document.getElementById('stat-interval');
+    if (elInterval && data.update_interval_minutes) {
+      elInterval.textContent = `${data.update_interval_minutes} min`;
+    }
+  } catch (err) {
+    console.warn('Tilastojen haku epäonnistui:', err);
+  }
+}
+loadHomepageStats();
+
 let currentTagFilter = null;
 let cachedArticles = [];
 
@@ -235,6 +268,16 @@ async function fetchOutbox(tag = null, retryCount = 0) {
   let url = `${QUERY_API_URL}/ap/outbox`;
   if (tag) {
     url += `?tag=${encodeURIComponent(tag)}`;
+  } else {
+    // Jos suodatinta ei ole valittu ("Kaikki"-näkymä), haetaan käyttäjän seuratut tagit
+    // tai käytetään oletustageja jos lista on tyhjä, jotta backend ei anna 400 Bad Request -virhettä.
+    const prefs = getPrefs();
+    const tagsToQuery = (prefs.followedTags && prefs.followedTags.length > 0)
+      ? prefs.followedTags
+      : ['#politiikka', '#talous', '#tiede', '#viihde', '#ulkomaat', '#kotimaa', '#kulttuuri', '#urheilu', '#sää'];
+    
+    const params = tagsToQuery.map(t => `tag=${encodeURIComponent(t)}`).join('&');
+    url += `?${params}`;
   }
 
   const headers = {};
@@ -701,9 +744,54 @@ async function refreshFeed() {
   }
 }
 
-// ---- CUSTOM USER FEED SYNC (Issue #51) ----
+// ---- CUSTOM USER FEED SYNC (Issue #51) & SPA ROUTER ----
 onPrefsChange((prefs) => {
-  // Kun preferenssit latautuvat tai muuttuvat, haetaan uutiset (personoitu uutisvirta huomioiden)
-  refreshFeed();
+  const view = prefs.currentView || 'home';
+  document.body.className = `view-${view}`;
+  
+  const homeLink = document.getElementById('nav-link-home');
+  const newsLink = document.getElementById('nav-link-news');
+  
+  if (homeLink) homeLink.classList.toggle('nav__link--active', view === 'home');
+  if (newsLink) newsLink.classList.toggle('nav__link--active', view === 'news');
+  
+  // Ladataan uutiset vain uutissivulla
+  if (view === 'news') {
+    refreshFeed();
+  }
 });
+
+// ---- SPA ROUTER CLICK HANDLERS ----
+const initSPARouter = () => {
+  const homeLink = document.getElementById('nav-link-home');
+  const newsLink = document.getElementById('nav-link-news');
+  const featuresLink = document.getElementById('nav-link-features');
+  const logoLink = document.querySelector('.nav__logo');
+  
+  const setView = (view, e) => {
+    if (e) e.preventDefault();
+    updatePrefs({ currentView: view });
+  };
+
+  if (logoLink) logoLink.addEventListener('click', (e) => setView('home', e));
+  if (homeLink) homeLink.addEventListener('click', (e) => setView('home', e));
+  if (newsLink) newsLink.addEventListener('click', (e) => setView('news', e));
+  
+  if (featuresLink) {
+    featuresLink.addEventListener('click', () => {
+      updatePrefs({ currentView: 'home' });
+    });
+  }
+  
+  document.querySelectorAll('a[href="#uutiset"]').forEach(link => {
+    link.addEventListener('click', (e) => setView('news', e));
+  });
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initSPARouter);
+} else {
+  initSPARouter();
+}
+
 

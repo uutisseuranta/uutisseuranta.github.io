@@ -122,6 +122,10 @@ button { cursor: pointer; background: none; border: none; }
   color: var(--color-text-muted);
 }
 .nav__links a:hover { color: var(--color-text); }
+.nav__links a.nav__link--active {
+  color: var(--color-primary);
+  font-weight: 700;
+}
 .btn-theme {
   width: 36px; height: 36px; border-radius: var(--radius-full);
   background: var(--color-surface-offset); color: var(--color-text-muted);
@@ -658,4 +662,13 @@ button { cursor: pointer; background: none; border: none; }
 .pwa-toast__btn:hover {
   background: var(--color-primary-highlight);
 }
+
+/* ---- SPA VIEW ROUTING ---- */
+body.view-home .view-news-only {
+  display: none !important;
+}
+body.view-news .view-home-only {
+  display: none !important;
+}
+
 
