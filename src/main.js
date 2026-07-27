@@ -1168,14 +1168,14 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
       commentDiv.innerHTML = `
         <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2);">
           <img src="${actorPic}" alt="" style="width:24px; height:24px; border-radius:50%;" />
-          <strong style="font-size:var(--text-sm);">${actorName}</strong>
+          <strong style="font-size:var(--text-sm);">${sanitize(actorName)}</strong>
           <time datetime="${cObj.published}" style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto;">${timeAgo}</time>
         </div>
-        <p style="font-size:var(--text-sm); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${cObj.content}</p>
+        <p style="font-size:var(--text-sm); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${sanitize(cObj.content)}</p>
         <div style="display:flex; gap:var(--space-2); align-items:center;">
-          <button class="btn-comment-reply" data-parent-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
-          <button class="btn-comment-agree" data-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0; margin-left:auto;">👍 Samaa mieltä (${cObj.like_count || 0})</button>
-          <button class="btn-comment-disagree" data-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0;">👎 Eri mieltä (${cObj.dislike_count || 0})</button>
+          <button class="btn-comment-reply" data-parent-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
+          <button class="btn-comment-agree" data-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0; margin-left:auto;">👍 Samaa mieltä (${cObj.like_count || 0})</button>
+          <button class="btn-comment-disagree" data-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0;">👎 Eri mieltä (${cObj.dislike_count || 0})</button>
         </div>
         <div class="replies-container" style="margin-left:var(--space-6); margin-top:var(--space-3); display:flex; flex-direction:column; gap:var(--space-2); border-left:2px solid var(--color-divider); padding-left:var(--space-3);">
           <!-- Vastaukset rendataan tähän -->
@@ -1187,7 +1187,7 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
 
       childReplies.forEach(reply => {
         const rObj = reply.object;
-        const rActorName = rObj.attributedTo ? rObj.attributedTo.split('/').pop() : 'Käyttäjä';
+        const rActorName = rObj.attributedTo ? sanitize(rObj.attributedTo.split('/').pop()) : 'Käyttäjä';
         const rTimeAgo = new Date(rObj.published).toLocaleString('fi-FI');
 
         const replyDiv = document.createElement('div');
@@ -1203,9 +1203,9 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
             <strong style="font-size:var(--text-xs);">${rActorName}</strong>
             <time datetime="${rObj.published}" style="font-size:var(--text-xxs); color:var(--color-text-faint); margin-left:auto;">${rTimeAgo}</time>
           </div>
-          <p style="font-size:var(--text-xs); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${rObj.content}</p>
+          <p style="font-size:var(--text-xs); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${sanitize(rObj.content)}</p>
           <div style="display:flex; gap:var(--space-2); align-items:center;">
-            <button class="btn-comment-reply-l2" data-parent-id="${cObj.id}" style="font-size:var(--text-xxs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
+            <button class="btn-comment-reply-l2" data-parent-id="${sanitize(cObj.id)}" style="font-size:var(--text-xxs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
           </div>
         `;
         repliesContainer.appendChild(replyDiv);
@@ -1231,10 +1231,12 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
     <textarea class="comment-textarea" placeholder="Kirjoita kommentti..." aria-label="Uusi kommentti" style="width:100%; min-height:60px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-sm); background:var(--color-surface); color:var(--color-text); resize:vertical;"></textarea>
     <button type="submit" class="btn btn--primary" style="align-self:flex-end; padding:var(--space-1) var(--space-3); font-size:var(--text-xs);">Lähetä kommentti</button>
   `;
-  
+
+  // Kerätään viestiketjun kommentoijien nimet autocompletea varten ja sanitoidaan ne XSS:n estämiseksi
   const threadUsers = Array.from(new Set(
-    replies.map(r => r.object && r.object.attributedTo ? r.object.attributedTo.split('/').pop() : '')
-           .filter(name => name && name !== 'Käyttäjä')
+    replies
+      .map(r => sanitize((r.object && r.object.attributedTo ? r.object.attributedTo : '').split('/').pop()))
+      .filter(name => name && name !== 'Käyttäjä')
   ));
   bindAutocompleteToTextarea(form.querySelector('.comment-textarea'), threadUsers);
 
