@@ -88,3 +88,19 @@ sequenceDiagram
 | `GET /ap/replies` | GET | **Valinnainen (Optional)** | Ohitetaan; palautetaan julkiset kommentit (200 OK) |
 | `GET /ap/check-status` | GET | Ei vaadita | Palautetaan artikkelin saatavuustila (200 OK) |
 | `POST /ap/activities` | POST | **Pakollinen (Required)** | Estetään pyyntö; palautetaan 401 Unauthorized |
+
+---
+
+## 4. Perplexity AI -arviointi & Googlen Best Practices -yhteensopivuus
+
+Transaktiomallin validointi pyydettiin Perplexity AI -palvelimelta suhteessa Googlen virallisiin Cloud Run- ja Firebase Auth -parhaisiin käytäntöihin.
+
+### Yhteenveto & Arviointi
+Arkkitehtuurimalli todettiin **vahvasti Googlen virallisten suositusten mukaiseksi**:
+1. **Google Cloud Run -suositus:** Google kuvaa dokumentaatiossaan täsmälleen tämän mallin julkisesti saavutettavissa oleville Cloud Run -palveluille, joissa frontend toimii selaimessa ja suojatut pyynnöt autentikoituvat `Authorization: Bearer <Firebase_ID_Token>` -otsakkeella ([Google Cloud Run End-User Auth Docs](https://docs.cloud.google.com/run/docs/authenticating/end-users)).
+2. **Palvelintason luottamussuhde:** Luotettavuus varmistetaan aina taustajärjestelmässä varmentamalla ID-tokenin allekirjoitus (`verify_firebase_token`), audienssi (`uutisseuranta-net`), voimassaolo ja käyttäjän UID (`sub`) ([Firebase Admin Auth Docs](https://firebase.google.com/docs/auth/admin/verify-id-tokens)).
+3. **Avointen lukuohjelmien kitkattomuus (Low-Friction Open Data):** Virheellisen tai puuttuvan tokenin ohittaminen anonyyminä lukuna poistaa turhat 401-latausvirheet ja takaa avoimen datan saavutettavuuden.
+
+### Suositukset jatkokehitykseen
+- **HTTP-statuskoodit:** Käytetään selkeästi `401 Unauthorized` kun käyttäjä ei ole tunnistautunut, ja `403 Forbidden` kun autentikoidulta käyttäjältä puuttuu tietty käyttöoikeus.
+- **Lokituksen tietoturva:** Varmistetaan, ettei Authorization-otsakkeen raaka-tokeneita kirjoiteta sellaisenaan Cloud Logging -lokiin.
