@@ -483,16 +483,16 @@ function renderFeed(articles) {
         <span class="feed-item__source">${sourceName}</span>
         <span class="feed-item__time">${timeStr}</span>
         <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-2); padding:0;">+ Lisää tagi</button>
-      </div>
-      <div class="add-tag-form-container" data-id="${item.id}" style="display:none; margin-top:var(--space-2); gap:var(--space-2); align-items:center; width:100%;">
-        <input type="text" class="add-tag-input" placeholder="tiede" style="font-size:var(--text-xs); padding:var(--space-1) var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); width:120px;" aria-label="Uuden tagin nimi" />
-        <button class="btn-add-tag-submit btn-primary" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Tallenna</button>
-        <button class="btn-add-tag-cancel btn-ghost" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Peruuta</button>
         ${item.url_archive ? `
           <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-text-faint); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
             📎 Arkisto
           </a>
         ` : ''}
+      </div>
+      <div class="add-tag-form-container" data-id="${item.id}" style="display:none; margin-top:var(--space-2); gap:var(--space-2); align-items:center; width:100%;">
+        <input type="text" class="add-tag-input" placeholder="tiede" style="font-size:var(--text-xs); padding:var(--space-1) var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); width:120px;" aria-label="Uuden tagin nimi" />
+        <button class="btn-add-tag-submit btn-primary" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Tallenna</button>
+        <button class="btn-add-tag-cancel btn-ghost" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Peruuta</button>
       </div>
       <div class="feed-item__comments-section" data-id="${item.id}" style="display:none; margin-top:var(--space-4); border-top:1px solid var(--color-divider); padding-top:var(--space-4); width:100%;"></div>
     `;
@@ -870,16 +870,12 @@ async function refreshFeed() {
       await new Promise(resolve => setTimeout(resolve, 100 - elapsed));
     }
 
-    if (grid) {
-      grid.style.opacity = '1.0';
-    }
     renderFeed(articles);
     setupScrollPagination();
   } catch (err) {
     console.error("Feed loading failed:", err);
     const grid = document.getElementById('feed-grid');
     if (grid) {
-      grid.style.opacity = '1.0';
       grid.setAttribute('aria-busy', 'false');
       // Virherajapinta / Error boundary uutisvirralle (Issue #58)
       grid.innerHTML = `
@@ -905,6 +901,11 @@ async function refreshFeed() {
           renderFeed(cachedArticles);
         });
       }
+    }
+  } finally {
+    const grid = document.getElementById('feed-grid');
+    if (grid) {
+      grid.style.opacity = '1.0';
     }
   }
 }
@@ -1444,8 +1445,8 @@ function getAutocompleteMenu() {
 }
 
 function bindAutocompleteToTextarea(textarea) {
-  // TODO: Korvaa geneeriset mock-nimet dynaamisilla profiilinimillä backend-hakurajapinnasta
-  const users = ['kayttaja1', 'kayttaja2', 'kehittaja_x', 'testaaja', 'anonyymi_lukija'];
+  // Pidetään tyhjänä MVP-vaiheessa tietovuotojen välttämiseksi. Oikea mainintatuki toteutetaan Google Workspace / Directory API -integraatiolla.
+  const users = [];
   const tags = ['politiikka', 'talous', 'tiede', 'viihde', 'kotimaa', 'ulkomaat', 'kulttuuri', 'urheilu', 'sää'];
   
   const menu = getAutocompleteMenu();
@@ -1550,8 +1551,10 @@ async function updateNotificationsBadge() {
   }
   
   if (unreadCount > 0) {
+    badge.textContent = unreadCount;
     badge.classList.remove('hidden');
   } else {
     badge.classList.add('hidden');
+    badge.textContent = '';
   }
 }

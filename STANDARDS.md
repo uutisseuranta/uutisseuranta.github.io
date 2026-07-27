@@ -24,6 +24,7 @@ Tämä dokumentti määrittelee uutisseuranta-projektin käyttöliittymäkerroks
   - `Note` kommenteille
   - `Collection` uutisvirralle (Outbox/Inbox)
 - Semanttisen oikeellisuuden varmistamiseksi kaikkiin uutiskortteihin ja kommenttirakenteisiin liitetään vastaavat `data-ap-type`, `data-ap-id` ja `@context`-arvot.
+- **AS2-poikkeukset (Laajennukset):** Standardinmukaisuuden (päätös `L-003`) alla käytettävä `"type": "Hashtag"` ei ole virallinen W3C ActivityStreams 2.0:n vakioobjektityyppi, vaan de facto -laajennus (ks. ActivityPub/Mastodon-käytännöt). Se on sallittu tässä projektissa uutisartikkelien ja kommenttien kategorisointiin.
 
 ### WCAG 2.1 AA (Saavutettavuus)
 - Vaatimustenmukaisuus on organisaation linjaus (katso [DECISION_LOG.csv](file:///Users/jaakkokorhonen/uutisseuranta/DECISION_LOG.csv) -> L-004).
