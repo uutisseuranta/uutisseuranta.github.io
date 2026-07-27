@@ -42,7 +42,7 @@ jobs:
           CI: true
 
       - name: Upload Playwright Report
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea2af6b81c8a70187a9dad191 # v4.4.3
+        uses: actions/upload-artifact@b4b15b8c7c25146c59d9c2409f9872e47879e602 # v4.4.3
         if: failure()
         with:
           name: playwright-report
