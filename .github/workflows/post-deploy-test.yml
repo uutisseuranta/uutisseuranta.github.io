@@ -1,25 +1,21 @@
 name: Post-Deploy Smoke Test
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Deploy static content to Pages"]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
   smoke-test:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pages: read
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Wait for deployment
-        run: |
-          echo "Waiting 60 seconds for GitHub Pages deployment to complete..."
-          sleep 60
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run Live Smoke Test
         run: ./live-smoke-test.sh
@@ -27,15 +23,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node for Browser Test
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.2.0
         with:
           node-version: 20
+          cache: npm
 
-      - name: Install Puppeteer
-        run: |
-          npm install puppeteer
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Run Headless Chrome Test
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright Smoke Tests
         run: |
           # Resolve target URL from smoke test
           if [ -f effective_url.txt ]; then
@@ -43,8 +42,17 @@ jobs:
           else
             export EFFECTIVE_URL="https://uutisseuranta.net"
           fi
-          node live-browser-test.js
+          npx playwright test
+        env:
+          CI: true
 
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea2af6b81c8a70187a9dad191 # v4.4.3
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
 
   notify-ops:
     needs: [smoke-test]
@@ -80,4 +88,3 @@ jobs:
                 "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
               }
             }'
-
