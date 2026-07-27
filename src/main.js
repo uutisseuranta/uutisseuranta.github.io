@@ -482,7 +482,12 @@ function renderFeed(articles) {
       <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%;">
         <span class="feed-item__source">${sourceName}</span>
         <span class="feed-item__time">${timeStr}</span>
-        <button class="btn-add-tag" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-2); padding:0;">+ Lisää tagi</button>
+        <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-2); padding:0;">+ Lisää tagi</button>
+      </div>
+      <div class="add-tag-form-container" data-id="${item.id}" style="display:none; margin-top:var(--space-2); gap:var(--space-2); align-items:center; width:100%;">
+        <input type="text" class="add-tag-input" placeholder="tiede" style="font-size:var(--text-xs); padding:var(--space-1) var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); width:120px;" aria-label="Uuden tagin nimi" />
+        <button class="btn-add-tag-submit btn-primary" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Tallenna</button>
+        <button class="btn-add-tag-cancel btn-ghost" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Peruuta</button>
         ${item.url_archive ? `
           <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-text-faint); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
             📎 Arkisto
@@ -553,17 +558,15 @@ function renderFeed(articles) {
         // Pre-save previous state for rollback
         const prevReaction = activeReaction;
 
-        // Optimistic update state
+        // Optimistic update state (supports undo / re-clicking active removes reaction)
+        let newReaction = null;
         if (activeReaction === action) {
-          return; // Jo valittua reaktiota ei voi perua, ainoastaan vaihtaa
+          localStorage.removeItem(userReactionKey);
+        } else {
+          localStorage.setItem(userReactionKey, action);
+          newReaction = action;
         }
-        localStorage.setItem(userReactionKey, action);
-        newReaction = action;
 
-        // Instantly update DOM state (optimistic representation)
-        const likeBtn = card.querySelector('.btn-reaction[data-action="like"]');
-        const dislikeBtn = card.querySelector('.btn-reaction[data-action="dislike"]');
-        
         // Current counts
         let currentLikes = likesCount;
         let currentDislikes = dislikesCount;
@@ -574,12 +577,8 @@ function renderFeed(articles) {
         if (newReaction === 'Like') currentLikes++;
         if (newReaction === 'Dislike') currentDislikes++;
 
-        // Update UI elements instantly (bandwagon avoidance logic)
-        const nowHasVoted = newReaction !== null;
-        likeBtn.setAttribute('aria-pressed', newReaction === 'Like' ? 'true' : 'false');
-        likeBtn.innerHTML = `👍 Samaa mieltä${nowHasVoted ? ` (${currentLikes})` : ''}`;
-        dislikeBtn.setAttribute('aria-pressed', newReaction === 'Dislike' ? 'true' : 'false');
-        dislikeBtn.innerHTML = `👎 Eri mieltä${nowHasVoted ? ` (${currentDislikes})` : ''}`;
+        // Update UI elements instantly (using DRY renderReactionButtons helper)
+        renderReactionButtons(card, currentLikes, currentDislikes, newReaction);
 
         // Synkronoidaan uudet laskurit cachedArticles-taulukkoon (Blocker-korjaus)
         const cachedArticle = cachedArticles.find(a => a.id === articleId);
@@ -588,22 +587,6 @@ function renderFeed(articles) {
           if (!cachedArticle.dislikes) cachedArticle.dislikes = { totalItems: 0 };
           cachedArticle.likes.totalItems = currentLikes;
           cachedArticle.dislikes.totalItems = currentDislikes;
-        }
-
-        // Update the progress bar if present
-        const statsBar = card.querySelector('.vote-stats');
-        const total = currentLikes + currentDislikes;
-        if (statsBar) {
-          if (total > 0 && nowHasVoted) {
-            const agree = Math.round(currentLikes / total * 100);
-            const disagree = 100 - agree;
-            statsBar.setAttribute('aria-label', `Reaktiot: ${agree}% samaa mieltä (${currentLikes} ääntä), ${disagree}% eri mieltä (${currentDislikes} ääntä)`);
-            statsBar.querySelector('.vote-stats__segment--agree').style.flex = agree;
-            statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagree;
-            statsBar.style.display = 'flex';
-          } else {
-            statsBar.style.display = 'none';
-          }
         }
 
         // Perform network request
@@ -631,38 +614,46 @@ function renderFeed(articles) {
             cachedArticle.dislikes.totalItems = dislikesCount;
           }
 
-          // Rollback DOM elements
-          const wasVoted = prevReaction !== null;
-          likeBtn.setAttribute('aria-pressed', prevReaction === 'Like' ? 'true' : 'false');
-          likeBtn.innerHTML = `👍 Samaa mieltä${wasVoted ? ` (${likesCount})` : ''}`;
-          dislikeBtn.setAttribute('aria-pressed', prevReaction === 'Dislike' ? 'true' : 'false');
-          dislikeBtn.innerHTML = `👎 Eri mieltä${wasVoted ? ` (${dislikesCount})` : ''}`;
-          
-          if (statsBar) {
-            if (likesCount + dislikesCount > 0 && wasVoted) {
-              statsBar.setAttribute('aria-label', `Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)`);
-              statsBar.querySelector('.vote-stats__segment--agree').style.flex = agreePct;
-              statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagreePct;
-              statsBar.style.display = 'flex';
-            } else {
-              statsBar.style.display = 'none';
-            }
-          }
+          // Rollback DOM elements using DRY helper
+          renderReactionButtons(card, likesCount, dislikesCount, prevReaction);
           showNotification("Virhe reaktion tallennuksessa. Tila palautettu.", true);
         }
       });
     });
-    // User can add tag (Issue #13)
-    card.querySelectorAll('.btn-add-tag').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+    // User can add tag (Issue #13) - Inline form implementation (No prompt() / Security pattern)
+    const tagFormContainer = card.querySelector('.add-tag-form-container');
+    const addTagToggle = card.querySelector('.btn-add-tag-toggle');
+    const addTagCancel = card.querySelector('.btn-add-tag-cancel');
+    const addTagSubmit = card.querySelector('.btn-add-tag-submit');
+    const addTagInput = card.querySelector('.add-tag-input');
+    
+    if (addTagToggle && tagFormContainer) {
+      addTagToggle.addEventListener('click', (e) => {
         e.preventDefault();
         if (!auth.currentUser) {
           openLogin();
           return;
         }
-        const tagInput = prompt("Anna uusi tagi artikkelille (esim. #tiede tai tiede):");
-        if (!tagInput || !tagInput.trim()) return;
-        let formatted = tagInput.trim().toLowerCase();
+        tagFormContainer.style.display = 'flex';
+        addTagInput.focus();
+      });
+    }
+    
+    if (addTagCancel && tagFormContainer) {
+      addTagCancel.addEventListener('click', (e) => {
+        e.preventDefault();
+        tagFormContainer.style.display = 'none';
+        addTagInput.value = '';
+      });
+    }
+    
+    if (addTagSubmit && tagFormContainer) {
+      addTagSubmit.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const tagInputVal = addTagInput.value.trim();
+        if (!tagInputVal) return;
+        
+        let formatted = tagInputVal.toLowerCase();
         if (!formatted.startsWith('#')) formatted = '#' + formatted;
         
         try {
@@ -681,7 +672,10 @@ function renderFeed(articles) {
                 "type": "Hashtag",
                 "name": formatted
               },
-              "target": item.id
+              "target": {
+                "type": "Article",
+                "id": item.id
+              }
             })
           });
           if (res.ok) {
@@ -697,7 +691,7 @@ function renderFeed(articles) {
           showNotification("Virhe tagin lisäyksessä", true);
         }
       });
-    });
+    }
 
     // Comments section toggle click handler (Issue #11)
     card.querySelectorAll('.btn-comments-toggle').forEach(btn => {
@@ -1356,7 +1350,40 @@ window.deleteUserPrefs = deleteUserPrefs;
 
 
 
-// ---- ACTIVE SOURCES WIDGET DYNAMIC UPDATE (Issue #1) ----
+
+// ---- REACTION BUTTONS DRY RENDERER (Issue #20 & #21) ----
+function renderReactionButtons(card, likesCount, dislikesCount, localReaction) {
+  const likeBtn = card.querySelector('.btn-reaction[data-action="like"]');
+  const dislikeBtn = card.querySelector('.btn-reaction[data-action="dislike"]');
+  const statsBar = card.querySelector('.vote-stats');
+  if (!likeBtn || !dislikeBtn) return;
+  
+  const hasVoted = localReaction !== null;
+  likeBtn.setAttribute('aria-pressed', localReaction === 'Like' ? 'true' : 'false');
+  likeBtn.innerHTML = `👍 Samaa mieltä${hasVoted ? ` (${likesCount})` : ''}`;
+  
+  dislikeBtn.setAttribute('aria-pressed', localReaction === 'Dislike' ? 'true' : 'false');
+  dislikeBtn.innerHTML = `👎 Eri mieltä${hasVoted ? ` (${dislikesCount})` : ''}`;
+  
+  const total = likesCount + dislikesCount;
+  if (statsBar) {
+    if (total > 0 && hasVoted) {
+      const agree = Math.round(likesCount / total * 100);
+      const disagree = 100 - agree;
+      statsBar.setAttribute('aria-label', `Reaktiot: ${agree}% samaa mieltä (${likesCount} ääntä), ${disagree}% eri mieltä (${dislikesCount} ääntä)`);
+      statsBar.querySelector('.vote-stats__segment--agree').style.flex = agree;
+      statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagree;
+      statsBar.style.display = 'flex';
+    } else {
+      statsBar.style.display = 'none';
+    }
+  }
+}
+
+// ---- ACTIVE SOURCES WIDGET DYNAMIC UPDATE (Issue #1 / UP-6) ----
+// HUOMIO: loadHomepageStats() hakee globaalit kokonaistilastot BigQuery-tietokannasta,
+// kun taas tämä funktio laskee aktiiviset lähteet dynaamisesti ja reaktiivisesti
+// vain kulloinkin client-puolella suodatetun/näytettävän uutisvirran perusteella.
 function updateActiveSourcesWidget(articles) {
   const elActiveSources = document.getElementById('stat-active-sources-container');
   if (!elActiveSources) return;
@@ -1385,27 +1412,34 @@ function updateActiveSourcesWidget(articles) {
 }
 
 // ---- COMMENT AUTOCOMPLETE (Issue #14 & #15) ----
+// Autocomplete-valikon singleton-toteutus muistivuotojen estämiseksi
+let _autocompleteMenu = null;
+
+function getAutocompleteMenu() {
+  if (_autocompleteMenu) return _autocompleteMenu;
+  _autocompleteMenu = document.createElement('div');
+  _autocompleteMenu.className = 'autocomplete-menu hidden';
+  _autocompleteMenu.style.position = 'absolute';
+  _autocompleteMenu.style.background = 'var(--color-bg-offset)';
+  _autocompleteMenu.style.border = '1px solid var(--color-divider)';
+  _autocompleteMenu.style.borderRadius = 'var(--radius-sm)';
+  _autocompleteMenu.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+  _autocompleteMenu.style.zIndex = '1000';
+  _autocompleteMenu.style.maxHeight = '150px';
+  _autocompleteMenu.style.overflowY = 'auto';
+  _autocompleteMenu.style.padding = '4px 0';
+  document.body.appendChild(_autocompleteMenu);
+  return _autocompleteMenu;
+}
+
 function bindAutocompleteToTextarea(textarea) {
-  // TODO: Hae dynaamiset käyttäjänimet backendin hakurajapinnasta MVP-vaiheen jälkeen
-  const users = ['matti', 'pekka', 'jaakko', 'mari', 'antti'];
+  // TODO: Korvaa geneeriset mock-nimet dynaamisilla profiilinimillä backend-hakurajapinnasta
+  const users = ['kayttaja1', 'kayttaja2', 'kehittaja_x', 'testaaja', 'anonyymi_lukija'];
   const tags = ['politiikka', 'talous', 'tiede', 'viihde', 'kotimaa', 'ulkomaat', 'kulttuuri', 'urheilu', 'sää'];
   
-  const menu = document.createElement('div');
-  menu.className = 'autocomplete-menu';
-  menu.style.position = 'absolute';
-  menu.style.background = 'var(--color-bg-offset)';
-  menu.style.border = '1px solid var(--color-divider)';
-  menu.style.borderRadius = 'var(--radius-sm)';
-  menu.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-  menu.style.display = 'none';
-  menu.style.zIndex = '1000';
-  menu.style.maxHeight = '150px';
-  menu.style.overflowY = 'auto';
-  menu.style.padding = '4px 0';
-  document.body.appendChild(menu);
-  
-  let activeTrigger = null;
+  const menu = getAutocompleteMenu();
   let triggerIndex = -1;
+  let activeTrigger = null;
   
   textarea.addEventListener('input', () => {
     const text = textarea.value;
@@ -1428,7 +1462,7 @@ function bindAutocompleteToTextarea(textarea) {
         const rect = textarea.getBoundingClientRect();
         menu.style.left = `${rect.left + window.scrollX}px`;
         menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
-        menu.style.display = 'block';
+        menu.classList.remove('hidden');
         
         menu.innerHTML = '';
         filtered.forEach(item => {
@@ -1448,21 +1482,21 @@ function bindAutocompleteToTextarea(textarea) {
             const replacement = activeTrigger === '#' ? '#' + item : '@' + item;
             textarea.value = text.slice(0, triggerIndex) + replacement + ' ' + text.slice(cursor);
             textarea.focus();
-            menu.style.display = 'none';
+            menu.classList.add('hidden');
           });
           menu.appendChild(btn);
         });
       } else {
-        menu.style.display = 'none';
+        menu.classList.add('hidden');
       }
     } else {
-      menu.style.display = 'none';
+      menu.classList.add('hidden');
     }
   });
   
   textarea.addEventListener('blur', () => {
     setTimeout(() => {
-      menu.style.display = 'none';
+      menu.classList.add('hidden');
     }, 200);
   });
 }
@@ -1483,7 +1517,7 @@ async function updateNotificationsBadge() {
   const prefs = getPrefs();
   const followedTags = prefs.followedTags || [];
   if (followedTags.length === 0) {
-    badge.style.display = 'none';
+    badge.classList.add('hidden');
     return;
   }
   
@@ -1505,9 +1539,8 @@ async function updateNotificationsBadge() {
   }
   
   if (unreadCount > 0) {
-    badge.textContent = unreadCount;
-    badge.style.display = 'inline-flex';
+    badge.classList.remove('hidden');
   } else {
-    badge.style.display = 'none';
+    badge.classList.add('hidden');
   }
 }
