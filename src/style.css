@@ -701,5 +701,7 @@ body.view-news .view-home-only {
   outline: none;
   border-color: var(--color-primary) !important;
 }
-
-
+/* ---- UTILITIES ---- */
+.hidden {
+  display: none !important;
+}

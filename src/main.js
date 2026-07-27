@@ -248,14 +248,13 @@ async function loadHomepageStats() {
 
     const elActiveSources = document.getElementById('stat-active-sources-container');
     if (elActiveSources && data.active_sources && data.active_sources.length > 0) {
-      const escapeHtml = (str) => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
       const maxCnt = Math.max(...data.active_sources.map(s => s.cnt || 1));
       
       let html = '';
       data.active_sources.forEach(source => {
         const pct = Math.max(5, Math.round(((source.cnt || 0) / maxCnt) * 100));
         html += `<div class="vis-row">
-          <span class="vis-source-name">${escapeHtml(source.name)}</span>
+          <span class="vis-source-name">${sanitize(source.name)}</span>
           <div class="vis-bar-wrap"><div class="vis-bar" style="width:${pct}%"></div></div>
           <span class="vis-count">${source.cnt}</span>
         </div>`;
@@ -1224,12 +1223,6 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
 
   form.innerHTML = `
     <textarea class="comment-textarea" placeholder="Kirjoita kommentti..." aria-label="Uusi kommentti" style="width:100%; min-height:60px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-sm); background:var(--color-surface); color:var(--color-text); resize:vertical;"></textarea>
-  `;
-  const textarea = form.querySelector('.comment-textarea');
-  bindAutocompleteToTextarea(textarea);
-  
-  form.innerHTML = `
-    <textarea class="comment-textarea" placeholder="Kirjoita kommentti..." aria-label="Uusi kommentti" style="width:100%; min-height:60px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-sm); background:var(--color-surface); color:var(--color-text); resize:vertical;"></textarea>
     <button type="submit" class="btn btn--primary" style="align-self:flex-end; padding:var(--space-1) var(--space-3); font-size:var(--text-xs);">Lähetä kommentti</button>
   `;
   bindAutocompleteToTextarea(form.querySelector('.comment-textarea'));
@@ -1377,14 +1370,12 @@ function updateActiveSourcesWidget(articles) {
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const max = Math.max(...Object.values(counts), 1);
   
-  const escapeHtml = (str) => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
-  
   let html = '';
   sorted.forEach(([name, count]) => {
     const pct = Math.max(5, Math.round((count / max) * 100));
     html += `
       <div class="vis-row">
-        <span class="vis-source-name">${escapeHtml(name)}</span>
+        <span class="vis-source-name">${sanitize(name)}</span>
         <div class="vis-bar-wrap"><div class="vis-bar" style="width:${pct}%"></div></div>
         <span class="vis-count">${count}</span>
       </div>
@@ -1395,6 +1386,7 @@ function updateActiveSourcesWidget(articles) {
 
 // ---- COMMENT AUTOCOMPLETE (Issue #14 & #15) ----
 function bindAutocompleteToTextarea(textarea) {
+  // TODO: Hae dynaamiset käyttäjänimet backendin hakurajapinnasta MVP-vaiheen jälkeen
   const users = ['matti', 'pekka', 'jaakko', 'mari', 'antti'];
   const tags = ['politiikka', 'talous', 'tiede', 'viihde', 'kotimaa', 'ulkomaat', 'kulttuuri', 'urheilu', 'sää'];
   
@@ -1482,11 +1474,11 @@ async function updateNotificationsBadge() {
   if (!btnNotif || !badge) return;
   
   if (!auth.currentUser) {
-    btnNotif.style.display = 'none';
+    btnNotif.classList.add('hidden');
     return;
   }
   
-  btnNotif.style.display = 'inline-flex';
+  btnNotif.classList.remove('hidden');
   
   const prefs = getPrefs();
   const followedTags = prefs.followedTags || [];
