@@ -731,11 +731,14 @@ body.view-news .view-home-only {
   right: 4px;
   background: var(--color-primary);
   color: white;
-  font-size: 14px;
+  /* Käytetään var(--text-xs) absoluuttisen px-arvon sijaan,
+     jotta teksti ei ylivuoda badgen reunojen yli 2-numeroisilla luvuilla (esim. 12) */
+  font-size: var(--text-xs);
   font-weight: bold;
   border-radius: 50%;
-  width: 16px;
-  height: 16px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
