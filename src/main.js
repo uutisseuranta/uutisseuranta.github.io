@@ -117,6 +117,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     await loadPrefs();
+    updateNotificationsBadge();
 
     // Check for pending comment (Issue #11)
     const pendingArticleId = localStorage.getItem('pending_comment_article_id');
@@ -150,6 +151,7 @@ onAuthStateChanged(auth, async (user) => {
     userAvatar.src = '';
 
     await loadPrefs();
+    updateNotificationsBadge();
   }
 });
 
@@ -246,14 +248,13 @@ async function loadHomepageStats() {
 
     const elActiveSources = document.getElementById('stat-active-sources-container');
     if (elActiveSources && data.active_sources && data.active_sources.length > 0) {
-      const escapeHtml = (str) => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
       const maxCnt = Math.max(...data.active_sources.map(s => s.cnt || 1));
       
       let html = '';
       data.active_sources.forEach(source => {
         const pct = Math.max(5, Math.round(((source.cnt || 0) / maxCnt) * 100));
         html += `<div class="vis-row">
-          <span class="vis-source-name">${escapeHtml(source.name)}</span>
+          <span class="vis-source-name">${sanitize(source.name)}</span>
           <div class="vis-bar-wrap"><div class="vis-bar" style="width:${pct}%"></div></div>
           <span class="vis-count">${source.cnt}</span>
         </div>`;
@@ -452,25 +453,26 @@ function renderFeed(articles) {
     // Reacting states - prefix with uid if authenticated to prevent cross-user leak (Issue #20 / L-015)
     const reactionKey = auth.currentUser ? `reaction_${auth.currentUser.uid}_${item.id}` : `reaction_${item.id}`;
     let localReaction = localStorage.getItem(reactionKey) || null;
+    const hasVoted = localReaction !== null;
 
     card.innerHTML = `
       ${isLead ? `<a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
       <h3 class="feed-item__title"><a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       
-      ${hasReactions ? `
-        <div class="vote-stats" role="img" aria-label="Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)">
+      ${(hasReactions && hasVoted) ? `
+        <div class="vote-stats" role="img" aria-label="Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)" style="display: flex;">
           <div class="vote-stats__segment vote-stats__segment--agree" style="flex: ${agreePct}"></div>
           <div class="vote-stats__segment vote-stats__segment--disagree" style="flex: ${disagreePct}"></div>
         </div>
-      ` : ''}
+      ` : `<div class="vote-stats" style="display:none;"><div class="vote-stats__segment vote-stats__segment--agree"></div><div class="vote-stats__segment vote-stats__segment--disagree"></div></div>`}
 
       <div class="reaction-container">
         <button class="btn-reaction" data-action="like" data-id="${item.id}" aria-pressed="${localReaction === 'Like' ? 'true' : 'false'}">
-          👍 Samaa mieltä (${likesCount})
+          👍 Samaa mieltä ${hasVoted ? `(${likesCount})` : ''}
         </button>
         <button class="btn-reaction" data-action="dislike" data-id="${item.id}" aria-pressed="${localReaction === 'Dislike' ? 'true' : 'false'}">
-          👎 Eri mieltä (${dislikesCount})
+          👎 Eri mieltä ${hasVoted ? `(${dislikesCount})` : ''}
         </button>
         <button class="btn-comments-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto; background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px;">
           💬 Kommentit (${commentCount})
@@ -480,11 +482,17 @@ function renderFeed(articles) {
       <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%;">
         <span class="feed-item__source">${sourceName}</span>
         <span class="feed-item__time">${timeStr}</span>
+        <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-2); padding:0;">+ Lisää tagi</button>
         ${item.url_archive ? `
           <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-text-faint); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
             📎 Arkisto
           </a>
         ` : ''}
+      </div>
+      <div class="add-tag-form-container" data-id="${item.id}" style="display:none; margin-top:var(--space-2); gap:var(--space-2); align-items:center; width:100%;">
+        <input type="text" class="add-tag-input" placeholder="tiede" style="font-size:var(--text-xs); padding:var(--space-1) var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); width:120px;" aria-label="Uuden tagin nimi" />
+        <button class="btn-add-tag-submit btn-primary" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Tallenna</button>
+        <button class="btn-add-tag-cancel btn-ghost" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Peruuta</button>
       </div>
       <div class="feed-item__comments-section" data-id="${item.id}" style="display:none; margin-top:var(--space-4); border-top:1px solid var(--color-divider); padding-top:var(--space-4); width:100%;"></div>
     `;
@@ -550,7 +558,7 @@ function renderFeed(articles) {
         // Pre-save previous state for rollback
         const prevReaction = activeReaction;
 
-        // Optimistic update state
+        // Optimistic update state (supports undo / re-clicking active removes reaction)
         let newReaction = null;
         if (activeReaction === action) {
           localStorage.removeItem(userReactionKey);
@@ -559,10 +567,6 @@ function renderFeed(articles) {
           newReaction = action;
         }
 
-        // Instantly update DOM state (optimistic representation)
-        const likeBtn = card.querySelector('.btn-reaction[data-action="like"]');
-        const dislikeBtn = card.querySelector('.btn-reaction[data-action="dislike"]');
-        
         // Current counts
         let currentLikes = likesCount;
         let currentDislikes = dislikesCount;
@@ -573,11 +577,8 @@ function renderFeed(articles) {
         if (newReaction === 'Like') currentLikes++;
         if (newReaction === 'Dislike') currentDislikes++;
 
-        // Update UI elements instantly
-        likeBtn.setAttribute('aria-pressed', newReaction === 'Like' ? 'true' : 'false');
-        likeBtn.innerHTML = `👍 Samaa mieltä (${currentLikes})`;
-        dislikeBtn.setAttribute('aria-pressed', newReaction === 'Dislike' ? 'true' : 'false');
-        dislikeBtn.innerHTML = `👎 Eri mieltä (${currentDislikes})`;
+        // Update UI elements instantly (using DRY renderReactionButtons helper)
+        renderReactionButtons(card, currentLikes, currentDislikes, newReaction);
 
         // Synkronoidaan uudet laskurit cachedArticles-taulukkoon (Blocker-korjaus)
         const cachedArticle = cachedArticles.find(a => a.id === articleId);
@@ -586,22 +587,6 @@ function renderFeed(articles) {
           if (!cachedArticle.dislikes) cachedArticle.dislikes = { totalItems: 0 };
           cachedArticle.likes.totalItems = currentLikes;
           cachedArticle.dislikes.totalItems = currentDislikes;
-        }
-
-        // Update the progress bar if present
-        const statsBar = card.querySelector('.vote-stats');
-        const total = currentLikes + currentDislikes;
-        if (statsBar) {
-          if (total > 0) {
-            const agree = Math.round(currentLikes / total * 100);
-            const disagree = 100 - agree;
-            statsBar.setAttribute('aria-label', `Reaktiot: ${agree}% samaa mieltä (${currentLikes} ääntä), ${disagree}% eri mieltä (${currentDislikes} ääntä)`);
-            statsBar.querySelector('.vote-stats__segment--agree').style.flex = agree;
-            statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagree;
-            statsBar.style.display = 'flex';
-          } else {
-            statsBar.style.display = 'none';
-          }
         }
 
         // Perform network request
@@ -629,26 +614,85 @@ function renderFeed(articles) {
             cachedArticle.dislikes.totalItems = dislikesCount;
           }
 
-          // Rollback DOM elements
-          likeBtn.setAttribute('aria-pressed', prevReaction === 'Like' ? 'true' : 'false');
-          likeBtn.innerHTML = `👍 Samaa mieltä (${likesCount})`;
-          dislikeBtn.setAttribute('aria-pressed', prevReaction === 'Dislike' ? 'true' : 'false');
-          dislikeBtn.innerHTML = `👎 Eri mieltä (${dislikesCount})`;
-          
-          if (statsBar) {
-            if (likesCount + dislikesCount > 0) {
-              statsBar.setAttribute('aria-label', `Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)`);
-              statsBar.querySelector('.vote-stats__segment--agree').style.flex = agreePct;
-              statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagreePct;
-              statsBar.style.display = 'flex';
-            } else {
-              statsBar.style.display = 'none';
-            }
-          }
+          // Rollback DOM elements using DRY helper
+          renderReactionButtons(card, likesCount, dislikesCount, prevReaction);
           showNotification("Virhe reaktion tallennuksessa. Tila palautettu.", true);
         }
       });
     });
+    // User can add tag (Issue #13) - Inline form implementation (No prompt() / Security pattern)
+    const tagFormContainer = card.querySelector('.add-tag-form-container');
+    const addTagToggle = card.querySelector('.btn-add-tag-toggle');
+    const addTagCancel = card.querySelector('.btn-add-tag-cancel');
+    const addTagSubmit = card.querySelector('.btn-add-tag-submit');
+    const addTagInput = card.querySelector('.add-tag-input');
+    
+    if (addTagToggle && tagFormContainer) {
+      addTagToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!auth.currentUser) {
+          openLogin();
+          return;
+        }
+        tagFormContainer.style.display = 'flex';
+        addTagInput.focus();
+      });
+    }
+    
+    if (addTagCancel && tagFormContainer) {
+      addTagCancel.addEventListener('click', (e) => {
+        e.preventDefault();
+        tagFormContainer.style.display = 'none';
+        addTagInput.value = '';
+      });
+    }
+    
+    if (addTagSubmit && tagFormContainer) {
+      addTagSubmit.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const tagInputVal = addTagInput.value.trim();
+        if (!tagInputVal) return;
+        
+        let formatted = tagInputVal.toLowerCase();
+        if (!formatted.startsWith('#')) formatted = '#' + formatted;
+        
+        try {
+          const token = await auth.currentUser.getIdToken();
+          const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              "@context": "https://www.w3.org/ns/activitystreams",
+              "type": "Add",
+              "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+              "object": {
+                "type": "Hashtag",
+                "name": formatted
+              },
+              "target": {
+                "type": "Article",
+                "id": item.id
+              }
+            })
+          });
+          if (res.ok) {
+            showNotification(`Tagi ${formatted} lisätty uutiselle!`);
+            if (!item.tag) item.tag = [];
+            item.tag.push({ type: "Hashtag", name: formatted });
+            refreshFeed();
+          } else {
+            showNotification("Tagin lisääminen epäonnistui", true);
+          }
+        } catch (err) {
+          console.error("Error adding tag:", err);
+          showNotification("Virhe tagin lisäyksessä", true);
+        }
+      });
+    }
+
     // Comments section toggle click handler (Issue #11)
     card.querySelectorAll('.btn-comments-toggle').forEach(btn => {
       btn.addEventListener('click', async (e) => {
@@ -674,6 +718,7 @@ function renderFeed(articles) {
 
     grid.appendChild(card);
   });
+  updateActiveSourcesWidget(articles);
 }
 
 // ---- SEND ACTIONS TO WRITE API (Issue #20) ----
@@ -797,13 +842,20 @@ async function refreshFeed() {
   }
 
   const grid = document.getElementById('feed-grid');
+  const isInitialLoad = grid && (!grid.children.length || grid.querySelector('.skeleton-card'));
+  
   if (grid) {
-    grid.innerHTML = `
-      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
-      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
-      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
-    `;
     grid.setAttribute('aria-busy', 'true');
+    if (isInitialLoad) {
+      grid.innerHTML = `
+        <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+        <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+        <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+      `;
+    } else {
+      // Visuaalinen indikaattori lataukselle pitäen nykyisen sisällön näkyvissä
+      grid.style.opacity = '0.6';
+    }
   }
 
   const startTime = Date.now();
@@ -849,6 +901,11 @@ async function refreshFeed() {
           renderFeed(cachedArticles);
         });
       }
+    }
+  } finally {
+    const grid = document.getElementById('feed-grid');
+    if (grid) {
+      grid.style.opacity = '1.0';
     }
   }
 }
@@ -1111,14 +1168,14 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
       commentDiv.innerHTML = `
         <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2);">
           <img src="${actorPic}" alt="" style="width:24px; height:24px; border-radius:50%;" />
-          <strong style="font-size:var(--text-sm);">${actorName}</strong>
+          <strong style="font-size:var(--text-sm);">${sanitize(actorName)}</strong>
           <time datetime="${cObj.published}" style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto;">${timeAgo}</time>
         </div>
-        <p style="font-size:var(--text-sm); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${cObj.content}</p>
+        <p style="font-size:var(--text-sm); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${sanitize(cObj.content)}</p>
         <div style="display:flex; gap:var(--space-2); align-items:center;">
-          <button class="btn-comment-reply" data-parent-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
-          <button class="btn-comment-agree" data-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0; margin-left:auto;">👍 Samaa mieltä (${cObj.like_count || 0})</button>
-          <button class="btn-comment-disagree" data-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0;">👎 Eri mieltä (${cObj.dislike_count || 0})</button>
+          <button class="btn-comment-reply" data-parent-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
+          <button class="btn-comment-agree" data-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0; margin-left:auto;">👍 Samaa mieltä (${cObj.like_count || 0})</button>
+          <button class="btn-comment-disagree" data-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0;">👎 Eri mieltä (${cObj.dislike_count || 0})</button>
         </div>
         <div class="replies-container" style="margin-left:var(--space-6); margin-top:var(--space-3); display:flex; flex-direction:column; gap:var(--space-2); border-left:2px solid var(--color-divider); padding-left:var(--space-3);">
           <!-- Vastaukset rendataan tähän -->
@@ -1130,7 +1187,7 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
 
       childReplies.forEach(reply => {
         const rObj = reply.object;
-        const rActorName = rObj.attributedTo ? rObj.attributedTo.split('/').pop() : 'Käyttäjä';
+        const rActorName = rObj.attributedTo ? sanitize(rObj.attributedTo.split('/').pop()) : 'Käyttäjä';
         const rTimeAgo = new Date(rObj.published).toLocaleString('fi-FI');
 
         const replyDiv = document.createElement('div');
@@ -1146,9 +1203,9 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
             <strong style="font-size:var(--text-xs);">${rActorName}</strong>
             <time datetime="${rObj.published}" style="font-size:var(--text-xxs); color:var(--color-text-faint); margin-left:auto;">${rTimeAgo}</time>
           </div>
-          <p style="font-size:var(--text-xs); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${rObj.content}</p>
+          <p style="font-size:var(--text-xs); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${sanitize(rObj.content)}</p>
           <div style="display:flex; gap:var(--space-2); align-items:center;">
-            <button class="btn-comment-reply-l2" data-parent-id="${cObj.id}" style="font-size:var(--text-xxs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
+            <button class="btn-comment-reply-l2" data-parent-id="${sanitize(cObj.id)}" style="font-size:var(--text-xxs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
           </div>
         `;
         repliesContainer.appendChild(replyDiv);
@@ -1174,6 +1231,14 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
     <textarea class="comment-textarea" placeholder="Kirjoita kommentti..." aria-label="Uusi kommentti" style="width:100%; min-height:60px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-sm); background:var(--color-surface); color:var(--color-text); resize:vertical;"></textarea>
     <button type="submit" class="btn btn--primary" style="align-self:flex-end; padding:var(--space-1) var(--space-3); font-size:var(--text-xs);">Lähetä kommentti</button>
   `;
+
+  // Kerätään viestiketjun kommentoijien nimet autocompletea varten ja sanitoidaan ne XSS:n estämiseksi
+  const threadUsers = Array.from(new Set(
+    replies
+      .map(r => sanitize((r.object && r.object.attributedTo ? r.object.attributedTo : '').split('/').pop()))
+      .filter(name => name && name !== 'Käyttäjä')
+  ));
+  bindAutocompleteToTextarea(form.querySelector('.comment-textarea'), threadUsers);
 
   // Palautetaan mahdollisesti välimuistissa oleva kirjoitus Google-kirjautumisen jälkeen
   const pendingKey = `pending_comment_${articleId}`;
@@ -1303,3 +1368,200 @@ window.deleteUserPrefs = deleteUserPrefs;
 
 
 
+
+
+// ---- REACTION BUTTONS DRY RENDERER (Issue #20 & #21) ----
+function renderReactionButtons(card, likesCount, dislikesCount, localReaction) {
+  const likeBtn = card.querySelector('.btn-reaction[data-action="like"]');
+  const dislikeBtn = card.querySelector('.btn-reaction[data-action="dislike"]');
+  const statsBar = card.querySelector('.vote-stats');
+  if (!likeBtn || !dislikeBtn) return;
+  
+  const hasVoted = localReaction !== null;
+  likeBtn.setAttribute('aria-pressed', localReaction === 'Like' ? 'true' : 'false');
+  likeBtn.innerHTML = `👍 Samaa mieltä${hasVoted ? ` (${likesCount})` : ''}`;
+  
+  dislikeBtn.setAttribute('aria-pressed', localReaction === 'Dislike' ? 'true' : 'false');
+  dislikeBtn.innerHTML = `👎 Eri mieltä${hasVoted ? ` (${dislikesCount})` : ''}`;
+  
+  const total = likesCount + dislikesCount;
+  if (statsBar) {
+    if (total > 0 && hasVoted) {
+      const agree = Math.round(likesCount / total * 100);
+      const disagree = 100 - agree;
+      statsBar.setAttribute('aria-label', `Reaktiot: ${agree}% samaa mieltä (${likesCount} ääntä), ${disagree}% eri mieltä (${dislikesCount} ääntä)`);
+      statsBar.querySelector('.vote-stats__segment--agree').style.flex = agree;
+      statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagree;
+      statsBar.style.display = 'flex';
+    } else {
+      statsBar.style.display = 'none';
+    }
+  }
+}
+
+// ---- ACTIVE SOURCES WIDGET DYNAMIC UPDATE (Issue #1 / UP-6) ----
+// HUOMIO: loadHomepageStats() hakee globaalit kokonaistilastot BigQuery-tietokannasta,
+// kun taas tämä funktio laskee aktiiviset lähteet dynaamisesti ja reaktiivisesti
+// vain kulloinkin client-puolella suodatetun/näytettävän uutisvirran perusteella.
+function updateActiveSourcesWidget(articles) {
+  const elActiveSources = document.getElementById('stat-active-sources-container');
+  if (!elActiveSources) return;
+  
+  const counts = {};
+  articles.forEach(item => {
+    const sourceName = item.attributedTo && item.attributedTo.name ? item.attributedTo.name : 'Uutislähde';
+    counts[sourceName] = (counts[sourceName] || 0) + 1;
+  });
+  
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const max = Math.max(...Object.values(counts), 1);
+  
+  let html = '';
+  sorted.forEach(([name, count]) => {
+    const pct = Math.max(5, Math.round((count / max) * 100));
+    html += `
+      <div class="vis-row">
+        <span class="vis-source-name">${sanitize(name)}</span>
+        <div class="vis-bar-wrap"><div class="vis-bar" style="width:${pct}%"></div></div>
+        <span class="vis-count">${count}</span>
+      </div>
+    `;
+  });
+  elActiveSources.innerHTML = html;
+}
+
+// ---- COMMENT AUTOCOMPLETE (Issue #14 & #15) ----
+// Autocomplete-valikon singleton-toteutus muistivuotojen estämiseksi
+let _autocompleteMenu = null;
+
+function getAutocompleteMenu() {
+  if (_autocompleteMenu) return _autocompleteMenu;
+  _autocompleteMenu = document.createElement('div');
+  _autocompleteMenu.className = 'autocomplete-menu hidden';
+  _autocompleteMenu.style.position = 'absolute';
+  _autocompleteMenu.style.background = 'var(--color-bg-offset)';
+  _autocompleteMenu.style.border = '1px solid var(--color-divider)';
+  _autocompleteMenu.style.borderRadius = 'var(--radius-sm)';
+  _autocompleteMenu.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+  _autocompleteMenu.style.zIndex = '1000';
+  _autocompleteMenu.style.maxHeight = '150px';
+  _autocompleteMenu.style.overflowY = 'auto';
+  _autocompleteMenu.style.padding = '4px 0';
+  document.body.appendChild(_autocompleteMenu);
+  return _autocompleteMenu;
+}
+
+function bindAutocompleteToTextarea(textarea, customUsers = []) {
+  // Käytetään ainoastaan viestiketjun aktiivisia kommentoijia
+  const users = Array.from(new Set(customUsers));
+  const tags = ['politiikka', 'talous', 'tiede', 'viihde', 'kotimaa', 'ulkomaat', 'kulttuuri', 'urheilu', 'sää'];
+  
+  const menu = getAutocompleteMenu();
+  let triggerIndex = -1;
+  let activeTrigger = null;
+  
+  textarea.addEventListener('input', () => {
+    const text = textarea.value;
+    const cursor = textarea.selectionStart;
+    const beforeCursor = text.slice(0, cursor);
+    
+    const lastAt = beforeCursor.lastIndexOf('@');
+    const lastHash = beforeCursor.lastIndexOf('#');
+    const lastTriggerIndex = Math.max(lastAt, lastHash);
+    
+    if (lastTriggerIndex !== -1 && lastTriggerIndex >= beforeCursor.lastIndexOf(' ')) {
+      activeTrigger = beforeCursor[lastTriggerIndex];
+      triggerIndex = lastTriggerIndex;
+      const query = beforeCursor.slice(triggerIndex + 1).toLowerCase();
+      
+      const list = activeTrigger === '@' ? users : tags;
+      const filtered = list.filter(item => item.startsWith(query));
+      
+      if (filtered.length > 0) {
+        const rect = textarea.getBoundingClientRect();
+        menu.style.left = `${rect.left + window.scrollX}px`;
+        menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+        menu.classList.remove('hidden');
+        
+        menu.innerHTML = '';
+        filtered.forEach(item => {
+          const btn = document.createElement('button');
+          btn.style.width = '100%';
+          btn.style.textAlign = 'left';
+          btn.style.padding = 'var(--space-1) var(--space-2)';
+          btn.style.background = 'none';
+          btn.style.border = 'none';
+          btn.style.color = 'var(--color-text)';
+          btn.style.cursor = 'pointer';
+          btn.style.fontSize = 'var(--text-xs)';
+          btn.textContent = activeTrigger === '#' ? '#' + item : '@' + item;
+          
+          btn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const replacement = activeTrigger === '#' ? '#' + item : '@' + item;
+            textarea.value = text.slice(0, triggerIndex) + replacement + ' ' + text.slice(cursor);
+            textarea.focus();
+            menu.classList.add('hidden');
+          });
+          menu.appendChild(btn);
+        });
+      } else {
+        menu.classList.add('hidden');
+      }
+    } else {
+      menu.classList.add('hidden');
+    }
+  });
+  
+  textarea.addEventListener('blur', () => {
+    setTimeout(() => {
+      menu.classList.add('hidden');
+    }, 200);
+  });
+}
+
+// ---- IN-APP NOTIFICATIONS BADGE (Issue #4) ----
+async function updateNotificationsBadge() {
+  const btnNotif = document.getElementById('btn-notifications');
+  const badge = document.getElementById('notification-badge');
+  if (!btnNotif || !badge) return;
+  
+  if (!auth.currentUser) {
+    btnNotif.classList.add('hidden');
+    return;
+  }
+  
+  btnNotif.classList.remove('hidden');
+  
+  const prefs = getPrefs();
+  const followedTags = prefs.followedTags || [];
+  if (followedTags.length === 0) {
+    badge.classList.add('hidden');
+    return;
+  }
+  
+  let unreadCount = 0;
+  try {
+    const articles = cachedArticles || await fetchOutbox(null, 50);
+    followedTags.forEach(tag => {
+      const tagArticles = articles.filter(item => item.tag && item.tag.some(t => t.name.toLowerCase() === tag.toLowerCase()));
+      if (tagArticles.length > 0) {
+        const newestId = tagArticles[0].id;
+        const lastSeen = localStorage.getItem(`seen_${auth.currentUser.uid}_${tag}`);
+        if (lastSeen !== newestId) {
+          unreadCount++;
+        }
+      }
+    });
+  } catch (e) {
+    console.warn("Unread badge update check failed:", e);
+  }
+  
+  if (unreadCount > 0) {
+    badge.textContent = unreadCount;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+    badge.textContent = '';
+  }
+}

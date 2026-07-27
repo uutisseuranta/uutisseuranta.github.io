@@ -19,7 +19,7 @@ import {
   deleteUserPrefs
 } from './prefs.js';
 
-import { getAuth, signOut, deleteUser } from 'firebase/auth';
+import { getAuth, signOut, deleteUser, reauthenticateWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
 let _user    = null;
 let _modal   = null;
@@ -214,15 +214,12 @@ function _renderContent() {
   // Poista tili (GDPR L-012)
   body.querySelector('#btn-delete-account')?.addEventListener('click', () => {
     showConfirm("Haluatko varmasti poistaa tilisi ja kaikki asetuksesi pysyvästi? Tätä toimintoa ei voi peruuttaa.", async () => {
-      try {
+      const performDeletion = async () => {
         const uid = _user.uid;
-        
         // 1. Firestore-preferenssit ensin (varmistetaan ennen kuin auth-oikeudet poistuvat)
         await deleteUserPrefs();
-        
         // 2. Firebase Auth toiseksi
         await deleteUser(_user);
-        
         // 3. Paikallinen siivous kolmanneksi (GDPR / selective clean to avoid wiping unrelated keys)
         localStorage.removeItem(`prefs_${uid}`);
         localStorage.removeItem(`seen_${uid}`);
@@ -240,10 +237,22 @@ function _renderContent() {
         showToast("Tili ja kaikki asetuksesi on poistettu onnistuneesti.");
         closeProfileModal();
         setTimeout(() => window.location.reload(), 1500);
+      };
+
+      try {
+        await performDeletion();
       } catch (err) {
         console.error("Tilin poisto epäonnistui", err);
         if (err.code === 'auth/requires-recent-login') {
-          showToast("Tämä toiminto vaatii äskettäisen sisäänkirjautumisen. Kirjaudu uudelleen sisään ja yritä tilin poistoa uudelleen.", true);
+          showToast("Uudelleenvarmistetaan kirjautuminen...", false);
+          try {
+            const provider = new GoogleAuthProvider();
+            await reauthenticateWithPopup(_user, provider);
+            await performDeletion();
+          } catch (reauthErr) {
+            console.error("Uudelleenautentikointi epäonnistui", reauthErr);
+            showToast("Tunnistautuminen epäonnistui: " + reauthErr.message, true);
+          }
         } else {
           showToast("Tilin poistaminen epäonnistui: " + err.message, true);
         }

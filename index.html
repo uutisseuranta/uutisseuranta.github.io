@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com https://picsum.photos; connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://*.google-analytics.com https://query-api-7y62heo36a-lz.a.run.app https://write-api-7y62heo36a-lz.a.run.app;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com https://picsum.photos; connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://*.google-analytics.com https://query-api-7y62heo36a-lz.a.run.app https://write-api-7y62heo36a-lz.a.run.app https://query-api-754758809337.europe-north1.run.app https://write-api-754758809337.europe-north1.run.app;">
   <title>Uutisseuranta – Seuraa uutisia älykkäästi</title>
   <meta name="description" content="Uutisseuranta auttaa sinua seuraamaan tärkeimpiä uutisia yhdessä paikassa. Älykäs uutisaggregaattori suomalaisille.">
 
@@ -34,6 +34,10 @@
       <div class="nav__actions">
         <button class="btn-theme" data-theme-toggle aria-label="Vaihda teemaa">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </button>
+        <button class="btn-notifications hidden" id="btn-notifications" aria-label="Ilmoitukset">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notification-badge hidden" id="notification-badge">●</span>
         </button>
         <div id="auth-container">
           <button id="btn-login" class="btn-primary">Kirjaudu</button>

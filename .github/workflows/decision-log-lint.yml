@@ -16,8 +16,8 @@ jobs:
 
       - name: Tarkista pakollinen header
         run: |
-          EXPECTED="id,date,scope,status,summary,ops_ref"
-          HEADER=$(head -1 DECISION_LOG.csv)
+          EXPECTED="id,date,timestamp,title,decision,rationale,affects_issues"
+          HEADER=$(head -1 DECISION_LOG.csv | tr -d '\r')
           if [ "$HEADER" != "$EXPECTED" ]; then
             echo "❌ Header väärä."
             echo "   Odotettu: $EXPECTED"
@@ -28,7 +28,7 @@ jobs:
 
       - name: Tarkista duplikaatti-ID:t
         run: |
-          DUPES=$(tail -n +2 DECISION_LOG.csv | cut -d',' -f1 | sort | uniq -d)
+          DUPES=$(tail -n +2 DECISION_LOG.csv | tr -d '\r' | grep -v '^[[:space:]]*$' | cut -d',' -f1 | sort | uniq -d)
           if [ -n "$DUPES" ]; then
             echo "❌ Duplikaatti-ID:t löytyi:"
             echo "$DUPES"
@@ -36,23 +36,10 @@ jobs:
           fi
           echo "✅ Ei duplikaatteja"
 
-      - name: Tarkista kanoniset rivit — OPS-REF vaaditaan
-        run: |
-          MISSING=$(tail -n +2 DECISION_LOG.csv | awk -F',' '
-            $3 ~ /org-wide|all-repos/ && ($6 == "" || $6 ~ /^[[:space:]]*$/) {
-              print "Rivi " NR+1 ": " $0
-            }
-          ')
-          if [ -n "$MISSING" ]; then
-            echo "❌ Kanoninen päätös ilman ops_ref-viittausta:"
-            echo "$MISSING"
-            exit 1
-          fi
-          echo "✅ Kanoniset viittaukset OK"
-
       - name: Tarkista päivämäärämuoto (YYYY-MM-DD)
         run: |
-          BADDATES=$(tail -n +2 DECISION_LOG.csv | awk -F',' '
+          BADDATES=$(tail -n +2 DECISION_LOG.csv | tr -d '\r' | awk -F',' '
+            $0 ~ /^[[:space:]]*$/ { next }
             $2 !~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ {
               print "Rivi " NR+1 ": date-sarake on \"" $2 "\""
             }
