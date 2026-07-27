@@ -134,6 +134,12 @@ btnProfile.addEventListener('click', () => {
   openProfileModal();
 });
 
+// Korjataan profiilikuvan latausvirheet ilman inline-käsittelijää (CSP)
+userAvatar.addEventListener('error', () => {
+  userAvatar.style.display = 'none';
+  userAvatar.nextElementSibling.style.display = 'block';
+});
+
 // Kytketään teeman vaihto (theme toggle) prefs-moduulin ohjaamaksi.
 // Korvataan inline-klikkaaja kun app.js on latautunut, jotta saadaan Firestore-synkronointi toimimaan.
 const btnTheme = document.querySelector('[data-theme-toggle]');
