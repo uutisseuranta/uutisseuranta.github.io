@@ -268,6 +268,8 @@ loadHomepageStats();
 
 let currentTagFilter = null;
 let cachedArticles = [];
+let currentFeedLimit = 5;
+let feedObserver = null;
 
 // ---- PWA SERVICE WORKER REGISTRATION (Issue #19 / L-011) ----
 if ('serviceWorker' in navigator && !import.meta.env.DEV) {
@@ -312,10 +314,12 @@ function showNotification(message, isError = false) {
 }
 
 // ---- FETCH OUTBOX WITH RATE-LIMIT HANDLING (Issue #60 / L-011) ----
-async function fetchOutbox(tag = null, retryCount = 0) {
+async function fetchOutbox(tag = null, limit = 50, retryCount = 0) {
   let url = `${QUERY_API_URL}/ap/outbox`;
+  let params = [];
+  
   if (tag) {
-    url += `?tag=${encodeURIComponent(tag)}`;
+    params.push(`tag=${encodeURIComponent(tag)}`);
   } else {
     // Jos suodatinta ei ole valittu ("Kaikki"-näkymä), haetaan käyttäjän seuratut tagit
     // tai käytetään oletustageja jos lista on tyhjä, jotta backend ei anna 400 Bad Request -virhettä.
@@ -324,9 +328,11 @@ async function fetchOutbox(tag = null, retryCount = 0) {
       ? prefs.followedTags
       : ['#politiikka', '#talous', '#tiede', '#viihde', '#ulkomaat', '#kotimaa', '#kulttuuri', '#urheilu', '#sää'];
     
-    const params = tagsToQuery.map(t => `tag=${encodeURIComponent(t)}`).join('&');
-    url += `?${params}`;
+    tagsToQuery.forEach(t => params.push(`tag=${encodeURIComponent(t)}`));
   }
+  
+  params.push(`n=${limit}`);
+  url += `?${params.join('&')}`;
 
   const headers = {};
   const user = auth.currentUser;
@@ -353,7 +359,7 @@ async function fetchOutbox(tag = null, retryCount = 0) {
         
         console.warn(`Rate limited (429). Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
-        return fetchOutbox(tag, retryCount + 1);
+        return fetchOutbox(tag, limit, retryCount + 1);
       }
       throw new Error('Liian monta pyyntöä (Rate limit). Yritä hetken kuluttua uudelleen.');
     }
@@ -779,6 +785,18 @@ function renderTagCloud(articles) {
 }
 
 async function refreshFeed() {
+  currentFeedLimit = 5;
+  if (feedObserver) {
+    feedObserver.disconnect();
+    feedObserver = null;
+  }
+
+  // Piilotetaan tagipilvi aluksi (Issue #10: tagipilvi näytetään vasta kun 500 artikkelia on haettu)
+  const tagCloudContainer = document.getElementById('tag-cloud');
+  if (tagCloudContainer) {
+    tagCloudContainer.style.display = 'none';
+  }
+
   const grid = document.getElementById('feed-grid');
   if (grid) {
     grid.innerHTML = `
@@ -792,7 +810,7 @@ async function refreshFeed() {
   const startTime = Date.now();
 
   try {
-    const articles = await fetchOutbox(currentTagFilter);
+    const articles = await fetchOutbox(currentTagFilter, currentFeedLimit);
     cachedArticles = articles;
 
     // Varmistetaan, että skeleton-loader näkyy vähintään 100ms (UX-vaatimus / Issue #12)
@@ -802,9 +820,7 @@ async function refreshFeed() {
     }
 
     renderFeed(articles);
-    if (!currentTagFilter) {
-      renderTagCloud(articles);
-    }
+    setupScrollPagination();
   } catch (err) {
     console.error("Feed loading failed:", err);
     const grid = document.getElementById('feed-grid');
@@ -834,6 +850,107 @@ async function refreshFeed() {
           renderFeed(cachedArticles);
         });
       }
+    }
+  }
+}
+
+function setupScrollPagination() {
+  if (feedObserver) {
+    feedObserver.disconnect();
+    feedObserver = null;
+  }
+
+  const grid = document.getElementById('feed-grid');
+  if (!grid) return;
+
+  const cards = grid.querySelectorAll('.feed-item');
+  if (cards.length === 0) return;
+
+  if (currentFeedLimit === 5) {
+    // Luodaan sentinel-elementti uutisvirran loppuun
+    let sentinel = document.getElementById('feed-sentinel');
+    if (!sentinel) {
+      sentinel = document.createElement('div');
+      sentinel.id = 'feed-sentinel';
+      sentinel.style.height = '10px';
+      sentinel.style.gridColumn = '1 / -1';
+      grid.appendChild(sentinel);
+    }
+    
+    feedObserver = new IntersectionObserver(async (entries) => {
+      if (entries[0].isIntersecting && currentFeedLimit === 5) {
+        feedObserver.disconnect();
+        feedObserver = null;
+        sentinel.remove();
+        await loadMoreFeed(50);
+      }
+    }, { threshold: 0.1 });
+    
+    feedObserver.observe(sentinel);
+  } else if (currentFeedLimit === 50) {
+    // Tarkkaillaan 30. artikkelikorttia (indeksi 29)
+    if (cards.length >= 30) {
+      const targetCard = cards[29];
+      feedObserver = new IntersectionObserver(async (entries) => {
+        if (entries[0].isIntersecting && currentFeedLimit === 50) {
+          feedObserver.disconnect();
+          feedObserver = null;
+          await loadMoreFeed(500);
+        }
+      }, { threshold: 0.1 });
+      feedObserver.observe(targetCard);
+    } else {
+      // Jos palvelin palautti vähemmän kuin 30 artikkelia, ollaan uutisten lopussa
+      currentFeedLimit = 500;
+      renderTagCloud(cachedArticles);
+      const tagCloudContainer = document.getElementById('tag-cloud');
+      if (tagCloudContainer) {
+        tagCloudContainer.style.display = 'flex';
+      }
+    }
+  } else if (currentFeedLimit === 500) {
+    // Kun 500 artikkelia on haettu, piirretään ja näytetään tagipilvi niiden alla
+    renderTagCloud(cachedArticles);
+    const tagCloudContainer = document.getElementById('tag-cloud');
+    if (tagCloudContainer) {
+      tagCloudContainer.style.display = 'flex';
+    }
+  }
+}
+
+async function loadMoreFeed(newLimit) {
+  const grid = document.getElementById('feed-grid');
+  if (!grid) return;
+
+  // Luodaan latausilmoitus
+  let loader = document.getElementById('feed-loader');
+  if (!loader) {
+    loader = document.createElement('div');
+    loader.id = 'feed-loader';
+    loader.style.gridColumn = '1 / -1';
+    loader.style.textAlign = 'center';
+    loader.style.padding = 'var(--space-4)';
+    loader.style.color = 'var(--color-text-faint)';
+    loader.style.fontSize = 'var(--text-sm)';
+    loader.innerHTML = '<span class="loading-spinner"></span> Ladataan lisää uutisia...';
+    grid.appendChild(loader);
+  }
+
+  currentFeedLimit = newLimit;
+
+  try {
+    const articles = await fetchOutbox(currentTagFilter, currentFeedLimit);
+    cachedArticles = articles;
+    
+    if (loader) loader.remove();
+    
+    renderFeed(articles);
+    setupScrollPagination();
+  } catch (err) {
+    console.error("Load more failed:", err);
+    if (loader) {
+      loader.innerHTML = `<span style="color:var(--color-error);">${sanitize(err.message || 'Haku epäonnistui')}</span>`;
+      setTimeout(() => loader.remove(), 3000);
     }
   }
 }
