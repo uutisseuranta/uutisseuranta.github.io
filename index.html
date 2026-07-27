@@ -84,9 +84,6 @@
         <h2 class="section-title">Päivän uutisvirtaesimerkki</h2>
         <p class="section-desc">Näin uutisseuranta näyttää koostettuna uutisvirran eri lähteistä.</p>
       </div>
-      <div class="tag-cloud" id="tag-cloud" style="display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-8); justify-content: center;">
-        <!-- Tag cloud dynamically rendered here -->
-      </div>
       <div class="feed-grid" id="feed-grid" aria-busy="true" aria-live="polite">
         <!-- Skeleton loaders shown initially -->
         <div class="skeleton-card" aria-hidden="true">
@@ -105,6 +102,9 @@
           <div class="skeleton-title"></div>
           <div class="skeleton-text"></div>
         </div>
+      </div>
+      <div class="tag-cloud" id="tag-cloud" style="display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-8); justify-content: center;">
+        <!-- Tag cloud dynamically rendered here -->
       </div>
     </div>
   </section>
