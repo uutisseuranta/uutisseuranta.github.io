@@ -20,7 +20,7 @@
  *   – Firebase Auth, Analytics (NPM)
  */
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithEmailAndPassword, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs, exportPrefsAsJson, deleteUserPrefs } from './prefs.js';
 import { initProfileModal, openProfileModal } from './profile.js';
@@ -87,15 +87,22 @@ btnSkipLogin.addEventListener('click', closeLogin);
 
 
 
+// Käsitellään mahdollinen redirect-kirjautumisen tulos ja virheet
+getRedirectResult(auth).catch((error) => {
+  console.error("Redirect login failed", error);
+  if (error.code === 'auth/unauthorized-domain') {
+    showNotification('Tämä verkkotunnus ei ole sallittu Firebase-konsolissa. Lisää se Authorized domains -listalle.', true);
+  } else if (error.code && error.code !== 'auth/popup-closed-by-user') {
+    showNotification(`Kirjautuminen epäonnistui: ${error.message}`, true);
+  }
+});
+
 btnGoogleLogin.addEventListener('click', async () => {
   closeLogin();
   try {
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
   } catch (error) {
-    console.error("Login failed", error);
-    if (error.code === 'auth/unauthorized-domain') {
-      showNotification('Tämä verkkotunnus ei ole sallittu Firebase-konsolissa. Lisää se Authorized domains -listalle.', true);
-    }
+    console.error("Login redirect failed", error);
   }
 });
 
