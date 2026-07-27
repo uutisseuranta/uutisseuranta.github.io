@@ -9,6 +9,9 @@ Tämä dokumentti määrittää projektin tekniset linjaukset ja arkkitehtuurip�
 
 ## Muutoshistoria
 
+| Päivämäärä | Päätös | Perustelu | Hylätty vaihtoehto | Vanhenemisehto | Viite |
+|---|---|---|---|---|---|
+| 2026-07-27 | Testaustyökalut: `@playwright/test`, `@axe-core/playwright`, `@lhci/cli` hyväksytty devDependencyinä | E2E-, a11y- ja suorituskykytestaus edellyttää selainkontrollia, jota Bash+curl ei pysty toteuttamaan. DevDependencyt eivät päädy tuotantobundleen (Vite tree-shaking). Bash+curl `live-smoke-test.sh` säilyy post-deploy-pollingia varten. | Pelkkä Bash+curl (riittämätön JS-renderöinnin testaukseen) | Jos Playwright korvataan toisella testaustyökalulla | [#80](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/80) [#81](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/81) [#82](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/82) [#83](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/83) |
 | 2026-07-03 | Koodin kommentointi -konventiot lisätty | Yhtenäinen kommentointikäytäntö JS/CSS/HTML/Python/Bash kaikissa kolmessa repossa | Ei yhtenäistä käytäntöä | — | — |
 | 2026-07-03 | Yhtenäinen SemVer-versionumerointi (`vX.Y.Z`) | Yhtenäiset julkaisukäytännöt kaikkien repositorioiden välillä | Ei tagitusta / repo-kohtainen versionumerointi | — | — |
 | 2026-07-03 | Firestore Security Rules: `{document=**}` wildcard `/users/{uid}/preferences/`-polun alla | Firestore v9 SDK edellyttää `match /databases/{database}/documents`-juuritasoa ja polun jokainen segmentti on täsmennettävä. `{document=**}` on rekursiivinen wildcard joka sallii `preferences/main`-dokumentin ja mahdolliset tulevat alikokelmot saman uid:n alla ilman rules-muutosta. Vaihtoehtona olisi tarkentaa polku täsmälleen `/users/{uid}/preferences/main`-tasolle — se on tiukempi mutta vaatii päivityksen jokaisesta uudesta dokumenttityypistä. | Täsmäpolku `/users/{uid}/preferences/main` (tiukempi, mutta joustamaton) | Jos preferenssirakennetta laajennetaan (esim. `/users/{uid}/preferences/notifications`) | [#31](https://github.com/uutisseuranta/uutisseuranta.github.io/pull/31) |
@@ -31,21 +34,37 @@ Projekti käyttää **Vite-pakkaajaa** ja **npm-paketinhallintaa** (päätös `L
 uutisseuranta/
 ├── .github/
 │   └── workflows/
-│       ├── deploy.yml          ← Automaattinen deploy GitHub Pagesille (Vite-build)
-│       └── post-deploy-test.yml← Ajon jälkeiset smoke-testit
-├── dist/                       ← Viten generoima tuotantobuild (Pages-julkaisukohde)
-├── src/                        ← Lähdekoodikansio
-│   ├── main.js                 ← Viten entrypoint — kaikki Firebase-alustus tapahtuu täällä
-│   ├── app.js                  ← Sovelluksen päälogiikka (UI-orkestrointi, Auth)
-│   ├── prefs.js                ← Preferenssien hallinta (localStorage + Firestore)
-│   ├── profile.js              ← Profiilimodaalin UI-logiikka
-│   └── style.css               ← Native CSS -tyylit ja Cascade Layerit
-├── index.html                  ← Vite-entrypoint (juuressa) — EI Firebase-importteja
-├── package.json                ← npm-paketit ja build-skriptit
+│       ├── deploy.yml              ← Automaattinen deploy GitHub Pagesille (Vite-build)
+│       ├── pr-validate.yml         ← PR-validointi: build, linkit, a11y, integraatio
+│       ├── post-deploy-test.yml    ← Post-deploy smoke-testit (E2E)
+│       └── lighthouse.yml          ← Suorituskykyauditointi (viikoittain)
+├── dist/                           ← Viten generoima tuotantobuild (Pages-julkaisukohde)
+├── src/                            ← Lähdekoodikansio
+│   ├── main.js                     ← Viten entrypoint — kaikki Firebase-alustus tapahtuu täällä
+│   ├── app.js                      ← Sovelluksen päälogiikka (UI-orkestrointi, Auth)
+│   ├── prefs.js                    ← Preferenssien hallinta (localStorage + Firestore)
+│   ├── profile.js                  ← Profiilimodaalin UI-logiikka
+│   └── style.css                   ← Native CSS -tyylit ja Cascade Layerit
+├── tests/                          ← Testit (devDependency — ei tuotantobundleen)
+│   ├── a11y/
+│   │   └── accessibility.spec.js   ← axe-core/Playwright WCAG 2.2 AA (PR-validointi)
+│   ├── e2e/
+│   │   └── smoke.spec.js           ← E2E smoke-testit (post-deploy)
+│   ├── integration/
+│   │   └── api-mock.spec.js        ← API mock page.route (PR-validointi)
+│   └── visual/
+│       ├── snapshot.spec.js        ← Visuaalinen regressio (manuaali, isot CSS-muutokset)
+│       └── __snapshots__/          ← Baseline-kuvakaappaukset (git-seurannassa)
+├── index.html                      ← Vite-entrypoint (juuressa) — EI Firebase-importteja
+├── package.json                    ← npm-paketit ja build-skriptit
 ├── package-lock.json
-├── vite.config.js              ← Vite- ja PWA/Workbox-konfiguraatio
-├── live-smoke-test.sh          ← Smoke-testiskripti
-└── TECHNICAL_DESIGN.md         ← Tämä dokumentti
+├── vite.config.js                  ← Vite- ja PWA/Workbox-konfiguraatio
+├── playwright.config.js            ← Playwright-konfiguraatio
+├── lighthouserc.json               ← Lighthouse CI -budjettikonfiguraatio
+├── lychee.toml                     ← Linkkitarkistuksen konfiguraatio
+├── .lycheeignore                   ← Linkkitarkistuksen ohitukset
+├── live-smoke-test.sh              ← Polling-odotus Pages-deploylle (post-deploy)
+└── TECHNICAL_DESIGN.md             ← Tämä dokumentti
 ```
 
 Tuotantobuild paketoidaan komennolla `npm run build` ja testataan paikallisesti komennolla `npm run dev`.
@@ -82,17 +101,34 @@ Nämä ovat kaksi erillistä moduulia, jotka molemmat liittyvät käyttäjään,
 | Autentikointi | Firebase Authentication | Ks. Firebase-rajaus |
 | Analytiikka | Firebase Analytics + GA4 | Ks. Firebase-rajaus + Analytics/GDPR-osio |
 | Fontit | Järjestelmäfonttipino tai `@font-face` + `local()` | Ei CDN-riippuvuuksia, avoimen standardin ratkaisu |
-| Testit | Bash + `curl` + standardit Unix-työkalut | Ks. Testausstrategia |
+| Testit (dev) | `@playwright/test`, `@axe-core/playwright`, `@lhci/cli`, Bash+curl | Ks. Testausstrategia. DevDependencyinä — ei tuotantobundleen. |
 
 ### Kielletyt teknologiat
 
-- **Testausframeworkit** (Playwright, Puppeteer, Jest, Vitest, Cypress, tms.) — ei käytetä koskaan. Testit kirjoitetaan vanilla Bash/curl-pohjaisesti avoimen standardin työkaluilla.
-- **JavaScript-frameworkit** (React, Vue, Angular, Svelte, tms.) — ei tarvita.
+- **JavaScript-sovelluskehykset** (React, Vue, Angular, Svelte, tms.) — ei tarvita.
+- **Testausframeworkit tuotantoriippuvuuksina** — `@playwright/test`, `@axe-core/playwright` ja `@lhci/cli` ovat hyväksyttyjä **devDependencyinä** (eivät päädy bundleen). Kielto koskee testauskirjastoja `dependencies`-listalla.
 - **CSS-preprosessorit** (Sass, Less, PostCSS) — moderni vanilla CSS nestingillä riittää.
 - **Vanhan liiton build-työkalut** (Webpack, Rollup, Parcel, tms. suoraan käytettynä) — käytetään vain Viten valmiita konfiguraatioita.
 - **Erillinen monitorointipalvelu** (Datadog, Sentry, tms.) — laatu varmistetaan pipelinessa ennen tuotantoa.
 - **PR preview -ympäristöt** (Netlify, Cloudflare Pages, tms.) — pipeline testaa ennen mergeä, erillisiä preview-ympäristöjä ei tarvita.
 - **Ulkoiset fontti-CDN:t** (Google Fonts, Fontshare, Adobe Fonts, tms.) — fonttilatauksista ei saa syntyä kolmannen osapuolen verkkopyyntöjä.
+
+### Testausstrategia
+
+Testaus on jaettu neljään kerrokseen, jotka ajetaan eri triggerillä:
+
+| Kerros | Työkalu | Triggeröinti | Tarkoitus |
+|---|---|---|---|
+| Staattinen | Vite build, lychee | Jokainen PR | Build ei hajoa, linkit toimivat |
+| Integraatio | Playwright + `page.route` | Jokainen PR | API-mock — ei verkkoverkkorippuvuutta |
+| A11y | `@axe-core/playwright` | Jokainen PR | WCAG 2.2 AA automaattisesti |
+| E2E smoke | Playwright + live-smoke-test.sh | Post-deploy | Live-sivuston perustoiminta |
+| Suorituskyky | Lighthouse CI | Viikoittain | Core Web Vitals -trendit |
+| Visuaalinen regressio | Playwright screenshot | Manuaali (isot CSS-muutokset) | Kriittiset teemamuutokset |
+
+**Bash+curl (`live-smoke-test.sh`) säilyy** post-deploy-pollingia varten: se odottaa HTTP 200:aa ennen kuin Playwright-testit käynnistetään live-sivustoa vasten. Playwright ei korvaa tätä — polling-skriptin tehtävä on eri.
+
+Ks. [TESTING.md](TESTING.md) toteutusdetaljit, koodinäytteet ja workflow-konfiguraatiot.
 
 ---
 
@@ -139,16 +175,26 @@ const db = initializeFirestore(app, {
 
 > ⚠️ **Kaksoismalli-vaara:** `index.html` ei saa sisältää Firebase CDN -importteja. Jos `index.html`:ssä on `<script type="module">` joka importtaa `https://www.gstatic.com/firebasejs/...` **ja** `src/main.js` käyttää npm-versiota, Firebase alustetaan kahdesti. `initializeApp()` heittää virheen `"Firebase App named '[DEFAULT]' already exists"`. Kaikki Firebase-alustus tapahtuu **yksinomaan** `src/main.js`:ssä npm-importteina. `index.html` sisältää vain yhden `<script type="module" src="/src/main.js">` -tagin.
 
-### Sallitut npm-riippuvuudet (frozen list, päätös L-009)
+### Sallitut npm-riippuvuudet
 
-Teknisen velan rajaamiseksi npm-riippuvuudet on jäädytetty seuraavaan neljään pakettiin. Uuden paketin lisääminen vaatii eksplisiittisen arkkitehtuuripäätöksen DECISION_LOG:iin ennen toteutusta.
+Teknisen velan rajaamiseksi npm-riippuvuudet on jäädytetty. Uuden paketin lisääminen vaatii eksplisiittisen arkkitehtuuripäätöksen DECISION_LOG:iin ennen toteutusta.
+
+**Tuotantoriippuvuudet (`dependencies`):**
 
 | Paketti | Versio | Tarkoitus |
 |---|---|---|
-| `vite` | `^8.1.5` | Build-työkalu, tree-shaking, dev-server (päivitetty PR #65) |
-| `vite-plugin-pwa` | `^1.3.0` | Workbox-integraatio, Service Worker -generointi (päivitetty PR #65) |
-| `firebase` | `^12.16.0` | Auth, Firestore, Analytics — tree-shakingia varten (päivitetty PR #65) |
-| `workbox-window` | `^7.4.1` | SW-päivityskehote käyttäjälle (L-011) (päivitetty PR #65) |
+| `vite` | `^8.1.5` | Build-työkalu, tree-shaking, dev-server |
+| `vite-plugin-pwa` | `^1.3.0` | Workbox-integraatio, Service Worker -generointi |
+| `firebase` | `^12.16.0` | Auth, Firestore, Analytics — tree-shakingia varten |
+| `workbox-window` | `^7.4.1` | SW-päivityskehote käyttäjälle (L-011) |
+
+**Testausriippuvuudet (`devDependencies`) — eivät päädy tuotantobundleen:**
+
+| Paketti | Versio | Tarkoitus |
+|---|---|---|
+| `@playwright/test` | `^1.45.0` | E2E-, integraatio- ja visuaalinen regressiotestaus |
+| `@axe-core/playwright` | `^4.9.1` | WCAG 2.2 AA -saavutettavuustestaus PR-vaiheessa |
+| `@lhci/cli` | `^0.14.0` | Lighthouse CI Core Web Vitals -auditointi |
 
 > [!NOTE]
 > Versiot `vite ^8.1.5` ja `firebase ^12.16.0` on lukittu vastaamaan uutisseurannan paikallisen/offline-kehitysympäristön erikoispaketteja laadunvarmistuksen ja testauksen vuoksi, vaikka viralliset julkiset pääversiot (Vite 6.x ja Firebase 11.x) poikkeavat tästä.
@@ -496,104 +542,4 @@ Käytetään `#`-rivikommentteja.
 
 ```bash
 # --- HTTP-statuskoodit ---
-test_returns_200 "https://uutisseuranta.fi"
-test_returns_200 "https://uutisseuranta.fi/index.html"
-
-# --- Kriittiset DOM-elementit ---
-test_contains "https://uutisseuranta.fi" "<main"
-test_contains "https://uutisseuranta.fi" "article-card"
 ```
-
-**Ei-ilmeiset parametrit ja paluuarvot:**
-
-```bash
-# curl -s: hiljaa (ei progress-palkkia), -L: seuraa uudelleenohjaukset,
-# -o /dev/null: hylkää body, -w: tulosta vain status. Käytetään CI:ssä
-# jossa konsolituloste on suppea.
-HTTP_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" "$1")
-```
-
----
-
-### Kielletyt kommentointikäytännöt
-
-Seuraavat kommentit ovat kiellettyjä kaikissa kielissä, koska ne lisäävät melua ilman tietoa:
-
-| Kielletty käytäntö | Syy | Esimerkki |
-|---|---|---|
-| Koodin toisto eri sanoilla | Ei lisää tietoa | `// Aseta muuttuja x arvoon 1` → `x = 1` |
-| Kommentoitu pois jätetty koodi | Kuuluu versionhallintaan, ei tiedostoon | `// const old = getOldPrefs()` |
-| TODO/FIXME ilman tikettinumeroa | Ei löydettävissä, ei vastuutettu | `// TODO: korjaa tämä myöhemmin` |
-| Päivämäärä- tai tekijämerkinnät | Kuuluu git blame:lle | `// Muutettu 2026-07-03 jaakko` |
-| Tautologiset osiokommentit | Nimi ei kerro mitään | `/* Functions */`, `/* Variables */` |
-
-**TODO-merkinnät** kirjoitetaan aina tikettinumerolla: `// TODO [#27]: siirrä fetch_helpers.sh`
-
----
-
-## Testausstrategia
-
-Testit kirjoitetaan `live-smoke-test.sh`-tiedostoon. Testit ajetaan CI/CD-pipelinessa jokaisen deployn jälkeen.
-
-### Periaatteet
-
-- **Ei testausframeworkeja** — kaikki testit ovat vanilla Bash + `curl` + standardit Unix-työkalut.
-- **Live-testit tuotannossa** — testit ajetaan tuotantoympäristöä vasten, ei paikallista mock-ympäristöä.
-- **HTTP-statuskoodit + sisällön validointi** — tarkistetaan että sivusto vastaa oikein ja kriittiset elementit löytyvät.
-
-### Pipeline
-
-`.github/workflows/post-deploy-test.yml` ajaa `live-smoke-test.sh`:n jokaisen push-deployn jälkeen GitHub Pagesiin.
-
-## Versionumerointi ja julkaisut (Release)
-
-Projektissa noudatetaan yhtenäistä versionumerointi- ja julkaisukäytäntöä kaikkien repositorioiden välillä:
-- **SemVer (Semantic Versioning):** Versionumerot noudattavat muotoa `vX.Y.Z` (esim. `v0.1.0`).
-- **Tagien luominen:** Uusi julkaisu luodaan tekemällä vastaava Git-tagi (`vX.Y.Z`) ja julkaisemalla se GitHub Releases -palvelussa.
-- **Julkaisuvastuu:** Jokaisesta tuotantoon viedystä merkittävästä välitavoitteesta (kuten Iteraatioiden valmistumisesta) luodaan virallinen SemVer-julkaisu.
-
----
-
-## Analytics ja GDPR
-
-Firebase Analytics + GA4 käytössä **vain** käyttäjän suostumuksen jälkeen:
-
-- **Google Consent Mode v2** — `analytics_storage` ja `ad_storage` oletuksena `denied`.
-- Analytics aktivoituu vasta kun käyttäjä hyväksyy suostumuksen.
-- Suostumus tallennetaan `localStorage`:hen (avain `consent_analytics`).
-- EU ePrivacy -direktiivin ja GDPR:n mukainen toteutus.
-
-### GDPR-poistojärjestys client-sidellä (päätös `L-012`)
-
-Käyttäjän poistaessa tilinsä ('Poista tili' -painike) noudatetaan tiukkaa poistosekvenssiä orpojen dokumenttien syntymisen estämiseksi (GDPR artikla 17). Poisto suoritetaan client-sidellä seuraavassa järjestyksessä:
-1. **Firestore-preferenssit ensin:** Kutsutaan `deleteDoc(doc(db, 'users', uid, 'preferences', 'main'))`. Jos tämä epäonnistuu, poistoprosessi keskeytetään ja käyttäjälle näytetään virheilmoitus (Auth-tunnusta ei saa poistaa jos preferenssien siivous epäonnistuu, koska ilman Auth-tunnusta poisto-oikeudet Firestore-sääntöjen mukaan evätään).
-2. **Firebase Auth toiseksi:** Kutsutaan `deleteUser(currentUser)`. Mikäli kutsu epäonnistuu ja vaatii äskettäistä re-autentikointia (`auth/requires-recent-login`), suoritetaan Google-autentikointipopup ja yritetään Auth-poistoa uudelleen.
-3. **Paikallinen siivous kolmanneksi:** Tyhjennetään selaimen `localStorage` kokonaisuudessaan (`localStorage.clear()`).
-4. **Backend-integraatio:** GDPR-poisto kytkeytyy `bq-activitystreams #37` -ratkaisuun, joka poistaa/anonymisoi käyttäjän sosiaaliset tykkäykset ja kommentit BigQuery-kannasta.
-
----
-
-## Reaktiot ja visualisointi (päätös `L-010`)
-
-### Agree/Disagree -napit ja erilliset laskurit
-
-Artikkelikorteissa näytetään "Samaa mieltä" (Like) / "Eri mieltä" (Dislike) -reaktiot.
-- **Erilliset laskurit:** Näytetään molemmat reaktiomäärät erillisinä (Samaa mieltä: X / Eri mieltä: Y) nettosumman sijaan sosiaalisen bandwagon-harhan ja vahvistusharhan (Muchnik et al. 2013) vähentämiseksi.
-- **Idempotenssi ja toggle:** Käyttäjällä voi olla vain yksi aktiivinen reaktio kerrallaan. Tykkäyksen painaminen uudelleen peruuttaa sen. Toisen reaktion painaminen poistaa vanhan ja asettaa uuden.
-- **Saavutettavuus:** Napeille asetetaan WAI-ARIA `aria-pressed="true/false"` -tilat, ja virhetilanteessa tehdyille optimistisille UI-päivityksille suoritetaan täydellinen rollback (sekä laskurin että `aria-pressed`-tilan osalta).
-- **Undo-reaktion write-API-sopimus (päätös L-010 & L-015):** Tykkäyksen tai eri mieltä olon peruminen lähettää write-API:n inboxiin `Undo`-tyyppisen ActivityPub/AS2-aktiviteetin. Write-API:n vastaanottosopimuksen mukaan `Undo`-aktiviteetti vähentää välittömästi reaktiolaskureita, mutta itse `Undo`-aktiviteettia ei tallenneta pysyvästi lokeihin tai pitkäaikaiseen säilytykseen käyttäjän yksityisyyden ja GDPR:n anonymisointivaatimusten turvaamiseksi.
-
----
-
-## Tietoturva ja konfiguraatiot
-
-### Firebase-konfiguraatio ja API-avaimet
-*   **Plaintext-kokoaminen:** Kaikki `.env`-tiedostossa määritellyt Firebase-konfiguraatioarvot (kuten `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_APP_ID`) kootaan Vite-buildin yhteydessä osaksi julkista asiakaspään JavaScript-koodia (`dist/assets/main-*.js`) plaintext-muodossa.
-*   **Tietoturva-arvio:** Tämä on Googlen Firebase-arkkitehtuurissa tarkoituksellinen ja turvallinen toimintamalli. Firebase API-avain ei ole salasana tai backend-secret, vaan se toimii ainoastaan julkisena tunnisteena (identifier), joka ohjaa selaimen oikeaan Firebase-projektiin.
-*   **Pääsynhallinta:** Firebasen tietoturva ei perustu API-avaimen piilottamiseen, vaan se on varmistettu **Firestore Security Rules** -säännöillä (jotka sallivat lukemisen ja kirjoittamisen vain kirjautuneille ja valtuutetuille käyttäjille) sekä Google Cloud -konsolin **API Key Restrictions** -rajoituksilla (jotka sallivat kutsut vain uutisseurannan omilta verkkotunnuksilta).
-
-### Content Security Policy (CSP) staattisessa GitHub Pages -ympäristössä
-*   **Rajoitus:** GitHub Pages tarjoilee sivuston täysin staattisena tiedostopalveluna eikä salli mukautettujen HTTP Response -otsikoiden (custom HTTP headers) asettamista.
-*   **Ratkaisu:** CSP-säännöt on määritelty ja otettu käyttöön `index.html`-sivun `<meta http-equiv="Content-Security-Policy" content="...">` -tagilla. Tämä takaa saman tason XSS- ja lataussuojauksen suoraan selaimessa ilman palvelintason otsikkotukea.
-*   **Kehitysaikainen 'unsafe-inline' style-src -säännössä:** Katso päätös `L-014` CSP `style-src` `'unsafe-inline'` -säännön sallimisesta väliaikaisesti Viten HMR-kehitystoimintojen ja dynaamisen reaktiopalkin inline-tyylimääritelmien tueksi.
-
