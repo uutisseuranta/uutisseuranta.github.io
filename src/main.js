@@ -424,7 +424,7 @@ function renderFeed(articles) {
     let localReaction = localStorage.getItem(reactionKey) || null;
 
     card.innerHTML = `
-      ${isLead ? `<a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" class="feed-item__image"></a>` : ''}
+      ${isLead ? `<a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
       <div class="feed-item__category"><span class="category-dot"></span>${sanitize(category)}</div>
       <h3 class="feed-item__title"><a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
