@@ -669,4 +669,37 @@ body.view-news .view-home-only {
   display: none !important;
 }
 
+/* ---- COMMENT SECTION & REPLIES (Issue #11) ---- */
+.feed-item__comments-section {
+  animation: slideDown 0.25s ease-out;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.comment-item {
+  transition: border-color var(--transition-interactive);
+}
+.comment-item:hover {
+  border-color: var(--color-border) !important;
+}
+.btn-comment-reply,
+.btn-comment-reply-l2,
+.btn-comment-agree,
+.btn-comment-disagree {
+  transition: opacity var(--transition-interactive), color var(--transition-interactive);
+}
+.btn-comment-reply:hover,
+.btn-comment-reply-l2:hover,
+.btn-comment-agree:hover,
+.btn-comment-disagree:hover {
+  opacity: 0.8;
+  color: var(--color-text) !important;
+}
+.comment-textarea:focus,
+.reply-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary) !important;
+}
+
 

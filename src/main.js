@@ -117,6 +117,30 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     await loadPrefs();
+
+    // Check for pending comment (Issue #11)
+    const pendingArticleId = localStorage.getItem('pending_comment_article_id');
+    if (pendingArticleId) {
+      setTimeout(async () => {
+        const card = document.querySelector(`.feed-item[data-id="${pendingArticleId}"]`);
+        if (card) {
+          const btn = card.querySelector('.btn-comments-toggle');
+          const section = card.querySelector(`.feed-item__comments-section[data-id="${pendingArticleId}"]`);
+          if (btn && section) {
+            section.style.display = 'block';
+            section.innerHTML = '<div style="font-size:var(--text-xs); color:var(--color-text-faint);">Ladataan kommentteja...</div>';
+            try {
+              const replies = await fetchReplies(pendingArticleId);
+              renderCommentsSection(card, pendingArticleId, replies);
+              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch (err) {
+              section.innerHTML = `<div style="font-size:var(--text-xs); color:red;">Virhe: ${err.message}</div>`;
+            }
+          }
+        }
+        localStorage.removeItem('pending_comment_article_id');
+      }, 500);
+    }
   } else {
     // Alustetaan preferenssit paikalliseen tilaan ilman kirjautumista
     initPrefs(app, null);
@@ -443,7 +467,9 @@ function renderFeed(articles) {
         <button class="btn-reaction" data-action="dislike" data-id="${item.id}" aria-pressed="${localReaction === 'Dislike' ? 'true' : 'false'}">
           👎 Eri mieltä (${dislikesCount})
         </button>
-        <span style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto;">💬 ${commentCount}</span>
+        <button class="btn-comments-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto; background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px;">
+          💬 Kommentit (${commentCount})
+        </button>
       </div>
 
       <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%;">
@@ -455,6 +481,7 @@ function renderFeed(articles) {
           </a>
         ` : ''}
       </div>
+      <div class="feed-item__comments-section" data-id="${item.id}" style="display:none; margin-top:var(--space-4); border-top:1px solid var(--color-divider); padding-top:var(--space-4); width:100%;"></div>
     `;
 
     // Intercept clicks on article links to check connectivity via Query API (Issue #24 / backend proxy check)
@@ -614,6 +641,28 @@ function renderFeed(articles) {
             }
           }
           showNotification("Virhe reaktion tallennuksessa. Tila palautettu.", true);
+        }
+      });
+    });
+    // Comments section toggle click handler (Issue #11)
+    card.querySelectorAll('.btn-comments-toggle').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const articleId = btn.getAttribute('data-id');
+        const section = card.querySelector(`.feed-item__comments-section[data-id="${articleId}"]`);
+        if (!section) return;
+
+        if (section.style.display === 'block') {
+          section.style.display = 'none';
+        } else {
+          section.style.display = 'block';
+          section.innerHTML = '<div style="font-size:var(--text-xs); color:var(--color-text-faint);">Ladataan kommentteja...</div>';
+          try {
+            const replies = await fetchReplies(articleId);
+            renderCommentsSection(card, articleId, replies);
+          } catch (err) {
+            section.innerHTML = `<div style="font-size:var(--text-xs); color:red;">Virhe: ${err.message}</div>`;
+          }
         }
       });
     });
@@ -838,6 +887,284 @@ if (document.readyState === 'loading') {
 } else {
   initSPARouter();
 }
+
+// ---- COMMENT & REPLIES LOGIC (Issue #11) ----
+async function fetchReplies(articleId) {
+  const res = await fetch(`${QUERY_API_URL}/ap/replies?id=${encodeURIComponent(articleId)}`);
+  if (!res.ok) throw new Error("Kommenttien haku epäonnistui");
+  const data = await res.json();
+  return data.orderedItems || [];
+}
+
+async function postComment(parentId, content) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Create",
+      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+      "object": {
+        "type": "Note",
+        "inReplyTo": parentId,
+        "content": content
+      }
+    })
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || "Kommentin lähetys epäonnistui");
+  }
+}
+
+async function postCommentReaction(commentId, type) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": type,
+      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+      "object": commentId
+    })
+  });
+  if (!res.ok) throw new Error("Reaktio epäonnistui");
+}
+
+function renderCommentsSection(card, articleId, replies) {
+  const container = card.querySelector(`.feed-item__comments-section[data-id="${articleId}"]`);
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  const commentsList = document.createElement('div');
+  commentsList.className = 'comments-list';
+  commentsList.style.display = 'flex';
+  commentsList.style.flexDirection = 'column';
+  commentsList.style.gap = 'var(--space-3)';
+  commentsList.style.marginBottom = 'var(--space-4)';
+
+  const mainComments = replies.filter(r => r.object.inReplyTo === articleId);
+  const repliesToComments = replies.filter(r => r.object.inReplyTo !== articleId);
+
+  if (mainComments.length === 0) {
+    const noComments = document.createElement('div');
+    noComments.className = 'no-comments';
+    noComments.style.color = 'var(--color-text-muted)';
+    noComments.style.fontSize = 'var(--text-sm)';
+    noComments.style.marginBottom = 'var(--space-4)';
+    noComments.textContent = 'Ei vielä kommentteja. Kirjoita ensimmäinen!';
+    commentsList.appendChild(noComments);
+  } else {
+    mainComments.forEach(comment => {
+      const cObj = comment.object;
+      const actorName = cObj.attributedTo ? cObj.attributedTo.split('/').pop() : 'Käyttäjä';
+      const actorPic = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
+      const pubDate = new Date(cObj.published);
+      const timeAgo = pubDate.toLocaleString('fi-FI');
+
+      const commentDiv = document.createElement('div');
+      commentDiv.className = 'comment-item level-1';
+      commentDiv.style.border = '1px solid var(--color-divider)';
+      commentDiv.style.borderRadius = 'var(--radius-md)';
+      commentDiv.style.padding = 'var(--space-3)';
+      commentDiv.style.background = 'var(--color-surface-hover)';
+
+      commentDiv.innerHTML = `
+        <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2);">
+          <img src="${actorPic}" alt="" style="width:24px; height:24px; border-radius:50%;" />
+          <strong style="font-size:var(--text-sm);">${actorName}</strong>
+          <time datetime="${cObj.published}" style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto;">${timeAgo}</time>
+        </div>
+        <p style="font-size:var(--text-sm); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${cObj.content}</p>
+        <div style="display:flex; gap:var(--space-2); align-items:center;">
+          <button class="btn-comment-reply" data-parent-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
+          <button class="btn-comment-agree" data-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0; margin-left:auto;">👍 Samaa mieltä (${cObj.like_count || 0})</button>
+          <button class="btn-comment-disagree" data-id="${cObj.id}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0;">👎 Eri mieltä (${cObj.dislike_count || 0})</button>
+        </div>
+        <div class="replies-container" style="margin-left:var(--space-6); margin-top:var(--space-3); display:flex; flex-direction:column; gap:var(--space-2); border-left:2px solid var(--color-divider); padding-left:var(--space-3);">
+          <!-- Vastaukset rendataan tähän -->
+        </div>
+      `;
+
+      const childReplies = repliesToComments.filter(r => r.object.inReplyTo === cObj.id);
+      const repliesContainer = commentDiv.querySelector('.replies-container');
+
+      childReplies.forEach(reply => {
+        const rObj = reply.object;
+        const rActorName = rObj.attributedTo ? rObj.attributedTo.split('/').pop() : 'Käyttäjä';
+        const rTimeAgo = new Date(rObj.published).toLocaleString('fi-FI');
+
+        const replyDiv = document.createElement('div');
+        replyDiv.className = 'comment-item level-2';
+        replyDiv.style.background = 'var(--color-surface)';
+        replyDiv.style.border = '1px solid var(--color-divider)';
+        replyDiv.style.borderRadius = 'var(--radius-md)';
+        replyDiv.style.padding = 'var(--space-2)';
+
+        replyDiv.innerHTML = `
+          <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-1);">
+            <img src="${actorPic}" alt="" style="width:20px; height:20px; border-radius:50%;" />
+            <strong style="font-size:var(--text-xs);">${rActorName}</strong>
+            <time datetime="${rObj.published}" style="font-size:var(--text-xxs); color:var(--color-text-faint); margin-left:auto;">${rTimeAgo}</time>
+          </div>
+          <p style="font-size:var(--text-xs); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${rObj.content}</p>
+          <div style="display:flex; gap:var(--space-2); align-items:center;">
+            <button class="btn-comment-reply-l2" data-parent-id="${cObj.id}" style="font-size:var(--text-xxs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
+          </div>
+        `;
+        repliesContainer.appendChild(replyDiv);
+      });
+
+      if (childReplies.length === 0) {
+        repliesContainer.style.display = 'none';
+      }
+
+      commentsList.appendChild(commentDiv);
+    });
+  }
+
+  container.appendChild(commentsList);
+
+  const form = document.createElement('form');
+  form.className = 'main-comment-form';
+  form.style.display = 'flex';
+  form.style.flexDirection = 'column';
+  form.style.gap = 'var(--space-2)';
+
+  form.innerHTML = `
+    <textarea class="comment-textarea" placeholder="Kirjoita kommentti..." aria-label="Uusi kommentti" style="width:100%; min-height:60px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-sm); background:var(--color-surface); color:var(--color-text); resize:vertical;"></textarea>
+    <button type="submit" class="btn btn--primary" style="align-self:flex-end; padding:var(--space-1) var(--space-3); font-size:var(--text-xs);">Lähetä kommentti</button>
+  `;
+
+  // Palautetaan mahdollisesti välimuistissa oleva kirjoitus Google-kirjautumisen jälkeen
+  const pendingKey = `pending_comment_${articleId}`;
+  const pendingText = localStorage.getItem(pendingKey);
+  if (pendingText) {
+    form.querySelector('.comment-textarea').value = pendingText;
+    localStorage.removeItem(pendingKey);
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const textarea = form.querySelector('.comment-textarea');
+    const content = textarea.value.trim();
+    if (!content) return;
+
+    if (!auth.currentUser) {
+      localStorage.setItem(pendingKey, content);
+      localStorage.setItem('pending_comment_article_id', articleId);
+      openLogin();
+      return;
+    }
+
+    try {
+      await postComment(articleId, content);
+      textarea.value = '';
+      const freshReplies = await fetchReplies(articleId);
+      renderCommentsSection(card, articleId, freshReplies);
+    } catch (err) {
+      alert("Kommentin lähetys epäonnistui: " + err.message);
+    }
+  });
+
+  container.appendChild(form);
+
+  container.querySelectorAll('.btn-comment-reply, .btn-comment-reply-l2').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const parentId = btn.getAttribute('data-parent-id');
+      
+      const parentCommentDiv = btn.closest('.comment-item.level-1');
+      let replyForm = parentCommentDiv.querySelector('.reply-form');
+      if (replyForm) {
+        replyForm.querySelector('.reply-textarea').focus();
+        return;
+      }
+
+      replyForm = document.createElement('form');
+      replyForm.className = 'reply-form';
+      replyForm.style.display = 'flex';
+      replyForm.style.flexDirection = 'column';
+      replyForm.style.gap = 'var(--space-2)';
+      replyForm.style.marginTop = 'var(--space-2)';
+      replyForm.style.marginLeft = 'var(--space-6)';
+
+      replyForm.innerHTML = `
+        <textarea class="reply-textarea" placeholder="Kirjoita vastaus..." aria-label="Uusi vastaus" style="width:100%; min-height:40px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-xs); background:var(--color-surface); color:var(--color-text); resize:vertical;"></textarea>
+        <div style="display:flex; justify-content:flex-end; gap:var(--space-2);">
+          <button type="button" class="btn-cancel-reply" style="font-size:var(--text-xxs); color:var(--color-text-muted); background:none; border:none; cursor:pointer;">Peruuta</button>
+          <button type="submit" class="btn btn--primary" style="padding:var(--space-1) var(--space-2); font-size:var(--text-xxs);">Vastaa</button>
+        </div>
+      `;
+
+      const pendingReplyKey = `pending_reply_${parentId}`;
+      const pendingReplyText = localStorage.getItem(pendingReplyKey);
+      if (pendingReplyText) {
+        replyForm.querySelector('.reply-textarea').value = pendingReplyText;
+        localStorage.removeItem(pendingReplyKey);
+      }
+
+      replyForm.querySelector('.btn-cancel-reply').addEventListener('click', () => replyForm.remove());
+
+      replyForm.addEventListener('submit', async (e2) => {
+        e2.preventDefault();
+        const rTextarea = replyForm.querySelector('.reply-textarea');
+        const rContent = rTextarea.value.trim();
+        if (!rContent) return;
+
+        if (!auth.currentUser) {
+          localStorage.setItem(pendingReplyKey, rContent);
+          localStorage.setItem('pending_reply_parent_id', parentId);
+          localStorage.setItem('pending_comment_article_id', articleId);
+          openLogin();
+          return;
+        }
+
+        try {
+          await postComment(parentId, rContent);
+          replyForm.remove();
+          const freshReplies = await fetchReplies(articleId);
+          renderCommentsSection(card, articleId, freshReplies);
+        } catch (err) {
+          alert("Vastauksen lähetys epäonnistui: " + err.message);
+        }
+      });
+
+      parentCommentDiv.appendChild(replyForm);
+      replyForm.querySelector('.reply-textarea').focus();
+    });
+  });
+
+  container.querySelectorAll('.btn-comment-agree, .btn-comment-disagree').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!auth.currentUser) {
+        openLogin();
+        return;
+      }
+      const commentId = btn.getAttribute('data-id');
+      const action = btn.classList.contains('btn-comment-agree') ? 'Like' : 'Dislike';
+      
+      try {
+        await postCommentReaction(commentId, action);
+        const freshReplies = await fetchReplies(articleId);
+        renderCommentsSection(card, articleId, freshReplies);
+      } catch (err) {
+        console.error("Comment reaction failed:", err);
+      }
+    });
+  });
+}
+
 
 // Altistetaan preferenssifunktiot globaalisti smoke-testiä varten / Expose preference functions globally for smoke tests
 window.updatePrefs = updatePrefs;
