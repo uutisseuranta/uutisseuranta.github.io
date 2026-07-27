@@ -134,7 +134,7 @@ onAuthStateChanged(auth, async (user) => {
               renderCommentsSection(card, pendingArticleId, replies);
               card.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } catch (err) {
-              section.innerHTML = `<div style="font-size:var(--text-xs); color:red;">Virhe: ${err.message}</div>`;
+              renderCommentsSection(card, pendingArticleId, [], `Virhe kommenttien haussa: ${err.message}`);
             }
           }
         }
@@ -666,7 +666,7 @@ function renderFeed(articles) {
             const replies = await fetchReplies(articleId);
             renderCommentsSection(card, articleId, replies);
           } catch (err) {
-            section.innerHTML = `<div style="font-size:var(--text-xs); color:red;">Virhe: ${err.message}</div>`;
+            renderCommentsSection(card, articleId, [], `Virhe kommenttien haussa: ${err.message}`);
           }
         }
       });
@@ -1055,11 +1055,25 @@ async function postCommentReaction(commentId, type) {
   if (!res.ok) throw new Error("Reaktio epäonnistui");
 }
 
-function renderCommentsSection(card, articleId, replies) {
+function renderCommentsSection(card, articleId, replies, errorMessage = null) {
   const container = card.querySelector(`.feed-item__comments-section[data-id="${articleId}"]`);
   if (!container) return;
 
   container.innerHTML = '';
+
+  if (errorMessage) {
+    const errorBanner = document.createElement('div');
+    errorBanner.className = 'error-boundary';
+    errorBanner.style.fontSize = 'var(--text-xs)';
+    errorBanner.style.color = 'var(--color-error, #ff4d4d)';
+    errorBanner.style.padding = 'var(--space-2)';
+    errorBanner.style.marginBottom = 'var(--space-3)';
+    errorBanner.style.border = '1px dashed var(--color-error, #ff4d4d)';
+    errorBanner.style.borderRadius = 'var(--radius-md)';
+    errorBanner.style.background = 'var(--color-bg-offset)';
+    errorBanner.textContent = errorMessage;
+    container.appendChild(errorBanner);
+  }
 
   const commentsList = document.createElement('div');
   commentsList.className = 'comments-list';
