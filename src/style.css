@@ -320,7 +320,6 @@ button { cursor: pointer; background: none; border: none; }
 .footer__links a:hover { color: var(--color-text); }
 
 @media (max-width: 768px) {
-  .nav__links { display: none; }
   .feed-grid { grid-template-columns: 1fr; }
   .feed-item--lead { grid-row: span 1; }
   .features-layout { grid-template-columns: 1fr; gap: var(--space-10); }
