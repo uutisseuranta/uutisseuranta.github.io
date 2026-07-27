@@ -595,7 +595,18 @@ tests/
 
 ---
 
-## 10. Viitteet
+## 10. Tulevat testausparannukset (Roadmap)
+
+Seuraavat testausrakenteen tiivistys- ja laajennushankkeet on avattu GitHubiin seurattaviksi:
+
+1. **Playwright-selainten cachen käyttöönotto CI-putkessa ([Issue #80](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/80)):**
+   Selainbinäärien välimuistitus nopeuttaa PR-validointia ja säästää GitHub Actions -resursseja.
+2. **Playwright-testikattavuuden laajennus ([Issue #81](https://github.com/uutisseuranta/uutisseuranta.github.io/issues/81)):**
+   Yhdistetään visuaalinen regressiotestaus (`toHaveScreenshot`), automaattinen saavutettavuusauditointi (`@axe-core/playwright` WCAG 2.1 AA) ja offline-pyyntöjen mockaus (`page.route`) samaan testiajoon testausskenaarioiden tiivistämiseksi.
+
+---
+
+## 11. Viitteet
 
 - [Playwright: Best Practices](https://playwright.dev/docs/best-practices)
 - [Playwright: Accessibility Testing](https://playwright.dev/docs/accessibility-testing)
