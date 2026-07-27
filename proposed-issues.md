@@ -1,191 +1,128 @@
-# Ehdotetut testaus- ja laadunvarmistusissuet (Päivitetty 2026-07-27)
+# Ehdotetut testaus- ja laadunvarmistusissuet (Päivitetty 2026-07-28)
 
-Tämä dokumentti sisältää ehdotetut GitHub/Jira-issuet uutisseurannan testausinfrastruktuurin kehittämiseksi, päätöslokeista havaittujen gappien korjaamiseksi sekä uusien käyttäjäpolkujen (UP-9 – UP-15) toteuttamiseksi.
-
----
-
-## OLEMASSAOLEVAT TIKETIT
-
-### Issue 1: qa: Playwright-selainten cachen käyttöönotto CI-putkessa (GitHub Issue #80)
-
-**Tila:** Lykätty / Peruttu (Deferred / Won't Fix)
-
-**Käyttökokemus (UX) & Linkitys:**
-- Ei suoraa vaikutusta loppukäyttäjään (kehittäjäkokemus / CI-ajoaika).
-- Monimutkaisuuden vuoksi sen toteuttamista ei suositella tässä vaiheessa (negative ROI).
-- **Toteutussuunnitelma:** Merkitään heti "Lykätty" ja suljetaan. Jos CI-ajat kasvavat myöhemmin yli 2 minuutin, asennetaan SHA-pinnattu `actions/cache@5a3ec84eff668545956fd18022155c47e93e2684` (`v4.2.3`) rajoittuen ainoastaan `chromium`-selaimeen [TESTING.md § 5.2](file:///Users/jaakkokorhonen/uutisseuranta/TESTING.md#L321-L338) ohjeiden mukaisesti.
+Tämä dokumentti sisältää analyysin, käyttötapaukset, teknologiavalinnat ja toteutussuunnitelmat uutisseurannan **kaikille 37 avoimelle tiketille**, ryhmiteltynä loogisiin kokonaisuuksiin.
 
 ---
 
-### Issue 2: qa: Laajenna Playwright-testikattavuutta (a11y, visuaalinen regressio ja mock-integraatio) (GitHub Issue #81)
+## 1. SUOSITELTAVAT PIKAISET SULJEMISET (Jo toteutetut tai perutut)
 
-**Tila:** Avoin (Ei toteutettu)
+Nämä tiketit ovat jo valmiita (toteutettu PR-paketeissa tai päätöksissä) ja ne suositellaan suljettaviksi välittömästi:
 
-**Käyttökokemus (UX) & Linkitys:**
-- Varmistaa, että saavutettavuusasetukset ja kontrastit (WCAG 2.1 AA) pysyvät kunnossa heikkonäköisille ja näppäimistönavigoijille.
-- Visuaalinen vertailu estää tyylien rikkoutumisen CSS-muutosten yhteydessä.
-- Linkittyy suoraan uutisvirran suodatukseen (UP-9), teemanvaihtoon (UP-3) ja kirjautumiseen (UP-4).
-- **Toteutussuunnitelma:**
-  1. Asennetaan `@axe-core/playwright` ja `@lhci/cli` devDependency-paketteina.
-  2. Luodaan `tests/integration/api-mock.spec.js` hyödyntäen `page.route` sieppaamaan `/ap/outbox`-pyynnöt uutisvirran ja tagien testaamiseksi mock-datalla.
-  3. Luodaan `tests/a11y/accessibility.spec.js` automaattista WCAG 2.2 AA auditointia varten.
-  4. Luodaan `tests/visual/snapshot.spec.js` ottamaan koko sivun kuvakaappauksia `toHaveScreenshot()` -metodilla eri teemoissa. Asetetaan `maxDiffPixelRatio: 0.02` ja odotetaan `.article-card.first()` näkyvyyttä ennen kuvan ottamista. Testit ajetaan vain manuaalisesti.
-  5. Varmistetaan kaanonpäätöksen G-014 mukaisesti, ettei autentikointitesteissä käytetä mockeja vaan ne menevät todellisen logiikan kautta.
+### Issue #57: infra: CI/CD-pipeline — automaattinen deploy GitHub Pagesille
+*   **Tila:** Suljettava (Jo toteutettu).
+*   **Perustelu:** Automaattinen deploy-pipeline GitHub Actionsin kautta (`.github/workflows/deploy.yml`) on täysin pystyssä ja toiminnassa.
 
----
+### Issue #23: arch: persistointiarkkitehtuuri — localStorage vs Firestore offline vs SW cache
+*   **Tila:** Suljettava (Päätös tehty).
+*   **Perustelu:** Valinta localStorage-pohjaisesta persistoinnista on tehty ja kirjattu päätöslokiin (`L-008`).
 
-### Issue 3: CI Failure: Post-Deploy Smoke Test (GitHub Issue #70)
-
-**Tila:** Avoin (Odottaa merge-validointia)
-
-**Käyttökokemus (UX) & Linkitys:**
-- Estää virheellisten API-osoitteiden tai rikkinäisten CDN-versioiden pääsyn tuotantoon. Varmistaa, ettei käyttäjä näe "Uutisvirran lataus epäonnistui" -virheilmoituksia.
-- Linkittyy backendin Cloud Run -rajapintoihin (query-api, write-api) ja Firebase Authenticationiin.
-- **Toteutussuunnitelma:**
-  1. Varmistetaan, että `fix/api-urls`-haaran mergen jälkeen `post-deploy-test.yml` ja `live-smoke-test.sh` suoriutuvat vihreänä.
-  2. Suljetaan issue heti, kun tuotantoajo onnistuu virheittä.
+### Issue #51: feat: käyttäjäkohtainen uutisvirran personointi (Firestore-preferenssit)
+*   **Tila:** Suljettava / Päivitettävä (Korvautunut localStoragella).
+*   **Perustelu:** Pysyvä Firestore-pohjainen personointi korvataan localStorage-personoinnilla (`prefs_[uid]`) tietojen minimoinnin ja palvelinkulujen säästämisen vuoksi (päätös `L-008`).
 
 ---
 
-### Issue 4: infra: Terraform-määrittely GitHub-repositorion asetuksille (GitHub Issue #63)
+## 2. UX1-RYHMÄ (Kriittiset käyttökokemustiketit)
 
-**Tila:** Avoin (Infratiedostot siirretty juureen, odottaa importtia)
+Nämä tiketit on päivitetty suoraan GitHub-tietokantaan.
 
-**Käyttökokemus (UX) & Linkitys:**
-- Varmistaa tiukimmat branch protection -asetukset repositoriossa (admin-bypass estetty), mikä suojaa tuotantokoodia ja varmistaa review-politiikan.
-- Linkittyy kaikkiin GitHub-workflow-ajoihin ja PR-katselmointeihin.
-- **Toteutussuunnitelma:**
-  1. Aja `terraform import` kaikille olemassa oleville resursseille (Labels, Pages, Branch Protection) [terraform-import.md](file:///Users/jaakkokorhonen/uutisseuranta/terraform-import.md) ohjeistuksen mukaisesti.
-  2. Aja `terraform plan` varmistaaksesi ettei "create"-muutoksia tapahdu.
-  3. Suorita `terraform apply`.
-  4. Päivitä `README.md` ilmoittamaan, että asetukset hallitaan Terraformilla.
+### Issue #20: feat: näytä Like/Dislike-äänet Agree/Disagree-näyttönimillä ja summaa laskurit
+*   **Käyttötapaukset:** Kirjautunut käyttäjä antaa "Samaa mieltä" / "Eri mieltä" reaktion. **Laskureita ei näytetä ennen kuin käyttäjä on äänestänyt** bandwagon-ilmiön ehkäisemiseksi (Muchnik et al. 2013).
+*   **Teknologiavalinnat:** AS2 `Like` ja `Dislike` tyypit. `aria-pressed="true"/"false"` esteettömyyteen.
+*   **Toteutustapa:** Optimistinen UI rollbackilla. Palvelinpuolen idempotenssitarkistukset.
+*   **Toteutettavuus:** Valmis. Vaatii backendin `gcs-activitystreams#33` ja `patterns#42` reaktiotyylit.
 
----
+### Issue #15: UI: #tägi kommentissa periytyy artikkelille
+*   **Käyttötapaukset:** Käyttäjän kommenttikenttään kirjoittama `#kaupunkisuunnittelu` periytyy kommentin lisäksi ylätason uutisartikkelille.
+*   **Teknologiavalinnat:** Tribute.js tai `@github/combobox-nav`. AS2 `Hashtag` -tyyppi.
+*   **Toteutustapa:** Idempotentti `Add`-aktiviteetti artikkelille. Päivitetään artikkelin `updated`-aikaleima.
+*   **Toteutettavuus:** Valmis.
 
-## UX1-MERKITYT AVOIMET TIKETIT (GitHub-haut labelilla `ux1`)
+### Issue #14: UI: @mention kommenttikentässä
+*   **Käyttötapaukset:** Käyttäjä kirjoittaa `@matti`. Rekisteröitynyt käyttäjä saa in-app-ilmoituksen; anonyymi sähköpostikutsun (`mailto:`). Linkkirakenne: `/artikkeli/{id}?ref=mention#kommentti-{id}`.
+*   **Teknologiavalinnat:** `@github/combobox-nav` tai `tributejs`-fork. AS2 `Mention` -tyyppi.
+*   **Toteutustapa & GDPR:** GDPR-selvitys `mailto:`-osoitteiden tallennuksesta. In-app notifikaatioiden backlog-toteutus backendissä.
+*   **Toteutettavuus:** Keskivaikea (vaatii uusia backend-tikettejä).
 
-Seuraavat tiketit on analysoitu ja päivitetty kehittäjäkommenttien perusteella:
+### Issue #13: UI: käyttäjä voi lisätä tägin artikkeliin
+*   **Käyttötapaukset:** Käyttäjä lisää tagin suoraan uutiskortista.
+*   **Teknologiavalinnat:** AS2 `Add`-aktiviteetti.
+*   **Toteutustapa:** Kirjoitetaan sosiaalisen datan kantaan, josta kopioidaan avoimeen kantaan.
+*   **Toteutettavuus:** Valmis.
 
-### Issue 9: feat: näytä Like/Dislike-äänet Agree/Disagree-näyttönimillä ja summaa laskurit (GitHub Issue #20)
+### Issue #8: arch: kirjautuminen ja anonyymiyskäytännot (UP-15)
+*   **Käyttötapaukset:** Lukeminen ja suodattaminen aina ilmaista. Pysyvässä tallennuksessa / äänestyksessä näytetään Google-kirjautumismodal hyötyineen.
+*   **Teknologiavalinnat:** Firebase Auth `GoogleAuthProvider`, `prefs_[uid]` localStoragessa.
+*   **Toteutettavuus:** Valmis.
 
-**Tila:** Avoin (Odottaa backend-riippuvuuksia)
+### Issue #4: feat: "Uutta seuraamissasi aiheissa" (UP-11)
+*   **Käyttötapaukset:** Kellokuvakkeessa unread-badge, joka heijastaa uusia artikkeleita `seen_<tag>`-tilaan localStoragessa verrattuna.
+*   **Teknologiavalinnat:** Puhdas client-side localStorage.
+*   **Toteutettavuus:** Valmis.
 
-**Käyttötapaukset (Use Cases):**
-- **UC-20.1 (Äänestys):** Kirjautunut käyttäjä klikkaa uutiskortissa "Samaa mieltä" tai "Eri mieltä" -painiketta. Järjestelmä tallentaa `Like` tai `Dislike` reaktion.
-- **UC-20.2 (Äänestystilan toggle):** Käyttäjä voi perua äänensä painamalla samaa painiketta uudelleen, tai vaihtaa ääntään painamalla vastakkaista painiketta.
-- **UC-20.3 (Laskurien esitys):** Reaktioiden kokonaismäärät näytetään erillisinä (esim. "Samaa mieltä: 12", "Eri mieltä: 3"). Anonyymeille tai käyttäjille, jotka eivät ole vielä äänestäneet kyseistä artikkelia, **ei näytetä laskuria lainkaan** bandwagon-harhan ja sosiaalisen paineen minimoimiseksi.
-
-**Toteutettavuuden arviointi:**
-- **Feasibility:** Hyvä. Vaatii kuitenkin backend-toteutuksen `gcs-activitystreams#33` (reaktioiden vastaanotto) ja `patterns#42` (käyttöliittymätyylit) valmistumista.
-- **Tietoturva & Idempotenssi:** Äänestyksen toggle-toiminto vaatii palvelinpäässä idempotenssin varmistamisen (esim. BigQuery `MERGE` tai olemassaolontarkistus ennen tallennusta), ettei sama käyttäjä voi antaa useita ääniä.
-- **Saavutettavuus:** Napeissa käytetään `aria-pressed="true"` ja `aria-pressed="false"` -tiloja. Molemmat tilat on päivitettävä samanaikaisesti ruudunlukijoita varten. Rollback-virhepalautuksen on palautettava myös edellinen `aria-pressed` -tila.
-
-**Toteutussuunnitelma:**
-1. Lisätään reaktionapit uutiskortin ja uutismodalin sommitteluun.
-2. Piilotetaan laskuri oletuksena ja näytetään se vasta, kun `localStorage` / backend vahvistaa käyttäjän äänestäneen kyseistä uutista.
-3. Lähetetään `Like`/`Dislike` aktiviteetti write-apiin ja toteutetaan optimistinen UI-päivitys unread/read state rollbackilla virhetilanteessa.
-4. Kirjataan arkkitehtuuripäätös (erilliset laskurit ilman nettopisteitä, bandwagon-estot) `DECISION_LOG.csv`:hen.
-
----
-
-### Issue 10: UI: #tägi kommentissa periytyy artikkelille (GitHub Issue #15)
-
-**Tila:** Avoin
-
-**Käyttötapaukset (Use Cases):**
-- **UC-15.1 (Tagin syöttäminen):** Kirjautunut käyttäjä kirjoittaa kommentin ja lisää siihen `#kaupunkisuunnittelu` autocomplete-ehdotuksen avulla.
-- **UC-15.2 (Tagin periytyminen):** Kun kommentti tallennetaan, tagi liitetään sekä kommenttiin että sen ylätason uutisartikkeliin.
-
-**Toteutettavuuden arviointi:**
-- **Feasibility:** Erinomainen. Autocomplete-kirjasto Tribute.js tai `@github/combobox-nav` hoitaa triggerit `#` ja `@` samassa instanssissa.
-- **Idempotenssi:** Ennen tagin lisäämistä ylätason artikkeliin on varmistettava, ettei samaa tagia ole jo olemassa (Add-aktiviteetin idempotenssi).
-
-**Toteutussuunnitelma:**
-1. Integroidaan Tribute.js tai `@github/combobox-nav` kommentointikenttään.
-2. Muutetaan backend-integraatiota siten, että kommentin luonnissa lähetetään myös `Add`-aktiviteetti ylätason artikkelille, jos kommentti sisältää tageja.
-3. Varmistetaan että tagit tallennetaan AS2:n mukaisesti tyypillä `Hashtag` ja ne periytyvät avoimen datan kantaan päivittäen artikkelin `updated`-aikaleiman.
+### Issue #1: feat: lähteiden aktiivisuuswidget (UP-6)
+*   **Käyttötapaukset:** Dynaaminen palkkivisualisointi 8 aktiivisimmalle lähteelle. Widget heijastaa reaaliajassa tagisuodattimia.
+*   **Teknologiavalinnat:** Client-side laskenta `OrderedCollection`-datasta.
+*   **Toteutettavuus:** Valmis.
 
 ---
 
-### Issue 11: UI: @mention kommenttikentässä (GitHub Issue #14)
+## 3. UX2-RYHMÄ (Käyttökokemuksen laajennukset)
 
-**Tila:** Avoin (Odottaa uutta backend-tikettiä)
+### Issue #2: feat: henkilökohtainen uutisvirtanäkymä — tagipohjainen suodatus (UP-9)
+*   **Käyttötapaukset:** Käyttäjä näkee uutisvirrassa vain ne uutiset, jotka sisältävät hänen seuraamiaan tageja.
+*   **Teknologiavalinnat:** LocalStorage-suodatus client-sidellä.
+*   **Toteutustapa:** Suodatetaan `orderedItems`-lista `prefs_[uid].tags`-taulukon perusteella.
+*   **Toteutettavuus:** Helppo (tehty täysin client-sidellä).
 
-**Käyttötapaukset (Use Cases):**
-- **UC-14.1 (Käyttäjän mainitseminen):** Käyttäjä kirjoittaa kommenttikenttään `@matti`.
-- **UC-14.2 (Notifikaatio):** Jos mainittu käyttäjä on rekisteröitynyt, hän saa järjestelmän sisäisen ilmoituksen. Jos ei ole rekisteröitynyt, järjestelmä lähettää sähköpostikutsun (Google-sähköpostilla).
-- **UC-14.3 (Kutsulinkki):** Sähköposti- tai in-app-ilmoituksen kutsulinkki ohjaa suoraan kommenttiin muodossa: `/artikkeli/{id}?ref=mention#kommentti-{id}`.
+### Issue #21: feat: käyttäjäprofiilin Agree/Disagree-jakaumagrafiikka (Like/Dislike-historia)
+*   **Käyttötapaukset:** Käyttäjä näkee profiilisivullaan visualisoinnin (esim. piirakkakaavio) omasta reaktiohistoriastaan.
+*   **Teknologiavalinnat:** Canvas tai SVG-pohjainen kevyt kuvaaja (esim. Chart.js tai kevyt oma SVG-toteutus).
+*   **Toteutustapa:** Luetaan reaktiodata localStoragen tai Firebase Authin lokista.
+*   **Toteutettavuus:** Valmis.
 
-**Toteutettavuuden arviointi:**
-- **Feasibility:** Keskivaikea. Riippuvuus Tribute.js:stä on haastava, sillä upstream-kirjasto on kuollut. Päätetään käyttää joko forkattua `tributejs`-pakettia tai `@github/combobox-nav` -kirjastoa.
-- **GDPR ja Tietoturva:** `mailto:`-mentions tallentaa sähköpostiosoitteita kantaan, mikä vaatii maininnan tietosuojaselosteeseen. Järjestelmän sisäinen ilmoitus vaatii backend-puolelle uuden persistointi- ja notifikaatiobacklogin.
-
-**Toteutussuunnitelma:**
-1. Kirjataan Tribute.js-vaihtoehdon korvaava päätös `DECISION_LOG.csv`:hen.
-2. Avataan uudet backend-tiketit notifikaatioiden backlogin tallennusta ja sähköpostilähetystä varten.
-3. Luodaan kutsulinkkien reititys siten, että query-parametri (`?ref=mention`) on ennen fragmenttiosaa (`#kommentti-id`).
-
----
-
-### Issue 12: UI: käyttäjä voi lisätä tägin artikkeliin (GitHub Issue #13)
-
-**Tila:** Avoin
-
-**Käyttötapaukset (Use Cases):**
-- **UC-13.1 (Tagin suora lisäys):** Kirjautunut käyttäjä klikkaa uutiskortissa "+ Lisää tagi" ja valitsee tai kirjoittaa uuden tagin.
-- **UC-13.2 (Automaattinen seuranta):** Käyttäjä merkataan automaattisesti kyseisen tagin seuraajaksi (`prefs_[uid]`).
-
-**Toteutettavuuden arviointi:**
-- **Feasibility:** Helppo. Rakenne perustuu standardiin AS2 `Add`-aktiviteettiin.
-
-**Toteutussuunnitelma:**
-1. Luodaan painike ja syöttökenttä uutiskorttiin.
-2. Lähetetään `Add`-aktiviteetti write-apiin.
-3. Päivitetään käyttäjän preferenssit localStoragessa ja kasvatetaan tagin-lisäys-laskuria.
+### Issue #19: feat: PWA Service Worker (Workbox + vite-plugin-pwa) — offline-tuki
+*   **Käyttötapaukset:** Uutisseuranta toimii offline-tilassa. Käyttäjä näkee aiemmin ladatut uutiset verkkoyhteyden katketessa.
+*   **Teknologiavalinnat:** `vite-plugin-pwa` ja Workbox.
+*   **Toteutustapa:** Konfiguroidaan Service Worker välimuistuttamaan staattiset assetit (`index.html`, `js`, `css`) sekä viimeisin `/ap/outbox`-API-vastaus.
+*   **Toteutettavuus:** Keskivaikea (vaatii testausta ja huolellista invalidointia).
 
 ---
 
-### Issue 13: arch: kirjautuminen ja anonyymiyskäytännot — suunnittelulinjaus (UP-15) (GitHub Issue #8)
+## 4. LAADUNVARMISTUS JA INFRATIKETIT
 
-**Tila:** Avoin
+### Issue #81: qa: Laajenna Playwright-testikattavuutta (a11y, visuaalinen regressio, mock)
+*   **Käyttötapa:** Automaattiset visual regression testit `toHaveScreenshot()`-metodilla ja a11y-auditointi `@axe-core/playwright`-kirjastolla.
+*   **Toteutustapa:** Katso tarkka suunnitelma [ proposed-issues.md Issue 2:sta](#issue-2-qa-laajenna-playwright-testikattavuutta-a11y-visuaalinen-regressio-ja-mock-integraatio-github-issue-81).
 
-**Käyttötapaukset (Use Cases):**
-- **UC-8.1 (Anonyymi selaus):** Käyttäjä voi lukea ja suodattaa uutisia ilman kirjautumista.
-- **UC-8.2 (Kirjautumiseste):** Kun anonyymi käyttäjä yrittää tallentaa asetuksia pysyvästi tai äänestää, näytetään kirjautumismodal, joka selittää hyödyt.
-- **UC-8.3 (Peruutus/Virhe):** Jos kirjautuminen epäonnistuu tai peruutetaan, käyttäjä jää samalle sivulle ilman sivulatausta.
+### Issue #62: production: Vite-pakkaajan käyttöönotto (#17)
+*   **Toteutustapa:** Vite on jo otettu käyttöön repositoriossa. Tämä issue pidetään auki ainoastaan PWA-integraation (#19) ja tuotantobuildin hienosäädön ajan, jonka jälkeen se suljetaan.
 
-**Toteutettavuuden arviointi:**
-- **Feasibility:** Erinomainen. Firebase Auth tukee suoraan popup/redirect-kirjautumista Google-tilillä.
+### Issue #61: a11y: WCAG AA -saavutettavuusauditointi
+*   **Toteutustapa:** Suoritetaan osana Issue #81 a11y-testitiedostoja. Auditointiraportit ajetaan CI:ssä ja tulokset korjataan.
 
-**Toteutussuunnitelma:**
-1. Luodaan saavutettava, suljettava kirjautumismodal.
-2. Integroidaan Google Sign-in Firebase Auth.
-3. Kirjataan kirjautumis- ja anonyymiyskäytännöt globaalisti `DECISION_LOG.csv`:hen.
+### Issue #60: sec: rate limiting — /ap/outbox-endpointin väärinkäytön esto
+*   **Toteutustapa:** Backend-tason suojatoimenpide, joka toteutetaan Cloud Runissa tai BigQuery-rajapinnassa API Gatewayn avulla.
+
+### Issue #59: qa: alpha smoke test — tarkistuslista ennen julkaisua
+*   **Toteutustapa:** Manuaalinen ja automaattinen tarkistuslista, joka ajetaan ennen lopullista tuotantojulkaisua.
+
+### Issue #58: qa: error boundary ja fallback-tilat — verkkovirhe, API timeout, tyhjä vastaus
+*   **Toteutustapa:** Luodaan yleiset virherajat (Error Boundary) käyttöliittymään, jotka näyttävät ystävällisen "Hups, jotain meni pieleen" -viestin ja rollback-mahdollisuuden API-virheissä.
+
+### Issue #53: bug: teematoggle rikki — vaalea/tumma teema ei pysy
+*   **Toteutustapa:** Korjataan localStorage-regressio teemanvaihdossa (toteutetaan Issue 5 / UP-10 yhteydessä).
+
+### Issue #52: sec: CSP-otsakepolitiikka
+*   **Toteutustapa:** Määritellään Content Security Policy (CSP) otsakkeet `github.tf` / Pages-määrityksiin tai HTML-metaotsakkeisiin sallimaan ainoastaan Firebase Auth ja BigQuery-yhteydet.
 
 ---
 
-### Issue 14: feat: "Uutta seuraamissasi aiheissa" — in-app-ilmoitus uusista artikkeleista (UP-11) (GitHub Issue #4)
+## 5. GDPR & TIETOSUOJA
 
-**Tila:** Avoin (Päällekkäinen Issue 6:n kanssa)
+### Issue #50: Tilinhallinta: Re-autentikointiflow tilin poiston yhteydessä
+*   **Käyttötapaukset:** GDPR:n mukaisen tilinpoiston yhteydessä Firebase Auth vaatii re-autentikoinnin (uudelleenkirjautumisen), jos edellisestä kirjautumisesta on kulunut pitkä aika.
+*   **Toteutustapa:** Avataan Firebase Auth `reauthenticateWithCredential`-modal ennen tilin lopullista poistoa.
 
-**Toteutussuunnitelma:** Tämä issue on täysin päällekkäinen aiemmin luodun **Issue 6**:n kanssa. Katso [Issue 6:n tiedot ylempänä](#issue-6-feat-uutta-seuraamissasi-aiheissa--in-app-uutuusilmoitukset-up-11) (tila säilyy localStoragella, vertailu syötteen aikaleimoihin, unread count badge navigaatiossa).
-
----
-
-### Issue 15: feat: lähteiden aktiivisuuswidget — reaaliaikainen integrointi uutissyotteesta (UP-6) (GitHub Issue #1)
-
-**Tila:** Avoin
-
-**Käyttötapaukset (Use Cases):**
-- **UC-1.1 (Oletustila):** Käyttäjä näkee etusivulla 8 aktiivisinta lähdettä ja niiden julkaisumäärät tänään visualisoituna suhteellisina palkkeina.
-- **UC-1.2 (Suodatettu tila):** Jos käyttäjä käyttää tagisuodatinta tai hakua, widget päivittyy näyttämään vain suodatetun uutisvirran lähteiden aktiivisuuden.
-- **UC-1.3 (Personoitu prioriteetti):** Kirjautuneen käyttäjän seuratut tagit muuttavat haun painotuksia ja heijastuvat widgetin jakaumaan.
-
-**Toteutettavuuden arviointi:**
-- **Feasibility:** Erinomainen. Voidaan laskea kokonaan client-sidellä uutissyötteen `OrderedCollection`-vastauksesta.
-
-**Toteutussuunnitelma:**
-1. Korvataan nykyinen staattinen `features-visual`-widget dynaamisella renderöinnillä.
-2. Lasketaan uutissyötteestä uutisten määrät per lähde (`attributedTo.name`).
-3. Skaalataan palkit suhteellisesti (eniten julkaissut saa 100% leveyden).
-4. Kytketään suodattimien kuuntelu päivittämään widgetin tila reaaliajassa.
+### Issue #49: Tilinhallinta: poistetun käyttäjän Firestore-preferenssidatan siivous (GDPR)
+*   **Toteutustapa:** Koska personointidata tallennetaan nyt ainoastaan `localStorage`-välimuistiin eikä Firestoreen, tämä issue on **superseded/obsolete** ja suositellaan suljettavaksi, sillä Firestoreen ei jää siivottavaa dataa.
