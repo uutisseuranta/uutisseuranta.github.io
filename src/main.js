@@ -1231,7 +1231,12 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
     <textarea class="comment-textarea" placeholder="Kirjoita kommentti..." aria-label="Uusi kommentti" style="width:100%; min-height:60px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-sm); background:var(--color-surface); color:var(--color-text); resize:vertical;"></textarea>
     <button type="submit" class="btn btn--primary" style="align-self:flex-end; padding:var(--space-1) var(--space-3); font-size:var(--text-xs);">Lähetä kommentti</button>
   `;
-  bindAutocompleteToTextarea(form.querySelector('.comment-textarea'));
+  
+  const threadUsers = Array.from(new Set(
+    replies.map(r => r.object && r.object.attributedTo ? r.object.attributedTo.split('/').pop() : '')
+           .filter(name => name && name !== 'Käyttäjä')
+  ));
+  bindAutocompleteToTextarea(form.querySelector('.comment-textarea'), threadUsers);
 
   // Palautetaan mahdollisesti välimuistissa oleva kirjoitus Google-kirjautumisen jälkeen
   const pendingKey = `pending_comment_${articleId}`;
@@ -1444,9 +1449,12 @@ function getAutocompleteMenu() {
   return _autocompleteMenu;
 }
 
-function bindAutocompleteToTextarea(textarea) {
-  // Pidetään tyhjänä MVP-vaiheessa tietovuotojen välttämiseksi. Oikea mainintatuki toteutetaan Google Workspace / Directory API -integraatiolla.
-  const users = [];
+function bindAutocompleteToTextarea(textarea, customUsers = []) {
+  // Käytetään viestiketjun aktiivisia kommentoijia ja lisätään muutama kehittäjätestitunnus
+  const users = Array.from(new Set([
+    ...customUsers,
+    'matti', 'pekka', 'jaakko', 'mari', 'antti'
+  ]));
   const tags = ['politiikka', 'talous', 'tiede', 'viihde', 'kotimaa', 'ulkomaat', 'kulttuuri', 'urheilu', 'sää'];
   
   const menu = getAutocompleteMenu();
