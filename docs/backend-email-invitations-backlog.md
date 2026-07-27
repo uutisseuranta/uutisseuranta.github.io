@@ -13,7 +13,7 @@ Kun käyttäjä lähettää uuden kommentin (`Create Note`), backendin tulee ets
 1.  **Maininnan parsinta:** Parsitaan kommentin sisältö ja etsitään kaikki `@gmail.com`-päätteiset osoitteet.
 2.  **Käyttäjän olemassaolon tarkistus:** Tarkistetaan tietokannasta, löytyykö sähköpostille rekisteröitynyttä käyttäjää.
 3.  **Asynkroninen jono:** Mikäli käyttäjää ei löydy, luodaan sähköpostikutsu-tehtävä (esim. Google Cloud Tasks tai Google Cloud Pub/Sub) tausta-ajolle.
-4.  **Sähköpostipalvelu:** Taustatyöntekijä (worker) hakee tehtävän ja lähettää kutsun hyödyntäen SendGrid- tai Mailgun-integraatiota.
+4.  **Gmail API -sähköpostilähetys:** Kutsut lähetetään käyttäjän itsensä puolesta hyödyntäen hänen sisäänkirjautumisessa antamaansa Gmail-luvitusta (`https://www.googleapis.com/auth/gmail.send`). Lähetys tapahtuu Googlen Gmail API:lla (esim. `gmail.users.messages.send`), jolloin sähköposti lähetetään suoraan käyttäjän omasta laatikosta ja se säästää ulkoisen SMTP/lähetyspalvelun kuluja.
 5.  **Aktiviteettiloki:** Kutsun lähetyksestä tallennetaan lokitieto kantaan duplikaattien välttämiseksi (enintään 1 kutsu per osoite per uutinen).
 
 ---
