@@ -85,4 +85,39 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     const loginModal = page.locator('#modal-login');
     await expect(loginModal).toBeVisible();
   });
+
+  test('UP-5: should successfully login and load the news feed when authenticated', async ({ page }) => {
+    const email = process.env.TEST_USER_EMAIL;
+    const password = process.env.TEST_USER_PASSWORD;
+    
+    if (!email || !password) {
+      console.warn('Skipping UP-5: TEST_USER_EMAIL and TEST_USER_PASSWORD not set.');
+      return;
+    }
+
+    // Google-kirjautumisikkuna (OAuth popup) estää automaattiset testit (Googlen bot-suojaus estää automaatiot).
+    // Tätä varten käytetään Firebase Auth Email/Password -kirjautumista testitunnukselle,
+    // mikä ohittaa popupit ja on 100 % vakaa. Huom: Vaatii että Email/Password-kirjautumismenetelmä
+    // on otettu käyttöön Firebase Consolessa uutisseuranta-projektille.
+    await page.evaluate(async ({ email, password }) => {
+      await window.signInForTest(email, password);
+    }, { email, password });
+
+    // Odotetaan, että Kirjaudu ulos -painike tulee näkyviin pääsivulla (kertoo onnistuneesta kirjautumisesta)
+    const logoutBtn = page.locator('#btn-logout');
+    await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+
+    // Navigoidaan uutisvirtaan
+    const newsLink = page.locator('#nav-link-news');
+    await expect(newsLink).toBeVisible();
+    await newsLink.click();
+
+    // Varmistetaan että uutisvirta latautuu
+    const feedGrid = page.locator('#feed-grid');
+    await expect(feedGrid).toBeVisible();
+
+    // Varmistetaan ettei uutisvirran latausvirhe-banneria näy
+    const errorBanner = page.locator('text=Uutisvirran lataus epäonnistui');
+    await expect(errorBanner).not.toBeVisible();
+  });
 });

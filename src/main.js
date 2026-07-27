@@ -20,7 +20,7 @@
  *   – Firebase Auth, Analytics (NPM)
  */
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs, exportPrefsAsJson, deleteUserPrefs } from './prefs.js';
 import { initProfileModal, openProfileModal } from './profile.js';
@@ -62,6 +62,9 @@ const analytics = (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID && localStorage.
   : null;
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
+
+// Eksportoidaan testikirjautumisen apufunktio Playwright-integraatiotesteille (QA)
+window.signInForTest = (email, password) => signInWithEmailAndPassword(auth, email, password);
 
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
