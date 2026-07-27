@@ -28,7 +28,7 @@ jobs:
 
       - name: Tarkista duplikaatti-ID:t
         run: |
-          DUPES=$(tail -n +2 DECISION_LOG.csv | tr -d '\r' | cut -d',' -f1 | sort | uniq -d)
+          DUPES=$(tail -n +2 DECISION_LOG.csv | tr -d '\r' | grep -v '^[[:space:]]*$' | cut -d',' -f1 | sort | uniq -d)
           if [ -n "$DUPES" ]; then
             echo "❌ Duplikaatti-ID:t löytyi:"
             echo "$DUPES"
@@ -39,6 +39,7 @@ jobs:
       - name: Tarkista päivämäärämuoto (YYYY-MM-DD)
         run: |
           BADDATES=$(tail -n +2 DECISION_LOG.csv | tr -d '\r' | awk -F',' '
+            $0 ~ /^[[:space:]]*$/ { next }
             $2 !~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ {
               print "Rivi " NR+1 ": date-sarake on \"" $2 "\""
             }
