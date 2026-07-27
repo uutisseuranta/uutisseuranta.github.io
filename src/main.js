@@ -219,6 +219,23 @@ async function loadHomepageStats() {
     if (elInterval && data.update_interval_minutes) {
       elInterval.textContent = `${data.update_interval_minutes} min`;
     }
+
+    const elActiveSources = document.getElementById('stat-active-sources-container');
+    if (elActiveSources && data.active_sources && data.active_sources.length > 0) {
+      const escapeHtml = (str) => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+      const maxCnt = Math.max(...data.active_sources.map(s => s.cnt || 1));
+      
+      let html = '';
+      data.active_sources.forEach(source => {
+        const pct = Math.max(5, Math.round(((source.cnt || 0) / maxCnt) * 100));
+        html += `<div class="vis-row">
+          <span class="vis-source-name">${escapeHtml(source.name)}</span>
+          <div class="vis-bar-wrap"><div class="vis-bar" style="width:${pct}%"></div></div>
+          <span class="vis-count">${source.cnt}</span>
+        </div>`;
+      });
+      elActiveSources.innerHTML = html;
+    }
   } catch (err) {
     console.warn('Tilastojen haku epäonnistui:', err);
   }
