@@ -555,13 +555,11 @@ function renderFeed(articles) {
         const prevReaction = activeReaction;
 
         // Optimistic update state
-        let newReaction = null;
         if (activeReaction === action) {
-          localStorage.removeItem(userReactionKey);
-        } else {
-          localStorage.setItem(userReactionKey, action);
-          newReaction = action;
+          return; // Jo valittua reaktiota ei voi perua, ainoastaan vaihtaa
         }
+        localStorage.setItem(userReactionKey, action);
+        newReaction = action;
 
         // Instantly update DOM state (optimistic representation)
         const likeBtn = card.querySelector('.btn-reaction[data-action="like"]');
