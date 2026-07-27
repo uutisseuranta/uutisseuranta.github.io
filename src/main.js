@@ -842,13 +842,20 @@ async function refreshFeed() {
   }
 
   const grid = document.getElementById('feed-grid');
+  const isInitialLoad = grid && (!grid.children.length || grid.querySelector('.skeleton-card'));
+  
   if (grid) {
-    grid.innerHTML = `
-      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
-      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
-      <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
-    `;
     grid.setAttribute('aria-busy', 'true');
+    if (isInitialLoad) {
+      grid.innerHTML = `
+        <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+        <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+        <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
+      `;
+    } else {
+      // Visuaalinen indikaattori lataukselle pitäen nykyisen sisällön näkyvissä
+      grid.style.opacity = '0.6';
+    }
   }
 
   const startTime = Date.now();
@@ -863,12 +870,16 @@ async function refreshFeed() {
       await new Promise(resolve => setTimeout(resolve, 100 - elapsed));
     }
 
+    if (grid) {
+      grid.style.opacity = '1.0';
+    }
     renderFeed(articles);
     setupScrollPagination();
   } catch (err) {
     console.error("Feed loading failed:", err);
     const grid = document.getElementById('feed-grid');
     if (grid) {
+      grid.style.opacity = '1.0';
       grid.setAttribute('aria-busy', 'false');
       // Virherajapinta / Error boundary uutisvirralle (Issue #58)
       grid.innerHTML = `
