@@ -1450,11 +1450,8 @@ function getAutocompleteMenu() {
 }
 
 function bindAutocompleteToTextarea(textarea, customUsers = []) {
-  // Käytetään viestiketjun aktiivisia kommentoijia ja lisätään muutama kehittäjätestitunnus
-  const users = Array.from(new Set([
-    ...customUsers,
-    'matti', 'pekka', 'jaakko', 'mari', 'antti'
-  ]));
+  // Käytetään ainoastaan viestiketjun aktiivisia kommentoijia
+  const users = Array.from(new Set(customUsers));
   const tags = ['politiikka', 'talous', 'tiede', 'viihde', 'kotimaa', 'ulkomaat', 'kulttuuri', 'urheilu', 'sää'];
   
   const menu = getAutocompleteMenu();
