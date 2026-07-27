@@ -679,9 +679,10 @@ function renderTagCloud(articles) {
     }
   });
 
+  // Näytetään 7 tagia (tukeakseen 7±2 suositusta)
   const sortedTags = Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 15);
+    .slice(0, 7);
 
   container.innerHTML = '';
   
@@ -689,6 +690,7 @@ function renderTagCloud(articles) {
   const allBtn = document.createElement('button');
   allBtn.className = `tag-cloud__tag ${!currentTagFilter ? 'tag-cloud__tag--active' : ''}`;
   allBtn.textContent = 'Kaikki';
+  allBtn.setAttribute('aria-label', 'Näytä kaikki uutiset');
   allBtn.addEventListener('click', () => {
     currentTagFilter = null;
     refreshFeed();
@@ -698,14 +700,33 @@ function renderTagCloud(articles) {
   sortedTags.forEach(([tagName, count]) => {
     const btn = document.createElement('button');
     btn.className = `tag-cloud__tag ${currentTagFilter === tagName ? 'tag-cloud__tag--active' : ''}`;
-    btn.textContent = `${tagName} (${count})`;
-    btn.setAttribute('aria-label', `Tagi ${tagName}, ${count} uutista`);
+    // Ei näytetä numeroa tai artikkelimäärää
+    btn.textContent = tagName;
+    btn.setAttribute('aria-label', `Suodata tagilla ${tagName}`);
     btn.addEventListener('click', () => {
       currentTagFilter = currentTagFilter === tagName ? null : tagName;
       refreshFeed();
     });
     container.appendChild(btn);
   });
+
+  // Viimeinen tagi pilvessä suurennuslasimerkillä (🔍) uuden tagin hakemiseksi/lisäämiseksi
+  const searchBtn = document.createElement('button');
+  searchBtn.className = 'tag-cloud__tag';
+  searchBtn.textContent = '🔍';
+  searchBtn.setAttribute('aria-label', 'Lisää uusi tagi hakukriteeriksi');
+  searchBtn.addEventListener('click', () => {
+    const userTag = prompt('Syötä uusi tagi hakukriteeriksi (esim. helsinki):');
+    if (userTag && userTag.trim()) {
+      let formatted = userTag.trim();
+      if (!formatted.startsWith('#')) {
+        formatted = '#' + formatted;
+      }
+      currentTagFilter = formatted.toLowerCase();
+      refreshFeed();
+    }
+  });
+  container.appendChild(searchBtn);
 }
 
 async function refreshFeed() {
