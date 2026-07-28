@@ -551,85 +551,7 @@ function renderFeed(articles) {
       });
     });
 
-    // Reaction click handlers (Issue #20 & #21)
-    card.querySelectorAll('.btn-reaction').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        if (!auth.currentUser) {
-          openLogin();
-          return;
-        }
 
-        const action = btn.getAttribute('data-action') === 'like' ? 'Like' : 'Dislike';
-        const articleId = btn.getAttribute('data-id');
-        const userReactionKey = `reaction_${auth.currentUser.uid}_${articleId}`;
-        const activeReaction = localStorage.getItem(userReactionKey);
-
-        // Pre-save previous state for rollback
-        const prevReaction = activeReaction;
-
-        // Optimistic update state (supports undo / re-clicking active removes reaction)
-        let newReaction = null;
-        if (activeReaction === action) {
-          localStorage.removeItem(userReactionKey);
-        } else {
-          localStorage.setItem(userReactionKey, action);
-          newReaction = action;
-        }
-
-        // Current counts
-        let currentLikes = likesCount;
-        let currentDislikes = dislikesCount;
-
-        // Adjust counts locally based on transitions
-        if (prevReaction === 'Like') currentLikes--;
-        if (prevReaction === 'Dislike') currentDislikes--;
-        if (newReaction === 'Like') currentLikes++;
-        if (newReaction === 'Dislike') currentDislikes++;
-
-        // Update UI elements instantly (using DRY renderReactionButtons helper)
-        renderReactionButtons(card, currentLikes, currentDislikes, newReaction);
-
-        // Synkronoidaan uudet laskurit cachedArticles-taulukkoon (Blocker-korjaus)
-        const cachedArticle = cachedArticles.find(a => a.id === articleId);
-        if (cachedArticle) {
-          if (!cachedArticle.likes) cachedArticle.likes = { totalItems: 0 };
-          if (!cachedArticle.dislikes) cachedArticle.dislikes = { totalItems: 0 };
-          cachedArticle.likes.totalItems = currentLikes;
-          cachedArticle.dislikes.totalItems = currentDislikes;
-        }
-
-        // Perform network request
-        try {
-          if (newReaction) {
-            await postReaction(articleId, newReaction);
-          } else {
-            await deleteReaction(articleId, activeReaction);
-          }
-        } catch (err) {
-          console.error("Reaction failed, rolling back UI", err);
-          // Rollback localStorage
-          if (prevReaction) {
-            localStorage.setItem(userReactionKey, prevReaction);
-          } else {
-            localStorage.removeItem(userReactionKey);
-          }
-          
-          // Rollback cachedArticles-taulukkoon virhetilanteessa (Blocker-korjaus)
-          const cachedArticle = cachedArticles.find(a => a.id === articleId);
-          if (cachedArticle) {
-            if (!cachedArticle.likes) cachedArticle.likes = { totalItems: 0 };
-            if (!cachedArticle.dislikes) cachedArticle.dislikes = { totalItems: 0 };
-            cachedArticle.likes.totalItems = likesCount;
-            cachedArticle.dislikes.totalItems = dislikesCount;
-          }
-
-          // Rollback DOM elements using DRY helper
-          renderReactionButtons(card, likesCount, dislikesCount, prevReaction);
-          showNotification("Virhe reaktion tallennuksessa. Tila palautettu.", true);
-        }
-      });
-    });
     // User can add tag (Issue #13) - Inline form implementation (No prompt() / Security pattern)
     const tagFormContainer = card.querySelector('.add-tag-form-container');
     const addTagToggle = card.querySelector('.btn-add-tag-toggle');
@@ -1380,34 +1302,7 @@ window.deleteUserPrefs = deleteUserPrefs;
 
 
 
-// ---- REACTION BUTTONS DRY RENDERER (Issue #20 & #21) ----
-function renderReactionButtons(card, likesCount, dislikesCount, localReaction) {
-  const likeBtn = card.querySelector('.btn-reaction[data-action="like"]');
-  const dislikeBtn = card.querySelector('.btn-reaction[data-action="dislike"]');
-  const statsBar = card.querySelector('.vote-stats');
-  if (!likeBtn || !dislikeBtn) return;
-  
-  const hasVoted = localReaction !== null;
-  likeBtn.setAttribute('aria-pressed', localReaction === 'Like' ? 'true' : 'false');
-  likeBtn.innerHTML = `👍 Samaa mieltä${hasVoted ? ` (${likesCount})` : ''}`;
-  
-  dislikeBtn.setAttribute('aria-pressed', localReaction === 'Dislike' ? 'true' : 'false');
-  dislikeBtn.innerHTML = `👎 Eri mieltä${hasVoted ? ` (${dislikesCount})` : ''}`;
-  
-  const total = likesCount + dislikesCount;
-  if (statsBar) {
-    if (total > 0 && hasVoted) {
-      const agree = Math.round(likesCount / total * 100);
-      const disagree = 100 - agree;
-      statsBar.setAttribute('aria-label', `Reaktiot: ${agree}% samaa mieltä (${likesCount} ääntä), ${disagree}% eri mieltä (${dislikesCount} ääntä)`);
-      statsBar.querySelector('.vote-stats__segment--agree').style.flex = agree;
-      statsBar.querySelector('.vote-stats__segment--disagree').style.flex = disagree;
-      statsBar.style.display = 'flex';
-    } else {
-      statsBar.style.display = 'none';
-    }
-  }
-}
+
 
 // ---- ACTIVE SOURCES WIDGET DYNAMIC UPDATE (Issue #1 / UP-6) ----
 // HUOMIO: loadHomepageStats() hakee globaalit kokonaistilastot BigQuery-tietokannasta,
