@@ -366,4 +366,49 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       });
     });
   }
+  test('UP-8: should enforce maximum layout width of 640px for news feed and feed items', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+
+    await page.route('**/ap/outbox*', async route => {
+      const json = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "totalItems": 1,
+        "orderedItems": [
+          {
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "type": "Create",
+            "actor": "https://uutisseuranta.net/sources/yle",
+            "object": {
+              "id": "https://uutisseuranta.net/articles/1",
+              "type": "Article",
+              "name": "Testiuutinen leveyden tarkistukseen",
+              "summary": "Tämä on testiuutisen kuvaus.",
+              "url": "https://yle.fi/uutiset/1",
+              "published": "2026-07-27T00:00:00Z"
+            }
+          }
+        ]
+      };
+      await route.fulfill({ json });
+    });
+
+    const newsLink = page.locator('#nav-link-news');
+    await expect(newsLink).toBeVisible();
+    await newsLink.click();
+
+    const feedGrid = page.locator('#feed-grid');
+    await expect(feedGrid).toBeVisible();
+
+    const feedItem = page.locator('.feed-item').first();
+    await expect(feedItem).toBeVisible({ timeout: 15000 });
+
+    const gridBox = await feedGrid.boundingBox();
+    const itemBox = await feedItem.boundingBox();
+
+    console.log(`Measured Grid width: ${gridBox.width}px, Item width: ${itemBox.width}px`);
+
+    expect(gridBox.width).toBeLessThanOrEqual(640);
+    expect(itemBox.width).toBeLessThanOrEqual(640);
+  });
 });
