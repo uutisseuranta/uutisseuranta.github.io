@@ -132,6 +132,7 @@ btnGoogleLogin.addEventListener('click', async () => {
 });
 
 
+
 myOnAuthStateChanged(auth, async (user) => {
   if (user) {
     // Alustetaan preferenssit ja profiilimodaali kirjautuneelle käyttäjälle
