@@ -100,7 +100,6 @@ window.registerForTest = async (email, password) => {
 };
 
 const btnLogin = document.getElementById('btn-login');
-const btnLogout = document.getElementById('btn-logout');
 const userProfile = document.getElementById('user-profile');
 const userAvatar = document.getElementById('user-avatar');
 const btnProfile = document.getElementById('btn-profile');
@@ -132,7 +131,6 @@ btnGoogleLogin.addEventListener('click', async () => {
   }
 });
 
-btnLogout.addEventListener('click', () => signOut(auth));
 
 myOnAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -903,23 +901,65 @@ function renderTagCloud(articles) {
     container.appendChild(btn);
   });
 
-  // Viimeinen tagi pilvessä suurennuslasimerkillä (🔍) uuden tagin hakemiseksi/lisäämiseksi
-  const searchBtn = document.createElement('button');
-  searchBtn.className = 'tag-cloud__tag';
-  searchBtn.textContent = '🔍';
-  searchBtn.setAttribute('aria-label', 'Lisää uusi tagi hakukriteeriksi');
-  searchBtn.addEventListener('click', () => {
-    const userTag = prompt('Syötä uusi tagi hakukriteeriksi (esim. helsinki):');
-    if (userTag && userTag.trim()) {
-      let formatted = userTag.trim();
-      if (!formatted.startsWith('#')) {
-        formatted = '#' + formatted;
+  // Add tag button '+' at the end of the tag cloud (Issue #135)
+  const addBtn = document.createElement('button');
+  addBtn.className = 'tag-cloud__tag';
+  addBtn.textContent = '+';
+  addBtn.setAttribute('aria-label', 'Lisää uusi tagi artikkelille');
+  addBtn.addEventListener('click', async () => {
+    if (!auth.currentUser) {
+      openLogin();
+      return;
+    }
+    const activeArticles = cachedArticles || [];
+    if (activeArticles.length === 0) {
+      showNotification('Ei artikkeleita joille lisätä tagi.', true);
+      return;
+    }
+    
+    const tagInput = prompt("Anna uusi tagi artikkelille (esim. #tiede tai tiede):");
+    if (!tagInput || !tagInput.trim()) return;
+    let formatted = tagInput.trim().toLowerCase();
+    if (!formatted.startsWith('#')) formatted = '#' + formatted;
+    
+    const targetArticle = activeArticles[0];
+    
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Add",
+          "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+          "object": {
+            "type": "Hashtag",
+            "name": formatted
+          },
+          "target": {
+            "type": "Article",
+            "id": targetArticle.id
+          }
+        })
+      });
+      if (res.ok) {
+        showNotification(`Tagi ${formatted} lisätty uutiselle!`);
+        if (!targetArticle.tag) targetArticle.tag = [];
+        targetArticle.tag.push({ type: "Hashtag", name: formatted });
+        refreshFeed();
+      } else {
+        showNotification("Tagin lisääminen epäonnistui", true);
       }
-      currentTagFilter = formatted.toLowerCase();
-      refreshFeed();
+    } catch (err) {
+      console.error("Error adding tag:", err);
+      showNotification("Virhe tagin lisäyksessä", true);
     }
   });
-  container.appendChild(searchBtn);
+  container.appendChild(addBtn);
 }
 
 async function refreshFeed() {
