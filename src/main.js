@@ -339,11 +339,6 @@ async function fetchOutbox(tag = null, limit = 50, retryCount = 0) {
   url += `?${params.join('&')}`;
 
   const headers = {};
-  const user = auth.currentUser;
-  if (user) {
-    const token = await user.getIdToken();
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   try {
     const response = await fetch(url, { headers });

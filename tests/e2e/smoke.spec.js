@@ -120,4 +120,67 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     const errorBanner = page.locator('text=Uutisvirran lataus epäonnistui');
     await expect(errorBanner).not.toBeVisible();
   });
+
+  test('UP-5-regression: should not send Authorization header to outbox when authenticated', async ({ page }) => {
+    const email = process.env.TEST_USER_EMAIL;
+    const password = process.env.TEST_USER_PASSWORD;
+    
+    if (!email || !password) {
+      console.warn('Skipping UP-5-regression: TEST_USER_EMAIL and TEST_USER_PASSWORD not set.');
+      return;
+    }
+
+    // Intercept /ap/outbox calls and check headers
+    let authHeaderFound = false;
+    await page.route('**/ap/outbox*', async route => {
+      const headers = route.request().headers();
+      if (headers['authorization']) {
+        authHeaderFound = true;
+      }
+      const json = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "totalItems": 1,
+        "orderedItems": [
+          {
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "type": "Create",
+            "actor": "https://uutisseuranta.net/sources/yle",
+            "object": {
+              "id": "https://uutisseuranta.net/articles/1",
+              "type": "Article",
+              "name": "Testiuutinen",
+              "summary": "Tämä on testiuutisen lyhyt kuvaus E2E-testausta varten.",
+              "url": "https://yle.fi/uutiset/1",
+              "published": "2026-07-27T00:00:00Z",
+              "tag": [
+                { "type": "Hashtag", "name": "#politiikka" }
+              ]
+            }
+          }
+        ]
+      };
+      await route.fulfill({ json });
+    });
+
+    await page.evaluate(async ({ email, password }) => {
+      await window.signInForTest(email, password);
+    }, { email, password });
+
+    const logoutBtn = page.locator('#btn-logout');
+    await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+
+    const newsLink = page.locator('#nav-link-news');
+    await expect(newsLink).toBeVisible();
+    await newsLink.click();
+
+    const feedGrid = page.locator('#feed-grid');
+    await expect(feedGrid).toBeVisible();
+
+    const articles = page.locator('.feed-item');
+    await expect(articles.first()).toBeVisible({ timeout: 15000 });
+
+    // Assert that the Authorization header was NOT sent to outbox
+    expect(authHeaderFound).toBe(false);
+  });
 });
