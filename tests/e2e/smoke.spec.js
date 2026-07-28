@@ -268,6 +268,21 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     await expect(loginBtn).toBeVisible();
   });
 
+  test('UP-8: should render real articles in the stream without mocks', async ({ page }) => {
+    // Navigate to the news view
+    const newsLink = page.locator('#nav-link-news');
+    await expect(newsLink).toBeVisible();
+    await newsLink.click();
+
+    // Wait for the articles container to stop loading
+    const feedGrid = page.locator('#feed-grid');
+    await expect(feedGrid).toBeVisible();
+    
+    // Assert that we have actual article cards loaded (not the failed state or empty state)
+    const articles = page.locator('.feed-item');
+    await expect(articles.first()).toBeVisible({ timeout: 20000 });
+  });
+
   const testUserEmail = process.env.TEST_USER_EMAIL;
   const testUserPassword = process.env.TEST_USER_PASSWORD;
 
