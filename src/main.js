@@ -313,24 +313,17 @@ if ('serviceWorker' in navigator && !import.meta.env.DEV) {
   const wb = new Workbox('/sw.js');
 
   wb.addEventListener('waiting', () => {
-    // Luodaan päivityskehote (PWA Toast)
-    const toast = document.createElement('div');
-    toast.className = 'pwa-toast';
-    toast.innerHTML = `
-      <span>Uusi versio uutispalvelusta on saatavilla.</span>
-      <button class="pwa-toast__btn" id="pwa-update-btn">Päivitä</button>
-    `;
-    document.body.appendChild(toast);
-
-    document.getElementById('pwa-update-btn').addEventListener('click', () => {
-      wb.addEventListener('controlling', () => {
-        window.location.reload();
-      });
-      wb.messageSkipWaiting();
+    wb.addEventListener('controlling', () => {
+      window.location.reload();
     });
+    wb.messageSkipWaiting();
   });
 
-  wb.register().catch(err => console.error('Service Worker registration failed:', err));
+  wb.register().then(reg => {
+    if (reg) {
+      reg.update();
+    }
+  }).catch(err => console.error('Service Worker registration failed:', err));
 }
 
 // Generic non-blocking notification helper using PWA toast styling
