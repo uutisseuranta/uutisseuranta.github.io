@@ -461,6 +461,9 @@ function renderFeed(articles) {
     const originalUrl = item.url || '#';
     const archiveUrl = item.url_archive || `https://web.archive.org/web/0/${originalUrl}`;
 
+    // Maksumuuri / Schema.org isAccessibleForFree
+    const isPaywalled = item.isAccessibleForFree === false || (item.tag && item.tag.some(t => t.name && t.name.toLowerCase() === '#tilaajille'));
+
     // Reactions counts (Issue #20 & #21)
     const likesCount = item.likes && typeof item.likes.totalItems === 'number' ? item.likes.totalItems : 0;
     const dislikesCount = item.dislikes && typeof item.dislikes.totalItems === 'number' ? item.dislikes.totalItems : 0;
@@ -504,6 +507,7 @@ function renderFeed(articles) {
       <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%;">
         <span class="feed-item__source">${sourceName}</span>
         <span class="feed-item__time">${timeStr}</span>
+        ${isPaywalled ? `<span class="feed-item__paywall-badge" style="font-size:var(--text-xs); color:#e11d48; font-weight:600; background:rgba(225,29,72,0.12); padding:1px 6px; border-radius:var(--radius-sm);">🔒 Tilaajille</span>` : ''}
         <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-2); padding:0;">+ Lisää tagi</button>
         <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-primary); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin ensimmäinen arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
           🏛️ Arkisto
