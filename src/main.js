@@ -457,9 +457,9 @@ function renderFeed(articles) {
       } catch (e) {}
     }
 
-    // Wayback Machine wildcard-arkistolinkki (Issue #24)
+    // Wayback Machine ensimmäinen arkistolinkki (web.archive.org/web/0/URL avaa ensimmäisen snapshotin)
     const originalUrl = item.url || '#';
-    const archiveUrl = item.url_archive || `https://web.archive.org/web/*/${originalUrl}`;
+    const archiveUrl = item.url_archive || `https://web.archive.org/web/0/${originalUrl}`;
 
     // Reactions counts (Issue #20 & #21)
     const likesCount = item.likes && typeof item.likes.totalItems === 'number' ? item.likes.totalItems : 0;
@@ -505,11 +505,9 @@ function renderFeed(articles) {
         <span class="feed-item__source">${sourceName}</span>
         <span class="feed-item__time">${timeStr}</span>
         <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-2); padding:0;">+ Lisää tagi</button>
-        ${item.url_archive ? `
-          <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-text-faint); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
-            📎 Arkisto
-          </a>
-        ` : ''}
+        <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-primary); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin ensimmäinen arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
+          🏛️ Arkisto
+        </a>
       </div>
       <div class="add-tag-form-container" data-id="${item.id}" style="display:none; margin-top:var(--space-2); gap:var(--space-2); align-items:center; width:100%;">
         <input type="text" class="add-tag-input" placeholder="tiede" style="font-size:var(--text-xs); padding:var(--space-1) var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); width:120px;" aria-label="Uuden tagin nimi" />
