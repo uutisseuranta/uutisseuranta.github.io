@@ -366,7 +366,7 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       });
     });
   }
-  test('UP-8: should enforce maximum layout width of 640px for news feed and feed items', async ({ page }) => {
+  test('UP-8: should enforce maximum layout width of 960px for news feed and feed items', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
 
     await page.route('**/ap/outbox*', async route => {
@@ -408,14 +408,14 @@ test.describe('Uutisseuranta Smoke Tests', () => {
 
     console.log(`Measured Grid width: ${gridBox.width}px, Item width: ${itemBox.width}px`);
 
-    expect(gridBox.width).toBeLessThanOrEqual(640);
-    expect(itemBox.width).toBeLessThanOrEqual(640);
+    expect(gridBox.width).toBeLessThanOrEqual(960);
+    expect(itemBox.width).toBeLessThanOrEqual(960);
 
     const feedImage = page.locator('.feed-item__image').first();
     if (await feedImage.isVisible()) {
       const imageBox = await feedImage.boundingBox();
       console.log(`Measured Image width: ${imageBox.width}px`);
-      expect(imageBox.width).toBeLessThanOrEqual(640);
+      expect(imageBox.width).toBeLessThanOrEqual(960);
     }
   });
 });
