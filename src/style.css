@@ -225,11 +225,18 @@ button { cursor: pointer; background: none; border: none; }
   width: 5px; height: 5px; border-radius: var(--radius-full);
 }
 .feed-item__title {
-  font-family: var(--font-display); font-weight: 700; line-height: 1.2;
-  margin-bottom: var(--space-3);
+  font-family: var(--font-display); font-weight: 700; line-height: 1.3;
+  margin-bottom: var(--space-3); font-size: 1.25rem;
 }
-.feed-item--lead .feed-item__title { font-size: var(--text-xl); }
-.feed-item--small .feed-item__title { font-size: var(--text-base); }
+.feed-item__title a {
+  color: var(--color-text); text-decoration: none;
+  transition: color var(--transition-interactive);
+}
+.feed-item__title a:hover {
+  color: var(--color-primary);
+}
+.feed-item--lead .feed-item__title { font-size: 1.25rem; }
+.feed-item--small .feed-item__title { font-size: 1.125rem; }
 .feed-item__excerpt { font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.55; flex: 1; }
 .feed-item__meta {
   display: flex; align-items: center; gap: var(--space-3);
