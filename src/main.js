@@ -484,21 +484,8 @@ function renderFeed(articles) {
       <h3 class="feed-item__title"><a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       
-      ${(hasReactions && hasVoted) ? `
-        <div class="vote-stats" role="img" aria-label="Reaktiot: ${agreePct}% samaa mieltä (${likesCount} ääntä), ${disagreePct}% eri mieltä (${dislikesCount} ääntä)" style="display: flex;">
-          <div class="vote-stats__segment vote-stats__segment--agree" style="flex: ${agreePct}"></div>
-          <div class="vote-stats__segment vote-stats__segment--disagree" style="flex: ${disagreePct}"></div>
-        </div>
-      ` : `<div class="vote-stats" style="display:none;"><div class="vote-stats__segment vote-stats__segment--agree"></div><div class="vote-stats__segment vote-stats__segment--disagree"></div></div>`}
-
-      <div class="reaction-container">
-        <button class="btn-reaction" data-action="like" data-id="${item.id}" aria-pressed="${localReaction === 'Like' ? 'true' : 'false'}">
-          👍 Samaa mieltä ${hasVoted ? `(${likesCount})` : ''}
-        </button>
-        <button class="btn-reaction" data-action="dislike" data-id="${item.id}" aria-pressed="${localReaction === 'Dislike' ? 'true' : 'false'}">
-          👎 Eri mieltä ${hasVoted ? `(${dislikesCount})` : ''}
-        </button>
-        <button class="btn-comments-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto; background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px;">
+      <div class="reaction-container" style="display:flex; align-items:center; width:100%; margin-top:var(--space-3);">
+        <button class="btn-comments-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600; padding:0;">
           💬 Kommentit (${commentCount})
         </button>
       </div>
