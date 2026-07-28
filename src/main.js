@@ -20,7 +20,7 @@
  *   – Firebase Auth, Analytics (NPM)
  */
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs, exportPrefsAsJson, deleteUserPrefs } from './prefs.js';
 import { initProfileModal, openProfileModal } from './profile.js';
@@ -93,6 +93,10 @@ window.signInForTest = async (email, password) => {
     return mockUser;
   }
   return signInWithEmailAndPassword(auth, email, password);
+};
+
+window.registerForTest = async (email, password) => {
+  return createUserWithEmailAndPassword(auth, email, password);
 };
 
 const btnLogin = document.getElementById('btn-login');
