@@ -522,10 +522,8 @@ function renderFeed(articles) {
     // Maksumuuri / Schema.org isAccessibleForFree
     const isPaywalled = item.isAccessibleForFree === false || (item.tag && item.tag.some(t => t.name && t.name.toLowerCase() === '#tilaajille'));
 
-    // Jos maksumuuriartikkelille ei ole olemassa Web Archive -snapshotia (url_archive), ei näytetä uutista syötteessä lainkaan
-    if (isPaywalled && !item.url_archive) {
-      return;
-    }
+    // Maksumuuriartikkelit näytetään aina — 🔒-badge kertoo käyttäjälle maksumuurista.
+    // Jos url_archive on saatavilla, päälinkki ohjaa arkistoon (ks. targetUrl alla).
 
     const originalUrl = item.url || '#';
     const archiveUrl = item.url_archive || null;
