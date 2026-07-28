@@ -196,4 +196,75 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     // Assert that the Authorization header was NOT sent to outbox
     expect(authHeaderFound).toBe(false);
   });
+
+  test('UP-6: should successfully delete profile and clean up local data', async ({ page }) => {
+    // Mock the backend API response to avoid actual fetch errors
+    await page.route('**/ap/outbox*', async route => {
+      const json = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "totalItems": 1,
+        "orderedItems": [
+          {
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "type": "Create",
+            "actor": "https://uutisseuranta.net/sources/yle",
+            "object": {
+              "id": "https://uutisseuranta.net/articles/1",
+              "type": "Article",
+              "name": "Testiuutinen",
+              "summary": "Tämä on testiuutisen lyhyt kuvaus E2E-testausta varten.",
+              "url": "https://yle.fi/uutiset/1",
+              "published": "2026-07-27T00:00:00Z"
+            }
+          }
+        ]
+      };
+      await route.fulfill({ json });
+    });
+
+    // Sign in with the mock test user
+    await page.evaluate(async () => {
+      await window.signInForTest('mockuser@test.com', 'mockpassword');
+      // Set some dummy local storage data to verify cleanup
+      localStorage.setItem('reaction_mock-uid-123_test', 'Like');
+      localStorage.setItem('prefs_mock-uid-123', '{"tags":[]}');
+    });
+
+    // Wait for the auth callback to complete and UI to update
+    const logoutBtn = page.locator('#btn-logout');
+    await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+
+    // Open profile modal
+    const profileBtn = page.locator('#btn-profile');
+    await expect(profileBtn).toBeVisible();
+    await profileBtn.dispatchEvent('click');
+
+    // Verify profile modal is open
+    const profileModal = page.locator('#profile-modal');
+    await expect(profileModal).toBeVisible();
+
+    // Click 'Poista tili' button
+    const deleteBtn = page.locator('#btn-delete-account');
+    await expect(deleteBtn).toBeVisible();
+    await deleteBtn.click();
+
+    // Click 'Kyllä' on the confirm dialog
+    const confirmYesBtn = page.locator('#confirm-yes-btn');
+    await expect(confirmYesBtn).toBeVisible();
+    await confirmYesBtn.click();
+
+    // Verify toast notification is displayed
+    const toast = page.locator('.pwa-toast');
+    await expect(toast).toContainText('Tili ja kaikki asetuksesi on poistettu onnistuneesti');
+
+    // Wait for reload and verify that user data is cleaned up from localStorage
+    await page.waitForFunction(() => {
+      return localStorage.getItem('reaction_mock-uid-123_test') === null;
+    });
+
+    // Confirm that profile UIs are reset/hidden
+    const loginBtn = page.locator('#btn-login');
+    await expect(loginBtn).toBeVisible();
+  });
 });

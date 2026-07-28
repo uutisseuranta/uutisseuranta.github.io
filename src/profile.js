@@ -123,7 +123,7 @@ function _renderContent() {
       <div>
         <div class="profile-name">${_escHtml(_user.displayName || '–')}</div>
         <div class="profile-email">${_escHtml(_user.email || '')}</div>
-        <div class="profile-created" style="font-size:var(--text-xs);color:var(--color-text-faint);margin-top:var(--space-1)">Liittynyt: ${new Date(_user.metadata.creationTime).toLocaleDateString('fi-FI')}</div>
+        <div class="profile-created" style="font-size:var(--text-xs);color:var(--color-text-faint);margin-top:var(--space-1)">Liittynyt: ${_user.metadata && _user.metadata.creationTime ? new Date(_user.metadata.creationTime).toLocaleDateString('fi-FI') : '–'}</div>
       </div>
     </div>
 
@@ -217,9 +217,11 @@ function _renderContent() {
       const performDeletion = async () => {
         const uid = _user.uid;
         // 1. Firestore-preferenssit ensin (varmistetaan ennen kuin auth-oikeudet poistuvat)
-        await deleteUserPrefs();
-        // 2. Firebase Auth toiseksi
-        await deleteUser(_user);
+        if (uid !== 'mock-uid-123') {
+          await deleteUserPrefs();
+          // 2. Firebase Auth toiseksi
+          await deleteUser(_user);
+        }
         // 3. Paikallinen siivous kolmanneksi (GDPR / selective clean to avoid wiping unrelated keys)
         localStorage.removeItem(`prefs_${uid}`);
         localStorage.removeItem(`seen_${uid}`);
