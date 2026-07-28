@@ -267,4 +267,97 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     const loginBtn = page.locator('#btn-login');
     await expect(loginBtn).toBeVisible();
   });
+
+  const testUserEmail = process.env.TEST_USER_EMAIL;
+  const testUserPassword = process.env.TEST_USER_PASSWORD;
+
+  if (testUserEmail && testUserPassword) {
+    test.describe('Real Firebase Auth Integration Tests', () => {
+      test.describe.configure({ mode: 'serial' });
+
+      test('UP-7a: should login with real test credentials and delete the profile', async ({ page }) => {
+        // Mock the backend API response to avoid actual fetch errors
+        await page.route('**/ap/outbox*', async route => {
+          await route.fulfill({ json: { "@context": "https://www.w3.org/ns/activitystreams", "type": "OrderedCollection", "totalItems": 0, "orderedItems": [] } });
+        });
+
+        // Try to sign in and delete the user
+        const loginError = await page.evaluate(async ({ email, password }) => {
+          try {
+            await window.signInForTest(email, password);
+            return null;
+          } catch (err) {
+            return err.code;
+          }
+        }, { email: testUserEmail, password: testUserPassword });
+
+        if (loginError === 'auth/user-not-found') {
+          console.log("User does not exist, skipping deletion step.");
+          return;
+        } else if (loginError) {
+          throw new Error(`Login failed with error: ${loginError}`);
+        }
+
+        // Wait for the auth callback to complete and UI to update
+        const logoutBtn = page.locator('#btn-logout');
+        await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+
+        // Open profile modal
+        const profileBtn = page.locator('#btn-profile');
+        await expect(profileBtn).toBeVisible();
+        await profileBtn.dispatchEvent('click');
+
+        // Click 'Poista tili' button
+        const deleteBtn = page.locator('#btn-delete-account');
+        await expect(deleteBtn).toBeVisible();
+        await deleteBtn.click();
+
+        // Click 'Kyllä' on the confirm dialog
+        const confirmYesBtn = page.locator('#confirm-yes-btn');
+        await expect(confirmYesBtn).toBeVisible();
+        await confirmYesBtn.click();
+
+        // Verify toast notification is displayed
+        const toast = page.locator('.pwa-toast');
+        await expect(toast).toContainText('Tili ja kaikki asetuksesi on poistettu onnistuneesti');
+
+        // Confirm that profile UIs are reset/hidden
+        const loginBtn = page.locator('#btn-login');
+        await expect(loginBtn).toBeVisible({ timeout: 10000 });
+      });
+
+      test('UP-7b: should register a new account with real test credentials and log in', async ({ page }) => {
+        // Mock the backend API response to avoid actual fetch errors
+        await page.route('**/ap/outbox*', async route => {
+          await route.fulfill({ json: { "@context": "https://www.w3.org/ns/activitystreams", "type": "OrderedCollection", "totalItems": 0, "orderedItems": [] } });
+        });
+
+        // Register the new user
+        const registerError = await page.evaluate(async ({ email, password }) => {
+          try {
+            await window.registerForTest(email, password);
+            return null;
+          } catch (err) {
+            return err.code;
+          }
+        }, { email: testUserEmail, password: testUserPassword });
+
+        if (registerError) {
+          throw new Error(`Registration failed with error: ${registerError}`);
+        }
+
+        // Wait for the auth callback to complete and UI to update
+        const logoutBtn = page.locator('#btn-logout');
+        await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+
+        // Open profile modal and verify it is our user
+        const profileBtn = page.locator('#btn-profile');
+        await expect(profileBtn).toBeVisible();
+        await profileBtn.dispatchEvent('click');
+
+        const profileEmail = page.locator('.profile-email');
+        await expect(profileEmail).toContainText(testUserEmail);
+      });
+    });
+  }
 });
