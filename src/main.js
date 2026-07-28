@@ -457,12 +457,18 @@ function renderFeed(articles) {
       } catch (e) {}
     }
 
-    // Wayback Machine ensimmäinen arkistolinkki (web.archive.org/web/0/URL avaa ensimmäisen snapshotin)
-    const originalUrl = item.url || '#';
-    const archiveUrl = item.url_archive || `https://web.archive.org/web/0/${originalUrl}`;
-
     // Maksumuuri / Schema.org isAccessibleForFree
     const isPaywalled = item.isAccessibleForFree === false || (item.tag && item.tag.some(t => t.name && t.name.toLowerCase() === '#tilaajille'));
+
+    // Jos maksumuuriartikkelille ei ole olemassa Web Archive -snapshotia (url_archive), ei näytetä uutista syötteessä lainkaan
+    if (isPaywalled && !item.url_archive) {
+      return;
+    }
+
+    const originalUrl = item.url || '#';
+    const archiveUrl = item.url_archive || `https://web.archive.org/web/0/${originalUrl}`;
+    // Jos kyseessä on maksumuuriartikkeli ja sille on arkistolinkki, päälinkki ohjaa suoraan toimivaan arkistoon
+    const targetUrl = (isPaywalled && item.url_archive) ? item.url_archive : originalUrl;
 
     // Reactions counts (Issue #20 & #21)
     const likesCount = item.likes && typeof item.likes.totalItems === 'number' ? item.likes.totalItems : 0;
@@ -481,8 +487,8 @@ function renderFeed(articles) {
     const hasVoted = localReaction !== null;
 
     card.innerHTML = `
-      ${imageUrl ? `<a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
-      <h3 class="feed-item__title"><a href="${sanitizeUrl(originalUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
+      ${imageUrl ? `<a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
+      <h3 class="feed-item__title"><a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       
       ${(hasReactions && hasVoted) ? `
