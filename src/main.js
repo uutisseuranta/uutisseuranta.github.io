@@ -353,15 +353,6 @@ async function fetchOutbox(tag = null, limit = 50, retryCount = 0) {
   
   if (tag) {
     params.push(`tag=${encodeURIComponent(tag)}`);
-  } else {
-    // Jos suodatinta ei ole valittu ("Kaikki"-näkymä), haetaan käyttäjän seuratut tagit
-    // tai käytetään oletustageja jos lista on tyhjä, jotta backend ei anna 400 Bad Request -virhettä.
-    const prefs = getPrefs();
-    const tagsToQuery = (prefs.followedTags && prefs.followedTags.length > 0)
-      ? prefs.followedTags
-      : ['#politiikka', '#talous', '#tiede', '#viihde', '#ulkomaat', '#kotimaa', '#kulttuuri', '#urheilu', '#sää'];
-    
-    tagsToQuery.forEach(t => params.push(`tag=${encodeURIComponent(t)}`));
   }
   
   params.push(`n=${limit}`);
