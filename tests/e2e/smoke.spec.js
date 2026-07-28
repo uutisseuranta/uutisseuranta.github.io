@@ -410,5 +410,12 @@ test.describe('Uutisseuranta Smoke Tests', () => {
 
     expect(gridBox.width).toBeLessThanOrEqual(640);
     expect(itemBox.width).toBeLessThanOrEqual(640);
+
+    const feedImage = page.locator('.feed-item__image').first();
+    if (await feedImage.isVisible()) {
+      const imageBox = await feedImage.boundingBox();
+      console.log(`Measured Image width: ${imageBox.width}px`);
+      expect(imageBox.width).toBeLessThanOrEqual(640);
+    }
   });
 });
