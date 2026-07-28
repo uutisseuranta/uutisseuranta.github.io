@@ -249,11 +249,80 @@ onPrefsChange((prefs) => {
          </svg>`;
   }
 });
-
 // ---- API CONFIGURATION ----
 const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL || 'https://query-api-754758809337.europe-north1.run.app';
 const WRITE_API_URL = import.meta.env.VITE_WRITE_API_URL || 'https://write-api-754758809337.europe-north1.run.app';
 
+// ---- SCROLL READ OBSERVER (AS2 Read Activity) ----
+const readObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const card = e.target;
+      const articleId = card.getAttribute('data-id');
+      
+      // Animointi (kuten scroll observer)
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+      
+      if (articleId) {
+        markArticleAsRead(articleId, card);
+      }
+    }
+  });
+}, { threshold: 0.1 });
+
+async function markArticleAsRead(articleId, card) {
+  const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
+  const seenKey = `seen_${uid}_art_${articleId}`;
+  const fingerprint = card.getAttribute('data-fingerprint') || 'true';
+  
+  if (localStorage.getItem(seenKey) === fingerprint) {
+    return; // Jo luettu tässä tilassa
+  }
+  
+  localStorage.setItem(seenKey, fingerprint);
+  
+  // Rajoitetaan seen_ artikkelien määrä 1000:een FIFO-siivouksella (Päätös L-008)
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(`seen_${uid}_art_`)) {
+        keys.push(k);
+      }
+    }
+    if (keys.length > 1000) {
+      keys.slice(0, keys.length - 1000).forEach(k => localStorage.removeItem(k));
+    }
+  } catch (e) {
+    console.warn("FIFO cleanup failed:", e);
+  }
+  
+  // Päivitetään luetun tyyli uutiskortille
+  card.classList.add('feed-item--read');
+  
+  // Lähetetään standardi AS2 Read-aktiviteetti jos kirjautunut käyttäjä
+  if (auth.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      await fetch(`${WRITE_API_URL}/ap/inbox`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Read",
+          "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+          "object": articleId
+        })
+      });
+    } catch (err) {
+      console.warn("Failed to send AS2 Read activity:", err);
+    }
+  }
+}
 
 // ---- HOMEPAGE DYNAMIC STATS ----
 async function loadHomepageStats() {
@@ -432,7 +501,6 @@ function renderFeed(articles) {
   articles.forEach((item, index) => {
     const isLead = index === 0 && !currentTagFilter;
     const card = document.createElement('div');
-    card.className = `feed-item ${isLead ? 'feed-item--lead' : 'feed-item--small'}`;
     
     // AS2 metadata attributes for D-CENT patterns
     card.setAttribute('data-id', item.id);
@@ -440,6 +508,7 @@ function renderFeed(articles) {
 
     const imageUrl = item.image && item.image.url ? item.image.url : 'https://picsum.photos/seed/news/800/450';
     const category = item.tag && item.tag.find(t => !t.name.startsWith('likes:') && !t.name.startsWith('dislikes:'))?.name || 'Yleinen';
+    const displayTags = (item.tag || []).filter(t => t.name && !t.name.startsWith('likes:') && !t.name.startsWith('dislikes:'));
     const sourceName = item.attributedTo && item.attributedTo.name ? item.attributedTo.name : 'Uutislähde';
     
     // Time rendering in local timezone (Issue #12)
@@ -474,27 +543,49 @@ function renderFeed(articles) {
     // Comments count (Issue #11)
     const commentCount = item.replies && typeof item.replies.totalItems === 'number' ? item.replies.totalItems : 0;
 
-    // Reacting states - prefix with uid if authenticated to prevent cross-user leak (Issue #20 / L-015)
-    const reactionKey = auth.currentUser ? `reaction_${auth.currentUser.uid}_${item.id}` : `reaction_${item.id}`;
-    let localReaction = localStorage.getItem(reactionKey) || null;
-    const hasVoted = localReaction !== null;
+    // Luodaan sormenjälki artikkelin nykyisestä tilasta (kommenttien määrä ja tägit)
+    const fingerprint = JSON.stringify({
+      comments: commentCount,
+      tags: displayTags.map(t => t.name).sort()
+    });
+    const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
+    const seenKey = `seen_${uid}_art_${item.id}`;
+    const isRead = localStorage.getItem(seenKey) === fingerprint;
+    
+    card.className = `feed-item ${isLead ? 'feed-item--lead' : 'feed-item--small'} ${isRead ? 'feed-item--read' : ''}`;
+    card.setAttribute('data-fingerprint', fingerprint);
 
     card.innerHTML = `
       ${imageUrl ? `<a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
       <h3 class="feed-item__title"><a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       
-      <div class="reaction-container" style="display:flex; align-items:center; width:100%; margin-top:var(--space-3);">
-        <button class="btn-comments-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600; padding:0;">
+      <div class="reaction-container" style="display:flex; flex-direction:column; gap:var(--space-2); width:100%; margin-top:var(--space-3);">
+        ${commentCount > 0 ? `
+        <button class="btn-comments-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600; padding:0; align-self:flex-start;">
           💬 Kommentit (${commentCount})
         </button>
+        ` : ''}
+        
+        <div class="quick-comment-container" style="width:100%; display:flex; flex-direction:column; gap:var(--space-2);">
+          <textarea class="quick-comment-textarea" placeholder="Kirjoita kommentti..." data-id="${item.id}" style="width:100%; min-height:36px; height:36px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-xs); background:var(--color-surface); color:var(--color-text); resize:none; transition:all 0.2s ease;" aria-label="Pikakommentti"></textarea>
+          <div class="quick-comment-actions" style="display:none; justify-content:flex-end; gap:var(--space-2);">
+            <button class="btn-quick-comment-submit btn-primary" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-3);">Lähetä</button>
+            <button class="btn-quick-comment-cancel btn-ghost" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-3);">Peruuta</button>
+          </div>
+        </div>
       </div>
 
-      <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%;">
+      <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%; flex-wrap:wrap;">
         <span class="feed-item__source">${sourceName}</span>
-        <span class="feed-item__time">${timeStr}</span>
+        <span class="feed-item__time" style="margin-left:0; margin-right:auto;">${timeStr}</span>
         ${isPaywalled ? `<span class="feed-item__paywall-badge" style="font-size:var(--text-xs); color:#e11d48; font-weight:600; background:rgba(225,29,72,0.12); padding:1px 6px; border-radius:var(--radius-sm);">🔒 Tilaajille</span>` : ''}
-        <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-2); padding:0;">+ Lisää tagi</button>
+        
+        <div class="feed-item__tags-list" style="display:flex; align-items:center; gap:var(--space-1); flex-wrap:wrap;">
+          ${displayTags.map(t => `<span class="feed-item__tag" data-tag="${sanitize(t.name)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:var(--color-surface-hover); border:1px solid var(--color-divider); padding:1px 6px; border-radius:var(--radius-sm); cursor:pointer; font-weight:500; transition:all 0.2s ease;">${sanitize(t.name)}</span>`).join('')}
+        </div>
+
+        <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-1); padding:0;">+ Lisää tagi</button>
         ${archiveUrl ? `
         <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-primary); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin ensimmäinen arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
           🏛️ Arkisto
@@ -508,6 +599,71 @@ function renderFeed(articles) {
       </div>
       <div class="feed-item__comments-section" data-id="${item.id}" style="display:none; margin-top:var(--space-4); border-top:1px solid var(--color-divider); padding-top:var(--space-4); width:100%;"></div>
     `;
+
+    // Click handler for quick comment
+    const quickCommentTextarea = card.querySelector('.quick-comment-textarea');
+    const quickCommentActions = card.querySelector('.quick-comment-actions');
+    const btnQuickSubmit = card.querySelector('.btn-quick-comment-submit');
+    const btnQuickCancel = card.querySelector('.btn-quick-comment-cancel');
+    
+    if (quickCommentTextarea && quickCommentActions) {
+      quickCommentTextarea.addEventListener('focus', () => {
+        if (!auth.currentUser) {
+          openLogin();
+          quickCommentTextarea.blur();
+          return;
+        }
+        quickCommentTextarea.style.minHeight = '60px';
+        quickCommentTextarea.style.resize = 'vertical';
+        quickCommentActions.style.display = 'flex';
+      });
+      
+      btnQuickCancel.addEventListener('click', (e) => {
+        e.preventDefault();
+        quickCommentTextarea.value = '';
+        quickCommentTextarea.style.minHeight = '36px';
+        quickCommentTextarea.style.height = '36px';
+        quickCommentTextarea.style.resize = 'none';
+        quickCommentActions.style.display = 'none';
+      });
+      
+      btnQuickSubmit.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const content = quickCommentTextarea.value.trim();
+        if (!content) return;
+        
+        try {
+          await postComment(item.id, content);
+          quickCommentTextarea.value = '';
+          quickCommentTextarea.style.minHeight = '36px';
+          quickCommentTextarea.style.height = '36px';
+          quickCommentTextarea.style.resize = 'none';
+          quickCommentActions.style.display = 'none';
+          
+          const section = card.querySelector(`.feed-item__comments-section[data-id="${item.id}"]`);
+          if (section) {
+            section.style.display = 'block';
+            section.innerHTML = '<div style="font-size:var(--text-xs); color:var(--color-text-faint);">Ladataan kommentteja...</div>';
+            const freshReplies = await fetchReplies(item.id);
+            renderCommentsSection(card, item.id, freshReplies);
+          }
+        } catch (err) {
+          alert("Kommentin lähetys epäonnistui: " + err.message);
+        }
+      });
+    }
+
+    // Click handler for tags to filter the feed
+    card.querySelectorAll('.feed-item__tag').forEach(tagEl => {
+      tagEl.addEventListener('click', (e) => {
+        e.preventDefault();
+        const tagName = tagEl.getAttribute('data-tag');
+        if (tagName) {
+          currentTagFilter = currentTagFilter === tagName ? null : tagName;
+          refreshFeed();
+        }
+      });
+    });
 
     // Intercept clicks on article links to check connectivity via Query API (Issue #24 / backend proxy check)
     card.querySelectorAll('.article-link').forEach(link => {
@@ -649,6 +805,12 @@ function renderFeed(articles) {
         }
       });
     });
+
+    // Animoidaan uutiskortit ja seurataan niiden lukemista IntersectionObserverilla
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(16px)';
+    card.style.transition = 'opacity 0.45s ease, transform 0.45s ease';
+    readObserver.observe(card);
 
     grid.appendChild(card);
   });

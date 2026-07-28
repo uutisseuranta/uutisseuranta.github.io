@@ -622,6 +622,20 @@ button { cursor: pointer; background: none; border: none; }
   border-color: var(--color-primary);
   color: white;
 }
+.feed-item__tag:hover {
+  background: var(--color-primary-highlight) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+.feed-item--read {
+  opacity: 0.65;
+  filter: grayscale(20%);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+.feed-item--read:hover {
+  opacity: 1;
+  filter: none;
+}
 .archive-badge {
   display: inline-flex;
   align-items: center;
