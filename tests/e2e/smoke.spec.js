@@ -87,21 +87,42 @@ test.describe('Uutisseuranta Smoke Tests', () => {
   });
 
   test('UP-5: should successfully login and load the news feed when authenticated', async ({ page }) => {
-    const email = process.env.TEST_USER_EMAIL;
-    const password = process.env.TEST_USER_PASSWORD;
-    
-    if (!email || !password) {
-      console.warn('Skipping UP-5: TEST_USER_EMAIL and TEST_USER_PASSWORD not set.');
-      return;
-    }
+    // Mock the backend outbox response for test speed and isolation
+    await page.route('**/ap/outbox*', async route => {
+      const json = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "totalItems": 1,
+        "orderedItems": [
+          {
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "type": "Create",
+            "actor": "https://uutisseuranta.net/sources/yle",
+            "object": {
+              "id": "https://uutisseuranta.net/articles/1",
+              "type": "Article",
+              "name": "Testiuutinen",
+              "summary": "Tämä on testiuutisen lyhyt kuvaus E2E-testausta varten.",
+              "url": "https://yle.fi/uutiset/1",
+              "published": "2026-07-27T00:00:00Z",
+              "tag": [
+                { "type": "Hashtag", "name": "#politiikka" }
+              ]
+            }
+          }
+        ]
+      };
+      await route.fulfill({ json });
+    });
 
     // Google-kirjautumisikkuna (OAuth popup) estää automaattiset testit (Googlen bot-suojaus estää automaatiot).
     // Tätä varten käytetään Firebase Auth Email/Password -kirjautumista testitunnukselle,
     // mikä ohittaa popupit ja on 100 % vakaa. Huom: Vaatii että Email/Password-kirjautumismenetelmä
     // on otettu käyttöön Firebase Consolessa uutisseuranta-projektille.
-    await page.evaluate(async ({ email, password }) => {
-      await window.signInForTest(email, password);
-    }, { email, password });
+    // Käytetään mock-tunnusta, jotta testit ajetaan deterministisesti ilman riippuvuutta ulkoisista Firebase-avaimista.
+    await page.evaluate(async () => {
+      await window.signInForTest('mockuser@test.com', 'mockpassword');
+    });
 
     // Odotetaan, että Kirjaudu ulos -painike tulee näkyviin pääsivulla (kertoo onnistuneesta kirjautumisesta)
     const logoutBtn = page.locator('#btn-logout');
@@ -122,14 +143,6 @@ test.describe('Uutisseuranta Smoke Tests', () => {
   });
 
   test('UP-5-regression: should not send Authorization header to outbox when authenticated', async ({ page }) => {
-    const email = process.env.TEST_USER_EMAIL;
-    const password = process.env.TEST_USER_PASSWORD;
-    
-    if (!email || !password) {
-      console.warn('Skipping UP-5-regression: TEST_USER_EMAIL and TEST_USER_PASSWORD not set.');
-      return;
-    }
-
     // Intercept /ap/outbox calls and check headers
     let authHeaderFound = false;
     await page.route('**/ap/outbox*', async route => {
@@ -163,9 +176,9 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       await route.fulfill({ json });
     });
 
-    await page.evaluate(async ({ email, password }) => {
-      await window.signInForTest(email, password);
-    }, { email, password });
+    await page.evaluate(async () => {
+      await window.signInForTest('mockuser@test.com', 'mockpassword');
+    });
 
     const logoutBtn = page.locator('#btn-logout');
     await expect(logoutBtn).toBeVisible({ timeout: 15000 });

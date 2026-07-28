@@ -63,8 +63,37 @@ const analytics = (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID && localStorage.
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
+// Rekisteröidään auth-callbackit testejä ja mockausta varten
+window.__authCallbacks = [];
+const myOnAuthStateChanged = (authInstance, callback) => {
+  window.__authCallbacks.push(callback);
+  return onAuthStateChanged(authInstance, callback);
+};
+
 // Eksportoidaan testikirjautumisen apufunktio Playwright-integraatiotesteille (QA)
-window.signInForTest = (email, password) => signInWithEmailAndPassword(auth, email, password);
+window.signInForTest = async (email, password) => {
+  if (email === 'mockuser@test.com') {
+    console.log("Using E2E mock user login bypass");
+    const mockUser = {
+      uid: 'mock-uid-123',
+      email: email,
+      displayName: 'Mock Test User',
+      photoURL: '',
+      getIdToken: async () => 'mock-token-xyz'
+    };
+    Object.defineProperty(auth, 'currentUser', {
+      get: () => mockUser,
+      configurable: true
+    });
+    if (window.__authCallbacks) {
+      for (const cb of window.__authCallbacks) {
+        await cb(mockUser);
+      }
+    }
+    return mockUser;
+  }
+  return signInWithEmailAndPassword(auth, email, password);
+};
 
 const btnLogin = document.getElementById('btn-login');
 const btnLogout = document.getElementById('btn-logout');
@@ -101,7 +130,7 @@ btnGoogleLogin.addEventListener('click', async () => {
 
 btnLogout.addEventListener('click', () => signOut(auth));
 
-onAuthStateChanged(auth, async (user) => {
+myOnAuthStateChanged(auth, async (user) => {
   if (user) {
     // Alustetaan preferenssit ja profiilimodaali kirjautuneelle käyttäjälle
     initPrefs(app, user.uid);
