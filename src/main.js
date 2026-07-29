@@ -870,10 +870,10 @@ function renderTagCloud(articles) {
     }
   });
 
-  // Näytetään 7 tagia (tukeakseen 7±2 suositusta)
+  // Näytetään 42 tagia
   const sortedTags = Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 7);
+    .slice(0, 42);
 
   container.innerHTML = '';
   
