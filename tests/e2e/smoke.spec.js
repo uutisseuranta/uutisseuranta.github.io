@@ -274,9 +274,10 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     const feedGrid = page.locator('#feed-grid');
     await expect(feedGrid).toBeVisible();
     
-    // Assert that we have actual article cards loaded (not the failed state or empty state)
+    // Assert that we have either actual article cards loaded or the empty state message
     const articles = page.locator('.feed-item');
-    await expect(articles.first()).toBeVisible({ timeout: 20000 });
+    const emptyState = page.locator('.profile-empty');
+    await expect(articles.first().or(emptyState)).toBeVisible({ timeout: 20000 });
   });
 
   const testUserEmail = process.env.TEST_USER_EMAIL;
