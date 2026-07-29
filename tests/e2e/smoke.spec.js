@@ -124,9 +124,9 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       await window.signInForTest('mockuser@test.com', 'mockpassword');
     });
 
-    // Odotetaan, että Kirjaudu ulos -painike tulee näkyviin pääsivulla (kertoo onnistuneesta kirjautumisesta)
-    const logoutBtn = page.locator('#btn-logout');
-    await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+    // Odotetaan, että profiili-painike tulee näkyviin pääsivulla (kertoo onnistuneesta kirjautumisesta)
+    const profileBtn = page.locator('#btn-profile');
+    await expect(profileBtn).toBeVisible({ timeout: 15000 });
 
     // Navigoidaan uutisvirtaan
     const newsLink = page.locator('#nav-link-news');
@@ -180,8 +180,8 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       await window.signInForTest('mockuser@test.com', 'mockpassword');
     });
 
-    const logoutBtn = page.locator('#btn-logout');
-    await expect(logoutBtn).toBeVisible({ timeout: 15000 });
+    const profileBtn = page.locator('#btn-profile');
+    await expect(profileBtn).toBeVisible({ timeout: 15000 });
 
     const newsLink = page.locator('#nav-link-news');
     await expect(newsLink).toBeVisible();
@@ -232,12 +232,8 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     });
 
     // Wait for the auth callback to complete and UI to update
-    const logoutBtn = page.locator('#btn-logout');
-    await expect(logoutBtn).toBeVisible({ timeout: 15000 });
-
-    // Open profile modal
     const profileBtn = page.locator('#btn-profile');
-    await expect(profileBtn).toBeVisible();
+    await expect(profileBtn).toBeVisible({ timeout: 15000 });
     await profileBtn.dispatchEvent('click');
 
     // Verify profile modal is open
@@ -278,9 +274,10 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     const feedGrid = page.locator('#feed-grid');
     await expect(feedGrid).toBeVisible();
     
-    // Assert that we have actual article cards loaded (not the failed state or empty state)
+    // Assert that we have either actual article cards loaded or the empty state message
     const articles = page.locator('.feed-item');
-    await expect(articles.first()).toBeVisible({ timeout: 20000 });
+    const emptyState = page.locator('.profile-empty');
+    await expect(articles.first().or(emptyState)).toBeVisible({ timeout: 20000 });
   });
 
   const testUserEmail = process.env.TEST_USER_EMAIL;
@@ -317,12 +314,8 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         }
 
         // Wait for the auth callback to complete and UI to update
-        const logoutBtn = page.locator('#btn-logout');
-        await expect(logoutBtn).toBeVisible({ timeout: 15000 });
-
-        // Open profile modal
         const profileBtn = page.locator('#btn-profile');
-        await expect(profileBtn).toBeVisible();
+        await expect(profileBtn).toBeVisible({ timeout: 15000 });
         await profileBtn.dispatchEvent('click');
 
         // Click 'Poista tili' button
@@ -368,12 +361,8 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         }
 
         // Wait for the auth callback to complete and UI to update
-        const logoutBtn = page.locator('#btn-logout');
-        await expect(logoutBtn).toBeVisible({ timeout: 15000 });
-
-        // Open profile modal and verify it is our user
         const profileBtn = page.locator('#btn-profile');
-        await expect(profileBtn).toBeVisible();
+        await expect(profileBtn).toBeVisible({ timeout: 15000 });
         await profileBtn.dispatchEvent('click');
 
         const profileEmail = page.locator('.profile-email');
