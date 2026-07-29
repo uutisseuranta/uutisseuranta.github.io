@@ -580,9 +580,8 @@ function renderFeed(articles) {
         
         <div class="feed-item__tags-list" style="display:flex; align-items:center; gap:var(--space-1); flex-wrap:wrap;">
           ${displayTags.map(t => `<span class="feed-item__tag" data-tag="${sanitize(t.name)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:var(--color-surface-hover); border:1px solid var(--color-divider); padding:1px 6px; border-radius:var(--radius-sm); cursor:pointer; font-weight:500; transition:all 0.2s ease;">${sanitize(t.name)}</span>`).join('')}
+          <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:var(--color-surface-hover); border:1px solid var(--color-divider); padding:1px 6px; border-radius:var(--radius-sm); cursor:pointer; font-weight:500; transition:all 0.2s ease;" aria-label="Lisää tagi">+</button>
         </div>
-
-        <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; margin-left:var(--space-1); padding:0;">+ Lisää tagi</button>
         ${archiveUrl ? `
         <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-primary); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin ensimmäinen arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
           🏛️ Arkisto
@@ -902,65 +901,6 @@ function renderTagCloud(articles) {
     container.appendChild(btn);
   });
 
-  // Add tag button '+' at the end of the tag cloud (Issue #135)
-  const addBtn = document.createElement('button');
-  addBtn.className = 'tag-cloud__tag';
-  addBtn.textContent = '+';
-  addBtn.setAttribute('aria-label', 'Lisää uusi tagi artikkelille');
-  addBtn.addEventListener('click', async () => {
-    if (!auth.currentUser) {
-      openLogin();
-      return;
-    }
-    const activeArticles = cachedArticles || [];
-    if (activeArticles.length === 0) {
-      showNotification('Ei artikkeleita joille lisätä tagi.', true);
-      return;
-    }
-    
-    const tagInput = prompt("Anna uusi tagi artikkelille (esim. #tiede tai tiede):");
-    if (!tagInput || !tagInput.trim()) return;
-    let formatted = tagInput.trim().toLowerCase();
-    if (!formatted.startsWith('#')) formatted = '#' + formatted;
-    
-    const targetArticle = activeArticles[0];
-    
-    try {
-      const token = await auth.currentUser.getIdToken();
-      const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "type": "Add",
-          "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-          "object": {
-            "type": "Hashtag",
-            "name": formatted
-          },
-          "target": {
-            "type": "Article",
-            "id": targetArticle.id
-          }
-        })
-      });
-      if (res.ok) {
-        showNotification(`Tagi ${formatted} lisätty uutiselle!`);
-        if (!targetArticle.tag) targetArticle.tag = [];
-        targetArticle.tag.push({ type: "Hashtag", name: formatted });
-        refreshFeed();
-      } else {
-        showNotification("Tagin lisääminen epäonnistui", true);
-      }
-    } catch (err) {
-      console.error("Error adding tag:", err);
-      showNotification("Virhe tagin lisäyksessä", true);
-    }
-  });
-  container.appendChild(addBtn);
 }
 
 async function refreshFeed() {
