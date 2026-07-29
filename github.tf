@@ -25,7 +25,9 @@ resource "github_branch_protection" "main" {
     required_approving_review_count = 1
   }
 
-  enforce_admins = false
+  enforce_admins      = true
+  allows_force_pushes = false
+  allows_deletions    = false
 }
 
 # ── Jira-synklabelit (säilytetään .github/labels.yml:stä) ─────────────────────
