@@ -1111,6 +1111,9 @@ onPrefsChange((prefs) => {
   if (homeLink) homeLink.classList.toggle('nav__link--active', view === 'home');
   if (newsLink) newsLink.classList.toggle('nav__link--active', view === 'news');
   
+  // Vieritetään sivu ylös uuteen näkymään siirryttäessä (Issue #150 / L-012)
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  
   // Ladataan uutiset vain uutissivulla
   if (view === 'news') {
     refreshFeed();
