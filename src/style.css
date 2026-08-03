@@ -205,7 +205,7 @@ button { cursor: pointer; background: none; border: none; }
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-4);
-  max-width: var(--content-default);
+  max-width: var(--content-narrow);
   margin-inline: auto;
 }
 .feed-item {
