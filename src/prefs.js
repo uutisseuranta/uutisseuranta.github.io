@@ -45,13 +45,14 @@ import {
 
 // Tietomallin versio — kasvata kun DEFAULT_PREFS:iin lisätään kenttiä.
 // _migrate() käyttää tätä arvoa taaksepäin yhteensopivuuden varmistamiseksi.
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** Oletusarvoinen preferenssirakenne. Toimii myös migraation pohjana. */
 const DEFAULT_PREFS = {
   followedTags: [],
   theme: 'system',
   currentView: 'home',
+  showReadArticles: false,
   updatedAt: null,
   schemaVersion: SCHEMA_VERSION,
 };
