@@ -514,17 +514,31 @@ function renderFeed(articles) {
   let displayedArticles = articles;
   if (hideRead && !currentTagFilter) {
     const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
-    displayedArticles = articles.filter(item => {
-      const seenKey = `seen_${uid}_art_${item.id}`;
-      return !localStorage.getItem(seenKey);
-    });
+    const prefix = `seen_${uid}_art_`;
+    
+    // Optimointi (Katselmuskommentti): Luetaan avaimet Set-rakenteeseen kerralla
+    const seenIds = new Set();
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          seenIds.add(key.substring(prefix.length));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to read seen keys from localStorage:", e);
+    }
+    
+    displayedArticles = articles.filter(item => !seenIds.has(String(item.id)));
   }
 
   if (displayedArticles.length === 0) {
     if (currentFeedLimit < 500) {
       const nextLimit = currentFeedLimit === 5 ? 50 : 500;
-      setTimeout(() => loadMoreFeed(nextLimit), 0);
-      return;
+      if (nextLimit > currentFeedLimit) { // Suojataan ikuiselta silmukalta
+        setTimeout(() => loadMoreFeed(nextLimit), 0);
+        return;
+      }
     }
     grid.innerHTML = '<div class="profile-empty profile-empty-text">Ei uutisia valituilla kriteereillä.</div>';
     return;
