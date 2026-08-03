@@ -508,13 +508,30 @@ function renderFeed(articles) {
   grid.innerHTML = '';
   grid.setAttribute('aria-busy', 'false');
 
-  if (articles.length === 0) {
+  const prefs = getPrefs();
+  const hideRead = !prefs.showReadArticles;
+
+  let displayedArticles = articles;
+  if (hideRead && !currentTagFilter) {
+    const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
+    displayedArticles = articles.filter(item => {
+      const seenKey = `seen_${uid}_art_${item.id}`;
+      return !localStorage.getItem(seenKey);
+    });
+  }
+
+  if (displayedArticles.length === 0) {
+    if (currentFeedLimit < 500) {
+      const nextLimit = currentFeedLimit === 5 ? 50 : 500;
+      setTimeout(() => loadMoreFeed(nextLimit), 0);
+      return;
+    }
     grid.innerHTML = '<div class="profile-empty profile-empty-text">Ei uutisia valituilla kriteereillä.</div>';
     return;
   }
 
   // Luodaan uutiskortit
-  articles.forEach((item, index) => {
+  displayedArticles.forEach((item, index) => {
     const isLead = index === 0 && !currentTagFilter;
     const card = document.createElement('div');
     
