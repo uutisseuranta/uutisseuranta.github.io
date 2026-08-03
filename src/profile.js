@@ -162,7 +162,7 @@ function _renderContent() {
     <section class="profile-section">
       <h3 class="profile-section-title">Omat tiedot</h3>
       <p class="profile-help profile-info-desc">
-        Lataa kaikki tallennetut asetuksesi JSON-tiedostona.
+        Lataa kaikki tallennetut asetuksesi JSON-tiedostona tai tyhjennä ne laitteeltasi.
       </p>
       <button class="btn-export" id="btn-export-json">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -172,6 +172,9 @@ function _renderContent() {
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
         Lataa asetukset (JSON)
+      </button>
+      <button class="btn-danger-ghost" id="btn-clear-settings">
+        Tyhjennä asetukset
       </button>
     </section>
 
@@ -218,6 +221,26 @@ function _renderContent() {
   // JSON-vienti
   body.querySelector('#btn-export-json')?.addEventListener('click', () => {
     exportPrefsAsJson(_user);
+  });
+
+  // Tyhjennä asetukset (Issue #93)
+  body.querySelector('#btn-clear-settings')?.addEventListener('click', () => {
+    showConfirm("Haluatko varmasti tyhjentää kaikki tallennetut asetuksesi tästä selaimesta? Tämä nollaa teeman ja seuratut aiheet.", async () => {
+      const uid = _user.uid;
+      if (uid && uid !== 'mock-uid-123') {
+        try {
+          await updatePrefs({ theme: 'system', followedTags: [] });
+        } catch (err) {
+          console.error("Firestore-asetusten nollaus epäonnistui:", err);
+        }
+      }
+      localStorage.removeItem(`prefs_${uid}`);
+      localStorage.removeItem(`seen_${uid}`);
+      localStorage.removeItem('prefs_anon');
+      localStorage.removeItem('seen_anon');
+      closeProfileModal();
+      window.location.reload();
+    });
   });
 
   // Kirjaudu ulos profiilista

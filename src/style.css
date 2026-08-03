@@ -1146,3 +1146,22 @@ body.view-news .view-home-only {
   gap: var(--space-2);
   max-width: 340px;
 }
+.btn-danger-ghost {
+  background: transparent;
+  color: #e02424;
+  border: 1px solid #e02424;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: var(--space-3);
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-danger-ghost:hover {
+  background: rgba(224, 36, 36, 0.08);
+}
