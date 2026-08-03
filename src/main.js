@@ -549,6 +549,16 @@ function renderFeed(articles) {
       setTimeout(() => loadMoreFeed(nextLimit), 0);
       return;
     }
+    
+    // Varmistetaan, että tagipilvi renderöidään ja näytetään, vaikka uutisia ei näkyisikään aloitussivulla
+    if (cachedArticles) {
+      renderTagCloud(cachedArticles);
+      const tagCloudContainer = document.getElementById('tag-cloud');
+      if (tagCloudContainer) {
+        tagCloudContainer.style.display = 'flex';
+      }
+    }
+    
     grid.innerHTML = '<div class="profile-empty profile-empty-text">Ei uutisia valituilla kriteereillä.</div>';
     return;
   }
