@@ -70,6 +70,18 @@ export default defineConfig({
           }
         ]
       }
-    })
+    }),
+    {
+      name: 'html-csp-transform',
+      transformIndexHtml(html, ctx) {
+        if (ctx.server) {
+          return html;
+        }
+        return html.replace(
+          "style-src 'self' 'unsafe-inline'",
+          "style-src 'self'"
+        );
+      }
+    }
   ]
 });

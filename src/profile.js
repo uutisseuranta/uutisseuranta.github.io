@@ -102,28 +102,26 @@ function _renderContent() {
   let avatarHTML = '';
   if (_user.photoURL) {
     avatarHTML = `<img src="${_escAttr(_user.photoURL)}" alt="" width="64" height="64"
-                       class="profile-avatar" loading="lazy"
-                       onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">`;
+                       class="profile-avatar" loading="lazy">`;
   }
 
   const svgFallback = `
     <svg class="profile-avatar-fallback" width="64" height="64" viewBox="0 0 24 24"
-         fill="none" stroke="currentColor" stroke-width="1.5"
-         style="background:var(--color-surface-offset); border-radius:var(--radius-full); padding:var(--space-2); color:var(--color-text-muted); ${_user.photoURL ? 'display:none;' : ''}">
+         fill="none" stroke="currentColor" stroke-width="1.5">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
     </svg>
   `;
 
   body.innerHTML = `
     <div class="profile-user">
-      <div style="position:relative; width:64px; height:64px; flex-shrink:0;">
+      <div class="profile-avatar-container">
         ${avatarHTML}
         ${svgFallback}
       </div>
       <div>
         <div class="profile-name">${_escHtml(_user.displayName || '–')}</div>
         <div class="profile-email">${_escHtml(_user.email || '')}</div>
-        <div class="profile-created" style="font-size:var(--text-xs);color:var(--color-text-faint);margin-top:var(--space-1)">Liittynyt: ${_user.metadata && _user.metadata.creationTime ? new Date(_user.metadata.creationTime).toLocaleDateString('fi-FI') : '–'}</div>
+        <div class="profile-created">Liittynyt: ${_user.metadata && _user.metadata.creationTime ? new Date(_user.metadata.creationTime).toLocaleDateString('fi-FI') : '–'}</div>
       </div>
     </div>
 
@@ -163,8 +161,7 @@ function _renderContent() {
 
     <section class="profile-section">
       <h3 class="profile-section-title">Omat tiedot</h3>
-      <p class="profile-help"
-         style="font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-4)">
+      <p class="profile-help profile-info-desc">
         Lataa kaikki tallennetut asetuksesi JSON-tiedostona.
       </p>
       <button class="btn-export" id="btn-export-json">
@@ -180,12 +177,31 @@ function _renderContent() {
 
     <section class="profile-section">
       <h3 class="profile-section-title">Tilinhallinta</h3>
-      <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-2)">
+      <div class="profile-actions-row">
         <button class="btn-profile-logout" id="btn-profile-logout">Kirjaudu ulos</button>
         <button class="btn-danger" id="btn-delete-account">Poista tili</button>
       </div>
     </section>
   `;
+
+  // Korjataan CSP-yhteensopivaksi: asetetaan virhekuuntelija profiilikuvalle ohjelmallisesti
+  const avatarImg = body.querySelector('.profile-avatar');
+  const avatarFallback = body.querySelector('.profile-avatar-fallback');
+  if (avatarImg && avatarFallback) {
+    if (_user.photoURL) {
+      avatarFallback.classList.add('hidden');
+      avatarImg.addEventListener('error', () => {
+        avatarImg.classList.add('hidden');
+        avatarFallback.classList.remove('hidden');
+      });
+      if (avatarImg.complete && avatarImg.naturalWidth === 0) {
+        avatarImg.classList.add('hidden');
+        avatarFallback.classList.remove('hidden');
+      }
+    }
+  } else if (avatarFallback) {
+    avatarFallback.classList.remove('hidden');
+  }
 
   // Tagien poisto
   body.querySelectorAll('.profile-tag-remove').forEach(btn => {
@@ -281,16 +297,12 @@ function showToast(message, isError = false) {
 
 function showConfirm(message, onConfirm) {
   const box = document.createElement('div');
-  box.className = 'pwa-toast';
-  box.style.flexDirection = 'column';
-  box.style.alignItems = 'flex-start';
-  box.style.gap = 'var(--space-2)';
-  box.style.maxWidth = '340px';
+  box.className = 'pwa-toast pwa-toast--confirm';
   box.innerHTML = `
-    <span style="font-weight:600;">${message}</span>
-    <div style="display:flex; gap:var(--space-3); margin-top:var(--space-2); width:100%;">
-      <button class="pwa-toast__btn" id="confirm-yes-btn" style="background:#e11d48;">Kyllä</button>
-      <button class="pwa-toast__btn" id="confirm-no-btn" style="background:var(--color-surface-offset); color:var(--color-text); border:1px solid var(--color-border);">Peruuta</button>
+    <span class="pwa-toast-message">${message}</span>
+    <div class="pwa-toast-actions">
+      <button class="pwa-toast__btn pwa-toast__btn--confirm" id="confirm-yes-btn">Kyllä</button>
+      <button class="pwa-toast__btn pwa-toast__btn--cancel" id="confirm-no-btn">Peruuta</button>
     </div>
   `;
   document.body.appendChild(box);

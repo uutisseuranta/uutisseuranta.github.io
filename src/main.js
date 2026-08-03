@@ -164,7 +164,7 @@ myOnAuthStateChanged(auth, async (user) => {
           const section = card.querySelector(`.feed-item__comments-section[data-id="${pendingArticleId}"]`);
           if (btn && section) {
             section.style.display = 'block';
-            section.innerHTML = '<div style="font-size:var(--text-xs); color:var(--color-text-faint);">Ladataan kommentteja...</div>';
+            section.innerHTML = '<div class="comments-loading-text">Ladataan kommentteja...</div>';
             try {
               const replies = await fetchReplies(pendingArticleId);
               renderCommentsSection(card, pendingArticleId, replies);
@@ -354,16 +354,33 @@ async function loadHomepageStats() {
     if (elActiveSources && data.active_sources && data.active_sources.length > 0) {
       const maxCnt = Math.max(...data.active_sources.map(s => s.cnt || 1));
       
-      let html = '';
+      elActiveSources.innerHTML = '';
       data.active_sources.forEach(source => {
         const pct = Math.max(5, Math.round(((source.cnt || 0) / maxCnt) * 100));
-        html += `<div class="vis-row">
-          <span class="vis-source-name">${sanitize(source.name)}</span>
-          <div class="vis-bar-wrap"><div class="vis-bar" style="width:${pct}%"></div></div>
-          <span class="vis-count">${source.cnt}</span>
-        </div>`;
+        
+        const row = document.createElement('div');
+        row.className = 'vis-row';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'vis-source-name';
+        nameSpan.textContent = source.name;
+        
+        const barWrap = document.createElement('div');
+        barWrap.className = 'vis-bar-wrap';
+        const bar = document.createElement('div');
+        bar.className = 'vis-bar';
+        bar.style.width = `${pct}%`;
+        barWrap.appendChild(bar);
+        
+        const countSpan = document.createElement('span');
+        countSpan.className = 'vis-count';
+        countSpan.textContent = source.cnt;
+        
+        row.appendChild(nameSpan);
+        row.appendChild(barWrap);
+        row.appendChild(countSpan);
+        elActiveSources.appendChild(row);
       });
-      elActiveSources.innerHTML = html;
     }
   } catch (err) {
     console.warn('Tilastojen haku epäonnistui:', err);
@@ -492,7 +509,7 @@ function renderFeed(articles) {
   grid.setAttribute('aria-busy', 'false');
 
   if (articles.length === 0) {
-    grid.innerHTML = '<div class="profile-empty" style="grid-column: 1/-1; text-align: center;">Ei uutisia valituilla kriteereillä.</div>';
+    grid.innerHTML = '<div class="profile-empty profile-empty-text">Ei uutisia valituilla kriteereillä.</div>';
     return;
   }
 
@@ -553,47 +570,47 @@ function renderFeed(articles) {
     card.setAttribute('data-fingerprint', fingerprint);
 
     card.innerHTML = `
-      ${imageUrl ? `<a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow" style="display:block; overflow:hidden; border-radius:var(--radius-md);"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
+      ${imageUrl ? `<a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link article-link-image-wrap" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
       <h3 class="feed-item__title"><a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       
-      <div class="reaction-container" style="display:flex; flex-direction:column; gap:var(--space-2); width:100%; margin-top:var(--space-3);">
+      <div class="reaction-container reaction-container-vertical">
         ${commentCount > 0 ? `
-        <button class="btn-comments-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:600; padding:0; align-self:flex-start;">
+        <button class="btn-comments-toggle btn-comments-toggle-styled" data-id="${item.id}">
           💬 Kommentit (${commentCount})
         </button>
         ` : ''}
         
-        <div class="quick-comment-container" style="width:100%; display:flex; flex-direction:column; gap:var(--space-2);">
-          <textarea class="quick-comment-textarea" placeholder="Kirjoita kommentti..." data-id="${item.id}" style="width:100%; min-height:36px; height:36px; padding:var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-md); font-family:inherit; font-size:var(--text-xs); background:var(--color-surface); color:var(--color-text); resize:none; transition:all 0.2s ease;" aria-label="Pikakommentti"></textarea>
-          <div class="quick-comment-actions" style="display:none; justify-content:flex-end; gap:var(--space-2);">
-            <button class="btn-quick-comment-submit btn-primary" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-3);">Lähetä</button>
-            <button class="btn-quick-comment-cancel btn-ghost" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-3);">Peruuta</button>
+        <div class="quick-comment-container quick-comment-container-styled">
+          <textarea class="quick-comment-textarea quick-comment-textarea-styled" placeholder="Kirjoita kommentti..." data-id="${item.id}" aria-label="Pikakommentti"></textarea>
+          <div class="quick-comment-actions quick-comment-actions-styled">
+            <button class="btn-quick-comment-submit btn-primary btn-quick-comment-submit-styled">Lähetä</button>
+            <button class="btn-quick-comment-cancel btn-ghost btn-quick-comment-cancel-styled">Peruuta</button>
           </div>
         </div>
       </div>
 
-      <div class="feed-item__meta" style="margin-top:var(--space-4); display:flex; align-items:center; gap:var(--space-2); width:100%; flex-wrap:wrap;">
+      <div class="feed-item__meta feed-item__meta-row">
         <span class="feed-item__source">${sourceName}</span>
-        <span class="feed-item__time" style="margin-left:0; margin-right:auto;">${timeStr}</span>
-        ${isPaywalled ? `<span class="feed-item__paywall-badge" style="font-size:var(--text-xs); color:#e11d48; font-weight:600; background:rgba(225,29,72,0.12); padding:1px 6px; border-radius:var(--radius-sm);">🔒 Tilaajille</span>` : ''}
+        <span class="feed-item__time feed-item__time-left">${timeStr}</span>
+        ${isPaywalled ? `<span class="feed-item__paywall-badge feed-item__paywall-badge-styled">🔒 Tilaajille</span>` : ''}
         
-        <div class="feed-item__tags-list" style="display:flex; align-items:center; gap:var(--space-1); flex-wrap:wrap;">
-          ${displayTags.map(t => `<span class="feed-item__tag" data-tag="${sanitize(t.name)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:var(--color-surface-hover); border:1px solid var(--color-divider); padding:1px 6px; border-radius:var(--radius-sm); cursor:pointer; font-weight:500; transition:all 0.2s ease;">${sanitize(t.name)}</span>`).join('')}
-          <button class="btn-add-tag-toggle" data-id="${item.id}" style="font-size:var(--text-xs); color:var(--color-primary); background:var(--color-surface-hover); border:1px solid var(--color-divider); padding:1px 6px; border-radius:var(--radius-sm); cursor:pointer; font-weight:500; transition:all 0.2s ease;" aria-label="Lisää tagi">+</button>
+        <div class="feed-item__tags-list feed-item__tags-list-row">
+          ${displayTags.map(t => `<span class="feed-item__tag feed-item__tag-styled" data-tag="${sanitize(t.name)}">${sanitize(t.name)}</span>`).join('')}
+          <button class="btn-add-tag-toggle btn-add-tag-toggle-styled" data-id="${item.id}" aria-label="Lisää tagi">+</button>
         </div>
         ${archiveUrl ? `
-        <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link" style="margin-left:auto; font-size:var(--text-xs); color:var(--color-primary); text-decoration:none; display:flex; align-items:center; gap:4px;" aria-label="Lue artikkelin ensimmäinen arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
+        <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link feed-item__archive-link-styled" aria-label="Lue artikkelin ensimmäinen arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
           🏛️ Arkisto
         </a>
         ` : ''}
       </div>
-      <div class="add-tag-form-container" data-id="${item.id}" style="display:none; margin-top:var(--space-2); gap:var(--space-2); align-items:center; width:100%;">
-        <input type="text" class="add-tag-input" placeholder="tiede" style="font-size:var(--text-xs); padding:var(--space-1) var(--space-2); border:1px solid var(--color-divider); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); width:120px;" aria-label="Uuden tagin nimi" />
-        <button class="btn-add-tag-submit btn-primary" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Tallenna</button>
-        <button class="btn-add-tag-cancel btn-ghost" style="font-size:var(--text-xxs); padding:var(--space-1) var(--space-2);">Peruuta</button>
+      <div class="add-tag-form-container add-tag-form-container-styled" data-id="${item.id}">
+        <input type="text" class="add-tag-input add-tag-input-styled" placeholder="tiede" aria-label="Uuden tagin nimi" />
+        <button class="btn-add-tag-submit btn-primary btn-add-tag-submit-styled">Tallenna</button>
+        <button class="btn-add-tag-cancel btn-ghost btn-add-tag-cancel-styled">Peruuta</button>
       </div>
-      <div class="feed-item__comments-section" data-id="${item.id}" style="display:none; margin-top:var(--space-4); border-top:1px solid var(--color-divider); padding-top:var(--space-4); width:100%;"></div>
+      <div class="feed-item__comments-section feed-item__comments-section-styled" data-id="${item.id}"></div>
     `;
 
     // Click handler for quick comment
@@ -639,7 +656,7 @@ function renderFeed(articles) {
           const section = card.querySelector(`.feed-item__comments-section[data-id="${item.id}"]`);
           if (section) {
             section.style.display = 'block';
-            section.innerHTML = '<div style="font-size:var(--text-xs); color:var(--color-text-faint);">Ladataan kommentteja...</div>';
+            section.innerHTML = '<div class="comments-loading-text">Ladataan kommentteja...</div>';
             const freshReplies = await fetchReplies(item.id);
             renderCommentsSection(card, item.id, freshReplies);
           }
@@ -791,7 +808,7 @@ function renderFeed(articles) {
           section.style.display = 'none';
         } else {
           section.style.display = 'block';
-          section.innerHTML = '<div style="font-size:var(--text-xs); color:var(--color-text-faint);">Ladataan kommentteja...</div>';
+          section.innerHTML = '<div class="comments-loading-text">Ladataan kommentteja...</div>';
           try {
             const replies = await fetchReplies(articleId);
             renderCommentsSection(card, articleId, replies);
@@ -954,13 +971,13 @@ async function refreshFeed() {
       grid.setAttribute('aria-busy', 'false');
       // Virherajapinta / Error boundary uutisvirralle (Issue #58)
       grid.innerHTML = `
-        <div class="error-boundary" style="grid-column: 1/-1; text-align: center; padding: var(--space-8); border: 2px dashed var(--color-error, #ff4d4d); border-radius: var(--radius-md); background: var(--color-bg-offset);">
-          <div style="font-size: var(--text-2xl); margin-bottom: var(--space-4);">⚠️</div>
-          <h3 style="margin-bottom: var(--space-2); color: var(--color-text-bright);">Uutisvirran lataus epäonnistui</h3>
-          <p style="color: var(--color-text-faint); margin-bottom: var(--space-6); font-size: var(--text-sm);">${sanitize(err.message || 'Yhteysongelma rajapintaan.')}</p>
-          <div style="display: flex; gap: var(--space-4); justify-content: center;">
-            <button class="btn btn--primary" id="btn-error-retry" style="padding: var(--space-2) var(--space-4); background: var(--color-primary); color: white; border: none; border-radius: var(--radius-sm); cursor: pointer;">Yritä uudelleen</button>
-            ${cachedArticles && cachedArticles.length > 0 ? `<button class="btn btn--secondary" id="btn-error-offline" style="padding: var(--space-2) var(--space-4); background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer;">Näytä offline-versio</button>` : ''}
+        <div class="error-boundary error-boundary-styled">
+          <div class="error-boundary-icon">⚠️</div>
+          <h3 class="error-boundary-title">Uutisvirran lataus epäonnistui</h3>
+          <p class="error-boundary-desc">${sanitize(err.message || 'Yhteysongelma rajapintaan.')}</p>
+          <div class="error-boundary-actions">
+            <button class="btn btn--primary btn-error-retry-styled" id="btn-error-retry">Yritä uudelleen</button>
+            ${cachedArticles && cachedArticles.length > 0 ? `<button class="btn btn--secondary btn-error-offline-styled" id="btn-error-offline">Näytä offline-versio</button>` : ''}
           </div>
         </div>
       `;
@@ -1080,7 +1097,7 @@ async function loadMoreFeed(newLimit) {
   } catch (err) {
     console.error("Load more failed:", err);
     if (loader) {
-      loader.innerHTML = `<span style="color:var(--color-error);">${sanitize(err.message || 'Haku epäonnistui')}</span>`;
+      loader.innerHTML = `<span class="comment-fetch-error-text">${sanitize(err.message || 'Haku epäonnistui')}</span>`;
       setTimeout(() => loader.remove(), 3000);
     }
   }
@@ -1214,8 +1231,8 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
   commentsList.style.gap = 'var(--space-3)';
   commentsList.style.marginBottom = 'var(--space-4)';
 
-  const mainComments = replies.filter(r => r.object.inReplyTo === articleId);
-  const repliesToComments = replies.filter(r => r.object.inReplyTo !== articleId);
+  const mainComments = replies.filter(r => r.inReplyTo === articleId);
+  const repliesToComments = replies.filter(r => r.inReplyTo !== articleId);
 
   if (mainComments.length === 0) {
     const noComments = document.createElement('div');
@@ -1227,7 +1244,7 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
     commentsList.appendChild(noComments);
   } else {
     mainComments.forEach(comment => {
-      const cObj = comment.object;
+      const cObj = comment;
       const actorName = cObj.attributedTo ? cObj.attributedTo.split('/').pop() : 'Käyttäjä';
       const actorPic = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
       const pubDate = new Date(cObj.published);
@@ -1241,27 +1258,27 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
       commentDiv.style.background = 'var(--color-surface-hover)';
 
       commentDiv.innerHTML = `
-        <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2);">
-          <img src="${actorPic}" alt="" style="width:24px; height:24px; border-radius:50%;" />
-          <strong style="font-size:var(--text-sm);">${sanitize(actorName)}</strong>
-          <time datetime="${cObj.published}" style="font-size:var(--text-xs); color:var(--color-text-faint); margin-left:auto;">${timeAgo}</time>
+        <div class="comment-header-row">
+          <img src="${actorPic}" alt="" class="comment-actor-avatar" />
+          <strong class="comment-actor-name">${sanitize(actorName)}</strong>
+          <time datetime="${cObj.published}" class="comment-published-time">${timeAgo}</time>
         </div>
-        <p style="font-size:var(--text-sm); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${sanitize(cObj.content)}</p>
-        <div style="display:flex; gap:var(--space-2); align-items:center;">
-          <button class="btn-comment-reply" data-parent-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
-          <button class="btn-comment-agree" data-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0; margin-left:auto;">👍 Samaa mieltä (${cObj.like_count || 0})</button>
-          <button class="btn-comment-disagree" data-id="${sanitize(cObj.id)}" style="font-size:var(--text-xs); color:var(--color-text-muted); background:none; border:none; cursor:pointer; padding:0;">👎 Eri mieltä (${cObj.dislike_count || 0})</button>
+        <p class="comment-content-text">${sanitize(cObj.content)}</p>
+        <div class="comment-actions-row">
+          <button class="btn-comment-reply btn-comment-reply-styled" data-parent-id="${sanitize(cObj.id)}">Vastaa</button>
+          <button class="btn-comment-agree btn-comment-agree-styled" data-id="${sanitize(cObj.id)}">👍 Samaa mieltä (${cObj.like_count || 0})</button>
+          <button class="btn-comment-disagree btn-comment-disagree-styled" data-id="${sanitize(cObj.id)}">👎 Eri mieltä (${cObj.dislike_count || 0})</button>
         </div>
-        <div class="replies-container" style="margin-left:var(--space-6); margin-top:var(--space-3); display:flex; flex-direction:column; gap:var(--space-2); border-left:2px solid var(--color-divider); padding-left:var(--space-3);">
+        <div class="replies-container comment-replies-container">
           <!-- Vastaukset rendataan tähän -->
         </div>
       `;
 
-      const childReplies = repliesToComments.filter(r => r.object.inReplyTo === cObj.id);
+      const childReplies = repliesToComments.filter(r => r.inReplyTo === cObj.id);
       const repliesContainer = commentDiv.querySelector('.replies-container');
 
       childReplies.forEach(reply => {
-        const rObj = reply.object;
+        const rObj = reply;
         const rActorName = rObj.attributedTo ? sanitize(rObj.attributedTo.split('/').pop()) : 'Käyttäjä';
         const rTimeAgo = new Date(rObj.published).toLocaleString('fi-FI');
 
@@ -1273,14 +1290,14 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
         replyDiv.style.padding = 'var(--space-2)';
 
         replyDiv.innerHTML = `
-          <div style="display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-1);">
-            <img src="${actorPic}" alt="" style="width:20px; height:20px; border-radius:50%;" />
-            <strong style="font-size:var(--text-xs);">${rActorName}</strong>
-            <time datetime="${rObj.published}" style="font-size:var(--text-xxs); color:var(--color-text-faint); margin-left:auto;">${rTimeAgo}</time>
+          <div class="reply-header-row">
+            <img src="${actorPic}" alt="" class="comment-actor-avatar-l2" />
+            <strong class="comment-actor-name-l2">${rActorName}</strong>
+            <time datetime="${rObj.published}" class="comment-published-time-l2">${rTimeAgo}</time>
           </div>
-          <p style="font-size:var(--text-xs); margin:0 0 var(--space-2) 0; white-space:pre-wrap;">${sanitize(rObj.content)}</p>
-          <div style="display:flex; gap:var(--space-2); align-items:center;">
-            <button class="btn-comment-reply-l2" data-parent-id="${sanitize(cObj.id)}" style="font-size:var(--text-xxs); color:var(--color-primary); background:none; border:none; cursor:pointer; padding:0;">Vastaa</button>
+          <p class="comment-content-text-l2">${sanitize(rObj.content)}</p>
+          <div class="comment-actions-row">
+            <button class="btn-comment-reply-l2 btn-comment-reply-l2-styled" data-parent-id="${sanitize(cObj.id)}">Vastaa</button>
           </div>
         `;
         repliesContainer.appendChild(replyDiv);
@@ -1310,7 +1327,7 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
   // Kerätään viestiketjun kommentoijien nimet autocompletea varten ja sanitoidaan ne XSS:n estämiseksi
   const threadUsers = Array.from(new Set(
     replies
-      .map(r => sanitize((r.object && r.object.attributedTo ? r.object.attributedTo : '').split('/').pop()))
+      .map(r => sanitize((r.attributedTo ? r.attributedTo : '').split('/').pop()))
       .filter(name => name && name !== 'Käyttäjä')
   ));
   bindAutocompleteToTextarea(form.querySelector('.comment-textarea'), threadUsers);
@@ -1475,7 +1492,34 @@ function updateActiveSourcesWidget(articles) {
       </div>
     `;
   });
-  elActiveSources.innerHTML = html;
+  
+  // Refaktoroitu ohjelmalliseksi CSP-yhteensopivuuden takaamiseksi
+  elActiveSources.innerHTML = '';
+  sorted.forEach(([name, count]) => {
+    const pct = Math.max(5, Math.round((count / max) * 100));
+    const row = document.createElement('div');
+    row.className = 'vis-row';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'vis-source-name';
+    nameSpan.textContent = name;
+    
+    const barWrap = document.createElement('div');
+    barWrap.className = 'vis-bar-wrap';
+    const bar = document.createElement('div');
+    bar.className = 'vis-bar';
+    bar.style.width = `${pct}%`;
+    barWrap.appendChild(bar);
+    
+    const countSpan = document.createElement('span');
+    countSpan.className = 'vis-count';
+    countSpan.textContent = count;
+    
+    row.appendChild(nameSpan);
+    row.appendChild(barWrap);
+    row.appendChild(countSpan);
+    elActiveSources.appendChild(row);
+  });
 }
 
 // ---- COMMENT AUTOCOMPLETE (Issue #14 & #15) ----
