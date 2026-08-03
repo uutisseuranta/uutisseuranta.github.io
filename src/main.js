@@ -152,6 +152,7 @@ myOnAuthStateChanged(auth, async (user) => {
     }
 
     await loadPrefs();
+    migrateOldSeenKeys();
     updateNotificationsBadge();
 
     // Check for pending comment (Issue #11)
@@ -186,6 +187,7 @@ myOnAuthStateChanged(auth, async (user) => {
     userAvatar.src = '';
 
     await loadPrefs();
+    migrateOldSeenKeys();
     updateNotificationsBadge();
   }
 });
@@ -275,6 +277,10 @@ async function markArticleAsRead(articleId, card) {
   const fingerprint = card.getAttribute('data-fingerprint') || 'true';
   const listKey = `seen_list_${uid}`;
   
+  // Huom: Jos useampi IntersectionObserver-kutsu laukeaa samanaikaisesti nopean
+  // vierityksen aikana, taulukko luetaan ja kirjoitetaan ilman lukitusta, mikä voi
+  // johtaa ylikirjoittamiseen (race condition). Käytännössä riski ja seuraukset
+  // (yksittäisen luetun merkin katoaminen) ovat erittäin vähäisiä.
   let seen = [];
   try {
     seen = JSON.parse(localStorage.getItem(listKey)) || [];
@@ -536,12 +542,12 @@ function renderFeed(articles) {
   }
 
   if (displayedArticles.length === 0) {
+    // Jos kaikki ladatut uutiset on jo luettu, ladataan automaattisesti suurempi erä.
+    // Pääte-ehtona toimii currentFeedLimit < 500, joka estää ikuisen lataussilmukan.
     if (currentFeedLimit < 500) {
       const nextLimit = currentFeedLimit === 5 ? 50 : 500;
-      if (nextLimit > currentFeedLimit) { // Suojataan ikuiselta silmukalta
-        setTimeout(() => loadMoreFeed(nextLimit), 0);
-        return;
-      }
+      setTimeout(() => loadMoreFeed(nextLimit), 0);
+      return;
     }
     grid.innerHTML = '<div class="profile-empty profile-empty-text">Ei uutisia valituilla kriteereillä.</div>';
     return;
@@ -1154,6 +1160,9 @@ onPrefsChange((prefs) => {
 
 function migrateOldSeenKeys() {
   try {
+    // TODO: Tämä kattaa vain nykyisen käyttäjän ja anonyymin tilan. Jos laitteella on aiemmin ollut
+    // kirjautuneena muita käyttäjiä (muita UID-tunnuksia), heidän vanhoja "seen_<uid>_art_*" avaimiaan
+    // ei siivota tai migroida. Tämä on pieni tallennustilavuoto, joka voidaan siivota myöhemmin.
     const uids = ['anonymous'];
     if (auth.currentUser) uids.push(auth.currentUser.uid);
     
@@ -1189,7 +1198,6 @@ function migrateOldSeenKeys() {
 
 // ---- SPA ROUTER CLICK HANDLERS ----
 const initSPARouter = () => {
-  migrateOldSeenKeys();
   const homeLink = document.getElementById('nav-link-home');
   const newsLink = document.getElementById('nav-link-news');
   const featuresLink = document.getElementById('nav-link-features');
