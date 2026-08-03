@@ -394,7 +394,7 @@ let currentFeedLimit = 5;
 let feedObserver = null;
 
 // ---- PWA SERVICE WORKER REGISTRATION (Issue #19 / L-011) ----
-if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+if ('serviceWorker' in navigator && !import.meta.env.DEV && !window.__DISABLE_SERVICE_WORKER__) {
   const wb = new Workbox('/sw.js');
 
   wb.addEventListener('waiting', () => {
@@ -538,11 +538,14 @@ function renderFeed(articles) {
     // Maksumuuri / Schema.org isAccessibleForFree
     const isPaywalled = item.isAccessibleForFree === false || (item.tag && item.tag.some(t => t.name && t.name.toLowerCase() === '#tilaajille'));
 
-    // Maksumuuriartikkelit näytetään aina — 🔒-badge kertoo käyttäjälle maksumuurista.
-    // Jos url_archive on saatavilla, päälinkki ohjaa arkistoon (ks. targetUrl alla).
-
     const originalUrl = item.url || '#';
     const archiveUrl = item.url_archive || null;
+
+    // Jos maksumuuriartikkelille ei ole olemassa Web Archive -snapshotia (url_archive), ei näytetä uutista syötteessä lainkaan
+    if (isPaywalled && !archiveUrl) {
+      return;
+    }
+
     // Jos kyseessä on maksumuuriartikkeli ja sille on arkistolinkki, päälinkki ohjaa suoraan toimivaan arkistoon
     const targetUrl = (isPaywalled && archiveUrl) ? archiveUrl : originalUrl;
 
@@ -593,17 +596,11 @@ function renderFeed(articles) {
       <div class="feed-item__meta feed-item__meta-row">
         <span class="feed-item__source">${sourceName}</span>
         <span class="feed-item__time feed-item__time-left">${timeStr}</span>
-        ${isPaywalled ? `<span class="feed-item__paywall-badge feed-item__paywall-badge-styled">🔒 Tilaajille</span>` : ''}
         
         <div class="feed-item__tags-list feed-item__tags-list-row">
           ${displayTags.map(t => `<span class="feed-item__tag feed-item__tag-styled" data-tag="${sanitize(t.name)}">${sanitize(t.name)}</span>`).join('')}
           <button class="btn-add-tag-toggle btn-add-tag-toggle-styled" data-id="${item.id}" aria-label="Lisää tagi">+</button>
         </div>
-        ${archiveUrl ? `
-        <a href="${sanitizeUrl(archiveUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="feed-item__archive-link feed-item__archive-link-styled" aria-label="Lue artikkelin ensimmäinen arkistoitu versio Wayback Machinessa (avautuu uudessa välilehdessä)">
-          🏛️ Arkisto
-        </a>
-        ` : ''}
       </div>
       <div class="add-tag-form-container add-tag-form-container-styled" data-id="${item.id}">
         <input type="text" class="add-tag-input add-tag-input-styled" placeholder="tiede" aria-label="Uuden tagin nimi" />

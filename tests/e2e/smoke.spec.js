@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Uutisseuranta Smoke Tests', () => {
   test.beforeEach(async ({ page }) => {
+    // Disable Service Worker registration in E2E tests to avoid caching flakiness
+    await page.addInitScript(() => {
+      window.__DISABLE_SERVICE_WORKER__ = true;
+    });
+
     // Log console errors to detect CORS or CSP violations
     page.on('console', msg => {
       if (msg.type() === 'error') {
