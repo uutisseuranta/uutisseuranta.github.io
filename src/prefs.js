@@ -132,7 +132,8 @@ export function getPrefs() {
  * Virhe Firestore-haussa ei kaada sovellusta — paikalliset tiedot riittävät.
  */
 export async function loadPrefs() {
-  _prefs = _readLocal() ?? { ...DEFAULT_PREFS };
+  const local = _readLocal();
+  _prefs = local ? _migrate(local) : { ...DEFAULT_PREFS };
   _notify();
 
   // Kirjautumaton käyttäjä tai Firestore ei alustettu: ei Firestore-latausta.
