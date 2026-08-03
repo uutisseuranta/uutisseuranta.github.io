@@ -2,9 +2,10 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Uutisseuranta Smoke Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Disable Service Worker registration in E2E tests to avoid caching flakiness
+    // Disable Service Worker registration and clear localStorage in E2E tests to avoid caching and isolation flakiness
     await page.addInitScript(() => {
       window.__DISABLE_SERVICE_WORKER__ = true;
+      localStorage.clear();
     });
 
     // Log console errors to detect CORS or CSP violations
