@@ -272,29 +272,35 @@ const readObserver = new IntersectionObserver((entries) => {
 
 async function markArticleAsRead(articleId, card) {
   const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
-  const seenKey = `seen_${uid}_art_${articleId}`;
   const fingerprint = card.getAttribute('data-fingerprint') || 'true';
+  const listKey = `seen_list_${uid}`;
   
-  if (localStorage.getItem(seenKey) === fingerprint) {
-    return; // Jo luettu tässä tilassa
+  let seen = [];
+  try {
+    seen = JSON.parse(localStorage.getItem(listKey)) || [];
+  } catch (e) {
+    seen = [];
   }
   
-  localStorage.setItem(seenKey, fingerprint);
+  const existingIndex = seen.findIndex(p => p[0] === String(articleId));
+  if (existingIndex !== -1) {
+    if (seen[existingIndex][1] === fingerprint) {
+      return; // Jo luettu samalla sormenjäljellä
+    }
+    seen.splice(existingIndex, 1);
+  }
   
-  // Rajoitetaan seen_ artikkelien määrä 1000:een FIFO-siivouksella (Päätös L-008)
+  seen.push([String(articleId), fingerprint]);
+  
+  // Kevyt FIFO-raja 10 000 artikkelille
+  if (seen.length > 10000) {
+    seen.shift();
+  }
+  
   try {
-    const keys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(`seen_${uid}_art_`)) {
-        keys.push(k);
-      }
-    }
-    if (keys.length > 1000) {
-      keys.slice(0, keys.length - 1000).forEach(k => localStorage.removeItem(k));
-    }
+    localStorage.setItem(listKey, JSON.stringify(seen));
   } catch (e) {
-    console.warn("FIFO cleanup failed:", e);
+    console.warn("FIFO write failed:", e);
   }
   
   // Päivitetään luetun tyyli uutiskortille
@@ -510,26 +516,23 @@ function renderFeed(articles) {
 
   const prefs = getPrefs();
   const hideRead = !prefs.showReadArticles;
+  const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
+
+  // Luetaan luetut uutiset kerralla Map-rakenteeseen tehokkuuden takia
+  let seenMap = new Map();
+  try {
+    const raw = localStorage.getItem(`seen_list_${uid}`);
+    if (raw) {
+      seenMap = new Map(JSON.parse(raw));
+    }
+  } catch (e) {
+    console.warn("Failed to read seen list:", e);
+  }
 
   let displayedArticles = articles;
   if (hideRead && !currentTagFilter) {
-    const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
-    const prefix = `seen_${uid}_art_`;
-    
-    // Optimointi (Katselmuskommentti): Luetaan avaimet Set-rakenteeseen kerralla
-    const seenIds = new Set();
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(prefix)) {
-          seenIds.add(key.substring(prefix.length));
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to read seen keys from localStorage:", e);
-    }
-    
-    displayedArticles = articles.filter(item => !seenIds.has(String(item.id)));
+    // tagi-haku ohittaa piilotuksen (tämä on tietoinen UX-suunnittelupäätös, jotta haut ovat aina kattavia)
+    displayedArticles = articles.filter(item => !seenMap.has(String(item.id)));
   }
 
   if (displayedArticles.length === 0) {
@@ -596,9 +599,7 @@ function renderFeed(articles) {
       comments: commentCount,
       tags: displayTags.map(t => t.name).sort()
     });
-    const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
-    const seenKey = `seen_${uid}_art_${item.id}`;
-    const isRead = localStorage.getItem(seenKey) === fingerprint;
+    const isRead = seenMap.get(String(item.id)) === fingerprint;
     
     card.className = `feed-item ${isLead ? 'feed-item--lead' : 'feed-item--small'} ${isRead ? 'feed-item--read' : ''}`;
     card.setAttribute('data-fingerprint', fingerprint);
@@ -1151,8 +1152,44 @@ onPrefsChange((prefs) => {
   }
 });
 
+function migrateOldSeenKeys() {
+  try {
+    const uids = ['anonymous'];
+    if (auth.currentUser) uids.push(auth.currentUser.uid);
+    
+    uids.forEach(uid => {
+      const listKey = `seen_list_${uid}`;
+      if (localStorage.getItem(listKey)) return;
+      
+      const migrated = [];
+      const keysToDelete = [];
+      const prefix = `seen_${uid}_art_`;
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          const artId = key.substring(prefix.length);
+          const val = localStorage.getItem(key);
+          migrated.push([artId, val]);
+          keysToDelete.push(key);
+        }
+      }
+      
+      if (migrated.length > 0) {
+        if (migrated.length > 10000) migrated.splice(0, migrated.length - 10000);
+        localStorage.setItem(listKey, JSON.stringify(migrated));
+        keysToDelete.forEach(k => localStorage.removeItem(k));
+        console.log(`[seen] Migrated ${migrated.length} seen articles for user ${uid}`);
+      }
+    });
+  } catch (e) {
+    console.warn("Migration of seen keys failed:", e);
+  }
+}
+
 // ---- SPA ROUTER CLICK HANDLERS ----
 const initSPARouter = () => {
+  migrateOldSeenKeys();
   const homeLink = document.getElementById('nav-link-home');
   const newsLink = document.getElementById('nav-link-news');
   const featuresLink = document.getElementById('nav-link-features');
