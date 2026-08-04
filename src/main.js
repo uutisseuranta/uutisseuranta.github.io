@@ -482,7 +482,18 @@ async function fetchOutbox(tag = null, limit = 50, retryCount = 0) {
     }
 
     const data = await response.json();
-    return data.orderedItems || [];
+    const items = data.orderedItems || [];
+    return items.map(item => {
+      if (item && item.type === 'Create' && item.object && typeof item.object === 'object') {
+        return {
+          ...item,
+          ...item.object,
+          id: item.id, // Keep Create activity ID as primary ID for seen_list tracking
+          type: item.object.type || 'Article'
+        };
+      }
+      return item;
+    });
   } catch (error) {
     console.error('Error fetching outbox:', error);
     throw error;
@@ -1010,7 +1021,7 @@ async function refreshFeed() {
     renderFeed(articles);
     setupScrollPagination();
   } catch (err) {
-    console.error("Feed loading failed:", err);
+    console.error("Feed loading failed:", err.stack || err);
     const grid = document.getElementById('feed-grid');
     if (grid) {
       grid.setAttribute('aria-busy', 'false');
@@ -1145,7 +1156,7 @@ async function loadMoreFeed(newLimit) {
     renderFeed(articles);
     setupScrollPagination();
   } catch (err) {
-    console.error("Load more failed:", err);
+    console.error("Load more failed:", err.stack || err);
     if (loader) {
       loader.remove();
     }
@@ -1283,7 +1294,18 @@ async function fetchReplies(articleId) {
   const res = await fetch(`${QUERY_API_URL}/ap/replies?id=${encodeURIComponent(articleId)}`);
   if (!res.ok) throw new Error("Kommenttien haku epäonnistui");
   const data = await res.json();
-  return data.orderedItems || [];
+  const items = data.orderedItems || [];
+  return items.map(item => {
+    if (item && item.type === 'Create' && item.object && typeof item.object === 'object') {
+      return {
+        ...item,
+        ...item.object,
+        id: item.id,
+        type: item.object.type || 'Note'
+      };
+    }
+    return item;
+  });
 }
 
 async function postComment(parentId, content) {
