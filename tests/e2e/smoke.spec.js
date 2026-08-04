@@ -2,9 +2,10 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Uutisseuranta Smoke Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Disable Service Worker registration in E2E tests to avoid caching flakiness
+    // Disable Service Worker registration and set testing flag in E2E tests
     await page.addInitScript(() => {
       window.__DISABLE_SERVICE_WORKER__ = true;
+      window.__TESTING__ = true;
     });
 
     // Navigate to establishing the correct origin

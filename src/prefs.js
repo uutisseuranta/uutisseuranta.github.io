@@ -35,6 +35,7 @@
 import {
   initializeFirestore,
   persistentLocalCache,
+  memoryLocalCache,
   getFirestore,
   doc,
   getDoc,
@@ -103,8 +104,9 @@ export function initPrefs(app, uid) {
     // jolloin preferenssit ovat luettavissa ja kirjoitettavissa myös offline-tilassa.
     try {
       if (!_dbInstance) {
+        const isTesting = typeof window !== 'undefined' && window.__TESTING__;
         _dbInstance = initializeFirestore(app, {
-          localCache: persistentLocalCache()
+          localCache: isTesting ? memoryLocalCache() : persistentLocalCache()
         });
       }
       _db = _dbInstance;
