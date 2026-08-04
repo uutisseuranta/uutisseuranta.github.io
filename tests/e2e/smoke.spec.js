@@ -2,21 +2,35 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Uutisseuranta Smoke Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Disable Service Worker registration and clear localStorage/IndexedDB in E2E tests to avoid caching and isolation flakiness
+    // Disable Service Worker registration in E2E tests to avoid caching flakiness
     await page.addInitScript(() => {
       window.__DISABLE_SERVICE_WORKER__ = true;
+    });
+
+    // Navigate to establishing the correct origin
+    const targetUrl = process.env.EFFECTIVE_URL || 'https://uutisseuranta.net';
+    console.log(`Establishing origin on ${targetUrl}...`);
+    await page.goto('/');
+
+    // Safely clear localStorage and IndexedDB with the correct origin context
+    await page.evaluate(async () => {
       localStorage.clear();
       sessionStorage.clear();
       if (window.indexedDB && window.indexedDB.databases) {
-        window.indexedDB.databases().then(dbs => {
-          dbs.forEach(db => {
-            try {
-              window.indexedDB.deleteDatabase(db.name);
-            } catch (e) {}
+        const dbs = await window.indexedDB.databases();
+        for (const db of dbs) {
+          await new Promise((resolve) => {
+            const req = window.indexedDB.deleteDatabase(db.name);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
           });
-        });
+        }
       }
     });
+
+    // Reload page with a clean slate
+    await page.reload();
 
     // Log console errors to detect CORS or CSP violations
     page.on('console', msg => {
@@ -24,10 +38,6 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         console.error(`CONSOLE ERROR: ${msg.text()}`);
       }
     });
-    
-    const targetUrl = process.env.EFFECTIVE_URL || 'https://uutisseuranta.net';
-    console.log(`Navigating to ${targetUrl}...`);
-    await page.goto('/');
   });
 
   test('UP-2: should load the news feed without errors', async ({ page }) => {
