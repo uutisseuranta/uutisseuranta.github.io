@@ -925,7 +925,7 @@ function renderTagCloud(articles) {
   articles.forEach(item => {
     if (item.tag) {
       item.tag.forEach(t => {
-        if (!t.name.startsWith('likes:') && !t.name.startsWith('dislikes:')) {
+        if (t && t.name && !t.name.startsWith('likes:') && !t.name.startsWith('dislikes:')) {
           counts.set(t.name, (counts.get(t.name) || 0) + 1);
         }
       });
