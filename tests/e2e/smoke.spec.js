@@ -449,4 +449,64 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       expect(imageBox.width).toBeLessThanOrEqual(960);
     }
   });
+
+  test('should scroll through all articles, mark them read, refresh feed by clicking Uutiset, and verify empty state with visible tag cloud', async ({ page }) => {
+    // 1. Mock outbox to return exactly 5 articles
+    await page.route('**/ap/outbox*', async route => {
+      const items = Array.from({ length: 5 }).map((_, i) => ({
+        "id": `https://activitystreams.uutisseuranta.net/ap/outbox/article-${i}`,
+        "type": "Create",
+        "actor": "https://uutisseuranta.net/sources/yle",
+        "object": {
+          "id": `https://uutisseuranta.net/articles/${i}`,
+          "type": "Article",
+          "name": `Testiuutinen ${i}`,
+          "summary": `Tämä on uutisen ${i} kuvaus.`,
+          "url": `https://yle.fi/uutiset/${i}`,
+          "published": new Date().toISOString(),
+          "tag": [
+            { "type": "Hashtag", "name": "#testausta" }
+          ]
+        }
+      }));
+      await route.fulfill({
+        json: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "OrderedCollection",
+          "totalItems": 5,
+          "orderedItems": items
+        }
+      });
+    });
+
+    // Go to news section
+    const newsLink = page.locator('#nav-link-news');
+    await newsLink.click();
+
+    // Verify cards load
+    const cards = page.locator('.feed-item');
+    await expect(cards.first()).toBeVisible({ timeout: 15000 });
+    const count = await cards.count();
+    expect(count).toBe(5);
+
+    // Scroll each card into view to trigger mark-as-read status
+    for (let i = 0; i < count; i++) {
+      await cards.nth(i).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600); // Wait for IntersectionObserver read logging
+    }
+
+    // Click on Uutiset navigation link to trigger refreshFeed()
+    await newsLink.click();
+
+    // Verify empty state message is shown
+    const emptyState = page.locator('text=Ei uutisia valituilla kriteereillä');
+    await expect(emptyState).toBeVisible({ timeout: 15000 });
+
+    // Verify tag cloud is still visible and has tags
+    const tagCloud = page.locator('#tag-cloud');
+    await expect(tagCloud).toBeVisible();
+    
+    const tags = tagCloud.locator('.tag-cloud__tag');
+    await expect(tags.first()).toBeVisible();
+  });
 });
