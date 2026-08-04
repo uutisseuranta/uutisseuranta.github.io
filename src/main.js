@@ -1020,6 +1020,11 @@ async function refreshFeed() {
           <div class="error-boundary-icon">⚠️</div>
           <h3 class="error-boundary-title">Uutisvirran lataus epäonnistui</h3>
           <p class="error-boundary-desc">${sanitize(err.message || 'Yhteysongelma rajapintaan.')}</p>
+          <div style="font-family: monospace; font-size: 0.8rem; margin: 12px auto; padding: 12px; background: rgba(0,0,0,0.05); border-radius: 4px; text-align: left; max-width: 500px; word-break: break-all; color: var(--color-text, #333);">
+            <strong>Debug-tiedot:</strong><br>
+            Virhe: ${sanitize(err.name || 'Error')}: ${sanitize(err.message || 'Tuntematon virhe')}<br>
+            Konteksti: refreshFeed
+          </div>
           <div class="error-boundary-actions">
             <button class="btn btn--primary btn-error-retry-styled" id="btn-error-retry">Yritä uudelleen</button>
             ${cachedArticles && cachedArticles.length > 0 ? `<button class="btn btn--secondary btn-error-offline-styled" id="btn-error-offline">Näytä offline-versio</button>` : ''}
@@ -1142,8 +1147,42 @@ async function loadMoreFeed(newLimit) {
   } catch (err) {
     console.error("Load more failed:", err);
     if (loader) {
-      loader.innerHTML = `<span class="comment-fetch-error-text">${sanitize(err.message || 'Haku epäonnistui')}</span>`;
-      setTimeout(() => loader.remove(), 3000);
+      loader.remove();
+    }
+    
+    // Piirretään rikas virheilmoitus suoraan gridiin
+    grid.innerHTML = `
+      <div class="error-boundary error-boundary-styled">
+        <div class="error-boundary-icon">⚠️</div>
+        <h3 class="error-boundary-title">Uutisten lataus epäonnistui</h3>
+        <p class="error-boundary-desc">${sanitize(err.message || 'Yhteysongelma rajapintaan.')}</p>
+        <div style="font-family: monospace; font-size: 0.8rem; margin: 12px auto; padding: 12px; background: rgba(0,0,0,0.05); border-radius: 4px; text-align: left; max-width: 500px; word-break: break-all; color: var(--color-text, #333);">
+          <strong>Debug-tiedot:</strong><br>
+          Virhe: ${sanitize(err.name || 'Error')}: ${sanitize(err.message || 'Tuntematon virhe')}<br>
+          Pyydetty raja (limit): ${currentFeedLimit}<br>
+          Konteksti: loadMoreFeed
+        </div>
+        <div class="error-boundary-actions">
+          <button class="btn btn--primary btn-error-retry-styled" id="btn-error-retry">Yritä uudelleen</button>
+        </div>
+      </div>
+    `;
+
+    const retryBtn = document.getElementById('btn-error-retry');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        loadMoreFeed(currentFeedLimit);
+      });
+    }
+
+    // Jos 500 uutisen haku epäonnistuu, mutta meillä on aiemmin ladattu uutiserä,
+    // piirretään ja näytetään tagipilvi sen avulla.
+    if (cachedArticles && cachedArticles.length > 0) {
+      renderTagCloud(cachedArticles);
+      const tagCloudContainer = document.getElementById('tag-cloud');
+      if (tagCloudContainer) {
+        tagCloudContainer.style.display = 'flex';
+      }
     }
   }
 }
