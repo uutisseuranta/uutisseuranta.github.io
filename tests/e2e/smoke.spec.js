@@ -8,6 +8,19 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       window.__TESTING__ = true;
     });
 
+    // Register a default mock for the API outbox so that initial page loads during setup
+    // do not make real network calls to production or local 8080 backends.
+    await page.route('**/ap/outbox*', async route => {
+      await route.fulfill({
+        json: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "OrderedCollection",
+          "totalItems": 0,
+          "orderedItems": []
+        }
+      });
+    });
+
     // Navigate to establishing the correct origin
     const targetUrl = process.env.EFFECTIVE_URL || 'https://uutisseuranta.net';
     console.log(`Establishing origin on ${targetUrl}...`);
@@ -32,6 +45,9 @@ test.describe('Uutisseuranta Smoke Tests', () => {
 
     // Reload page with a clean slate
     await page.reload();
+
+    // Remove the temporary setup mock so individual tests can register their own or run live
+    await page.unroute('**/ap/outbox*');
 
     // Log console errors to detect CORS or CSP violations
     page.on('console', msg => {
