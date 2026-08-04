@@ -543,9 +543,9 @@ function renderFeed(articles) {
 
   if (displayedArticles.length === 0) {
     // Jos kaikki ladatut uutiset on jo luettu, ladataan automaattisesti suurempi erä.
-    // Pääte-ehtona toimii currentFeedLimit < 500, joka estää ikuisen lataussilmukan.
-    if (currentFeedLimit < 500) {
-      const nextLimit = currentFeedLimit === 5 ? 50 : 500;
+    // Pääte-ehtona toimii currentFeedLimit < 150, joka estää ikuisen lataussilmukan.
+    if (currentFeedLimit < 150) {
+      const nextLimit = currentFeedLimit === 5 ? 50 : 150;
       setTimeout(() => loadMoreFeed(nextLimit), 0);
       return;
     }
@@ -972,7 +972,7 @@ async function refreshFeed() {
     feedObserver = null;
   }
 
-  // Piilotetaan tagipilvi aluksi (Issue #10: tagipilvi näytetään vasta kun 500 artikkelia on haettu)
+  // Piilotetaan tagipilvi aluksi (Issue #10: tagipilvi näytetään vasta kun 150 artikkelia on haettu)
   const tagCloudContainer = document.getElementById('tag-cloud');
   if (tagCloudContainer) {
     tagCloudContainer.style.display = 'none';
@@ -1088,21 +1088,21 @@ function setupScrollPagination() {
         if (entries[0].isIntersecting && currentFeedLimit === 50) {
           feedObserver.disconnect();
           feedObserver = null;
-          await loadMoreFeed(500);
+          await loadMoreFeed(150);
         }
       }, { threshold: 0.1 });
       feedObserver.observe(targetCard);
     } else {
       // Jos palvelin palautti vähemmän kuin 30 artikkelia, ollaan uutisten lopussa
-      currentFeedLimit = 500;
+      currentFeedLimit = 150;
       renderTagCloud(cachedArticles);
       const tagCloudContainer = document.getElementById('tag-cloud');
       if (tagCloudContainer) {
         tagCloudContainer.style.display = 'flex';
       }
     }
-  } else if (currentFeedLimit === 500) {
-    // Kun 500 artikkelia on haettu, piirretään ja näytetään tagipilvi niiden alla
+  } else if (currentFeedLimit === 150) {
+    // Kun 150 artikkelia on haettu, piirretään ja näytetään tagipilvi niiden alla
     renderTagCloud(cachedArticles);
     const tagCloudContainer = document.getElementById('tag-cloud');
     if (tagCloudContainer) {
