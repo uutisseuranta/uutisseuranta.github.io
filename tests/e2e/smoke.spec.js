@@ -66,11 +66,11 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         "totalItems": 1,
         "orderedItems": [
           {
-            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-up2",
             "type": "Create",
             "actor": "https://uutisseuranta.net/sources/yle",
             "object": {
-              "id": "https://uutisseuranta.net/articles/1",
+              "id": "https://uutisseuranta.net/articles/up2",
               "type": "Article",
               "name": "Testiuutinen",
               "summary": "Tämä on testiuutisen lyhyt kuvaus E2E-testausta varten.",
@@ -138,11 +138,11 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         "totalItems": 1,
         "orderedItems": [
           {
-            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-up5",
             "type": "Create",
             "actor": "https://uutisseuranta.net/sources/yle",
             "object": {
-              "id": "https://uutisseuranta.net/articles/1",
+              "id": "https://uutisseuranta.net/articles/up5",
               "type": "Article",
               "name": "Testiuutinen",
               "summary": "Tämä on testiuutisen lyhyt kuvaus E2E-testausta varten.",
@@ -199,11 +199,11 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         "totalItems": 1,
         "orderedItems": [
           {
-            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-regression",
             "type": "Create",
             "actor": "https://uutisseuranta.net/sources/yle",
             "object": {
-              "id": "https://uutisseuranta.net/articles/1",
+              "id": "https://uutisseuranta.net/articles/regression",
               "type": "Article",
               "name": "Testiuutinen",
               "summary": "Tämä on testiuutisen lyhyt kuvaus E2E-testausta varten.",
@@ -249,11 +249,11 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         "totalItems": 1,
         "orderedItems": [
           {
-            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-up6",
             "type": "Create",
             "actor": "https://uutisseuranta.net/sources/yle",
             "object": {
-              "id": "https://uutisseuranta.net/articles/1",
+              "id": "https://uutisseuranta.net/articles/up6",
               "type": "Article",
               "name": "Testiuutinen",
               "summary": "Tämä on testiuutisen lyhyt kuvaus E2E-testausta varten.",
