@@ -423,11 +423,11 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         "totalItems": 1,
         "orderedItems": [
           {
-            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-1",
+            "id": "https://activitystreams.uutisseuranta.net/ap/outbox/article-width",
             "type": "Create",
             "actor": "https://uutisseuranta.net/sources/yle",
             "object": {
-              "id": "https://uutisseuranta.net/articles/1",
+              "id": "https://uutisseuranta.net/articles/width",
               "type": "Article",
               "name": "Testiuutinen leveyden tarkistukseen",
               "summary": "Tämä on testiuutisen kuvaus.",
