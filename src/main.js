@@ -155,6 +155,18 @@ myOnAuthStateChanged(auth, async (user) => {
     migrateOldSeenKeys();
     updateNotificationsBadge();
 
+    try {
+      const saved = localStorage.getItem(`unsynced_reads_${user.uid}`);
+      if (saved) {
+        const ids = JSON.parse(saved) || [];
+        ids.forEach(id => pendingSeenSync.add(id));
+        localStorage.removeItem(`unsynced_reads_${user.uid}`);
+        setTimeout(syncPendingSeen, 1000);
+      }
+    } catch (e) {
+      console.warn("Failed to load unsynced reads:", e);
+    }
+
     // Check for pending comment (Issue #11)
     const pendingArticleId = localStorage.getItem('pending_comment_article_id');
     if (pendingArticleId) {
@@ -272,15 +284,15 @@ const readObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
-let pendingSeenSync = [];
+let pendingSeenSync = new Set();
 
 async function syncPendingSeen() {
-  if (pendingSeenSync.length === 0 || !auth.currentUser) {
+  if (pendingSeenSync.size === 0 || !auth.currentUser) {
     return;
   }
   
-  const batch = [...pendingSeenSync];
-  pendingSeenSync = [];
+  const batch = Array.from(pendingSeenSync);
+  pendingSeenSync.clear();
   
   try {
     const token = await auth.currentUser.getIdToken();
@@ -303,12 +315,24 @@ async function syncPendingSeen() {
     }
   } catch (err) {
     console.warn("Failed to sync read activities, restoring to queue:", err);
-    pendingSeenSync = [...batch, ...pendingSeenSync];
+    batch.forEach(id => pendingSeenSync.add(id));
   }
 }
 
 // Suoritetaan luettujen synkronointi 5 sekunnin välein
 setInterval(syncPendingSeen, 5000);
+
+// Flushataan ja tallennetaan synkronoimattomat luetut ennen sivulta poistumista
+window.addEventListener('beforeunload', () => {
+  if (pendingSeenSync.size > 0 && auth.currentUser) {
+    try {
+      const uid = auth.currentUser.uid;
+      localStorage.setItem(`unsynced_reads_${uid}`, JSON.stringify(Array.from(pendingSeenSync)));
+    } catch (e) {
+      console.warn("Failed to save unsynced reads on beforeunload:", e);
+    }
+  }
+});
 
 async function markArticleAsRead(articleId, card) {
   const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
@@ -345,8 +369,9 @@ async function markArticleAsRead(articleId, card) {
   card.classList.add('feed-item--read');
   
   if (auth.currentUser) {
-    if (!pendingSeenSync.includes(articleId)) {
-      pendingSeenSync.push(articleId);
+    pendingSeenSync.add(articleId);
+    if (pendingSeenSync.size >= 500) {
+      syncPendingSeen();
     }
   }
 }
@@ -489,9 +514,12 @@ async function fetchOutbox(tag = null, limit = 50, retryCount = 0) {
 
   const bodyData = {
     tag: tag ? [tag] : null,
-    n: limit,
-    seen_ids: seenIds
+    n: limit
   };
+
+  if (uid === 'anonymous') {
+    bodyData.seen_ids = seenIds;
+  }
 
   try {
     const response = await fetch(url, {
