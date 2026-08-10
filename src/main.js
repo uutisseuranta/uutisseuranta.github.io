@@ -272,15 +272,49 @@ const readObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
+let pendingSeenSync = [];
+
+async function syncPendingSeen() {
+  if (pendingSeenSync.length === 0 || !auth.currentUser) {
+    return;
+  }
+  
+  const batch = [...pendingSeenSync];
+  pendingSeenSync = [];
+  
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Read",
+        "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+        "object": batch
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Sync failed with HTTP ${response.status}`);
+    }
+  } catch (err) {
+    console.warn("Failed to sync read activities, restoring to queue:", err);
+    pendingSeenSync = [...batch, ...pendingSeenSync];
+  }
+}
+
+// Suoritetaan luettujen synkronointi 5 sekunnin välein
+setInterval(syncPendingSeen, 5000);
+
 async function markArticleAsRead(articleId, card) {
   const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
   const fingerprint = card.getAttribute('data-fingerprint') || 'true';
   const listKey = `seen_list_${uid}`;
   
-  // Huom: Jos useampi IntersectionObserver-kutsu laukeaa samanaikaisesti nopean
-  // vierityksen aikana, taulukko luetaan ja kirjoitetaan ilman lukitusta, mikä voi
-  // johtaa ylikirjoittamiseen (race condition). Käytännössä riski ja seuraukset
-  // (yksittäisen luetun merkin katoaminen) ovat erittäin vähäisiä.
   let seen = [];
   try {
     seen = JSON.parse(localStorage.getItem(listKey)) || [];
@@ -291,14 +325,13 @@ async function markArticleAsRead(articleId, card) {
   const existingIndex = seen.findIndex(p => p[0] === String(articleId));
   if (existingIndex !== -1) {
     if (seen[existingIndex][1] === fingerprint) {
-      return; // Jo luettu samalla sormenjäljellä
+      return;
     }
     seen.splice(existingIndex, 1);
   }
   
   seen.push([String(articleId), fingerprint]);
   
-  // Kevyt FIFO-raja 10 000 artikkelille
   if (seen.length > 10000) {
     seen.shift();
   }
@@ -309,28 +342,11 @@ async function markArticleAsRead(articleId, card) {
     console.warn("FIFO write failed:", e);
   }
   
-  // Päivitetään luetun tyyli uutiskortille
   card.classList.add('feed-item--read');
   
-  // Lähetetään standardi AS2 Read-aktiviteetti jos kirjautunut käyttäjä
   if (auth.currentUser) {
-    try {
-      const token = await auth.currentUser.getIdToken();
-      await fetch(`${WRITE_API_URL}/ap/inbox`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "type": "Read",
-          "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-          "object": articleId
-        })
-      });
-    } catch (err) {
-      console.warn("Failed to send AS2 Read activity:", err);
+    if (!pendingSeenSync.includes(articleId)) {
+      pendingSeenSync.push(articleId);
     }
   }
 }
@@ -443,19 +459,46 @@ function showNotification(message, isError = false) {
 // ---- FETCH OUTBOX WITH RATE-LIMIT HANDLING (Issue #60 / L-011) ----
 async function fetchOutbox(tag = null, limit = 50, retryCount = 0) {
   let url = `${QUERY_API_URL}/ap/outbox`;
-  let params = [];
   
-  if (tag) {
-    params.push(`tag=${encodeURIComponent(tag)}`);
-  }
-  
-  params.push(`n=${limit}`);
-  url += `?${params.join('&')}`;
+  const headers = {
+    'Content-Type': 'application/json'
+  };
 
-  const headers = {};
+  if (auth.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } catch (err) {
+      console.warn("Failed to get idToken for outbox query:", err);
+    }
+  }
+
+  let seenIds = [];
+  const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
+  if (uid === 'anonymous') {
+    try {
+      const raw = localStorage.getItem(`seen_list_${uid}`);
+      if (raw) {
+        const seenList = JSON.parse(raw) || [];
+        seenIds = seenList.map(p => p[0]).reverse();
+      }
+    } catch (e) {
+      console.warn("Failed to read seen list for outbox POST:", e);
+    }
+  }
+
+  const bodyData = {
+    tag: tag ? [tag] : null,
+    n: limit,
+    seen_ids: seenIds
+  };
 
   try {
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(bodyData)
+    });
 
     if (response.status === 429) {
       if (retryCount < 3) {
@@ -547,10 +590,6 @@ function renderFeed(articles) {
   }
 
   let displayedArticles = articles;
-  if (hideRead && !currentTagFilter) {
-    // tagi-haku ohittaa piilotuksen (tämä on tietoinen UX-suunnittelupäätös, jotta haut ovat aina kattavia)
-    displayedArticles = articles.filter(item => !seenMap.has(String(item.id)));
-  }
 
   if (displayedArticles.length === 0) {
     // Jos kaikki ladatut uutiset on jo luettu, ladataan automaattisesti suurempi erä.
