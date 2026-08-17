@@ -5,3 +5,22 @@ dist/
 .env.local
 .env.development
 .env.production
+
+# Test output
+playwright-report/
+test-results/
+
+# Local scratch and tooling
+scratch/
+*.log
+
+# Separate subprojects in workspace
+bq-activitystreams/
+jira-github-integration/
+Oura-MCP/
+weekly-cycle-oura-web/
+patterns/
+ops/
+skills/
+uutisseuranta.github.io/
+
