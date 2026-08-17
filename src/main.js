@@ -137,6 +137,9 @@ btnGoogleLogin.addEventListener('click', async () => {
 
 myOnAuthStateChanged(auth, async (user) => {
   if (user) {
+    if (modalLogin) {
+      modalLogin.classList.remove('is-open');
+    }
     // Alustetaan preferenssit ja profiilimodaali kirjautuneelle käyttäjälle
     initPrefs(app, user.uid);
     import('./profile.js').then(({ initProfileModal }) => {
@@ -467,7 +470,7 @@ loadHomepageStats();
 
 let currentTagFilter = null;
 let cachedArticles = [];
-let currentFeedLimit = 5;
+let displayedFeedCount = 5;
 let feedObserver = null;
 
 // ---- PWA SERVICE WORKER REGISTRATION (Issue #19 / L-011) ----
@@ -645,34 +648,11 @@ function renderFeed(articles, append = false) {
 
   if (displayedArticles.length === 0) {
     if (append) {
-      // Jos lisäyslatauksessa ei tullut uusia uutisia, ollaan uutisvirran lopussa
-      if (cachedArticles && cachedArticles.length > 0) {
-        renderTagCloud(cachedArticles);
-        const tagCloudContainer = document.getElementById('tag-cloud');
-        if (tagCloudContainer) {
-          tagCloudContainer.style.display = 'flex';
-        }
-      }
+      finishFeedSet();
       return;
     }
 
-    // Jos kaikki ladatut uutiset on jo luettu ensilatauksella, ladataan automaattisesti suurempi erä.
-    // Pääte-ehtona toimii currentFeedLimit < 500, joka estää ikuisen lataussilmukan.
-    if (currentFeedLimit < 500) {
-      const nextLimit = currentFeedLimit === 5 ? 50 : 500;
-      setTimeout(() => loadMoreFeed(nextLimit), 0);
-      return;
-    }
-    
-    // Varmistetaan, että tagipilvi renderöidään ja näytetään, vaikka uutisia ei näkyisikään aloitussivulla
-    if (cachedArticles) {
-      renderTagCloud(cachedArticles);
-      const tagCloudContainer = document.getElementById('tag-cloud');
-      if (tagCloudContainer) {
-        tagCloudContainer.style.display = 'flex';
-      }
-    }
-    
+    finishFeedSet();
     grid.innerHTML = '<div class="profile-empty profile-empty-text">Ei uutisia valituilla kriteereillä.</div>';
     return;
   }
@@ -942,8 +922,7 @@ function renderFeed(articles, append = false) {
 }
 
 
-// ---- TAG CLOUD LOGIC (Issue #16) ----
-function renderTagCloud(articles) {
+function renderTagCloud(articles = []) {
   const container = document.getElementById('tag-cloud');
   if (!container) return;
 
@@ -957,6 +936,12 @@ function renderTagCloud(articles) {
       });
     }
   });
+
+  // Jos uutisia tai tageja ei ollut, käytetään oletustageja jotta käyttäjä ei lukkiudu tyhjään tilaan
+  if (counts.size === 0) {
+    const defaultTags = ['#politiikka', '#talous', '#tiede', '#viihde', '#ulkomaat', '#kotimaa', '#kulttuuri', '#urheilu', '#sää'];
+    defaultTags.forEach(t => counts.set(t, 1));
+  }
 
   // Näytetään 42 tagia
   const sortedTags = Array.from(counts.entries())
@@ -991,18 +976,67 @@ function renderTagCloud(articles) {
 
 }
 
+function finishFeedSet() {
+  renderTagCloud(cachedArticles || []);
+  const tagCloudContainer = document.getElementById('tag-cloud');
+  if (tagCloudContainer) {
+    tagCloudContainer.style.display = 'flex';
+  }
+  if (cachedArticles && cachedArticles.length > 0) {
+    markArticlesAsReadBatch(cachedArticles);
+  }
+}
+
+function markArticlesAsReadBatch(articles) {
+  if (!articles || articles.length === 0) return;
+  const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
+  const listKey = `seen_list_${uid}`;
+  
+  let seen = [];
+  try {
+    seen = JSON.parse(localStorage.getItem(listKey)) || [];
+  } catch (e) {
+    seen = [];
+  }
+  
+  const seenMap = new Map(seen);
+  articles.forEach(item => {
+    const articleId = String(item.id);
+    const fingerprint = item.updated || item.published || 'true';
+    seenMap.set(articleId, fingerprint);
+    if (auth.currentUser) {
+      pendingSeenSync.add(articleId);
+    }
+  });
+  
+  let newSeen = Array.from(seenMap.entries());
+  if (newSeen.length > 10000) {
+    newSeen = newSeen.slice(newSeen.length - 10000);
+  }
+  
+  try {
+    localStorage.setItem(listKey, JSON.stringify(newSeen));
+  } catch (e) {
+    console.warn("Failed to write batch seen list:", e);
+  }
+  
+  if (auth.currentUser && pendingSeenSync.size > 0) {
+    syncPendingSeen();
+  }
+}
+
 async function refreshFeed() {
   if (pendingSeenSync.size > 0 && auth.currentUser) {
     await syncPendingSeen();
   }
 
-  currentFeedLimit = 5;
+  displayedFeedCount = 5;
   if (feedObserver) {
     feedObserver.disconnect();
     feedObserver = null;
   }
 
-  // Piilotetaan tagipilvi aluksi (Issue #10: tagipilvi näytetään vasta kun 500 artikkelia on haettu)
+  // Piilotetaan tagipilvi aluksi
   const tagCloudContainer = document.getElementById('tag-cloud');
   if (tagCloudContainer) {
     tagCloudContainer.style.display = 'none';
@@ -1020,7 +1054,6 @@ async function refreshFeed() {
         <div class="skeleton-card" aria-hidden="true"><div class="skeleton-img"></div><div class="skeleton-title"></div><div class="skeleton-text"></div></div>
       `;
     } else {
-      // Visuaalinen indikaattori lataukselle pitäen nykyisen sisällön näkyvissä
       grid.style.opacity = '0.6';
     }
   }
@@ -1028,23 +1061,26 @@ async function refreshFeed() {
   const startTime = Date.now();
 
   try {
-    const articles = await fetchOutbox(currentTagFilter, currentFeedLimit);
+    const articles = await fetchOutbox(currentTagFilter, 500);
     cachedArticles = articles;
 
-    // Varmistetaan, että skeleton-loader näkyy vähintään 100ms (UX-vaatimus / Issue #12)
     const elapsed = Date.now() - startTime;
     if (elapsed < 100) {
       await new Promise(resolve => setTimeout(resolve, 100 - elapsed));
     }
 
-    renderFeed(articles);
-    setupScrollPagination();
+    if (!articles || articles.length === 0) {
+      renderFeed([], false);
+    } else {
+      const initialSlice = articles.slice(0, 5);
+      renderFeed(initialSlice, false);
+      setupScrollPagination();
+    }
   } catch (err) {
     console.error("Feed loading failed:", err.stack || err);
     const grid = document.getElementById('feed-grid');
     if (grid) {
       grid.setAttribute('aria-busy', 'false');
-      // Virherajapinta / Error boundary uutisvirralle (Issue #58)
       grid.innerHTML = `
         <div class="error-boundary error-boundary-styled">
           <div class="error-boundary-icon">⚠️</div>
@@ -1092,136 +1128,63 @@ function setupScrollPagination() {
   if (!grid) return;
 
   const cards = grid.querySelectorAll('.feed-item');
-  if (cards.length === 0) return;
+  if (cards.length === 0 || !cachedArticles || cachedArticles.length === 0) {
+    finishFeedSet();
+    return;
+  }
 
-  if (currentFeedLimit === 5) {
-    // Luodaan sentinel-elementti uutisvirran loppuun
-    let sentinel = document.getElementById('feed-sentinel');
-    if (!sentinel) {
-      sentinel = document.createElement('div');
-      sentinel.id = 'feed-sentinel';
-      sentinel.style.height = '10px';
-      sentinel.style.gridColumn = '1 / -1';
-      grid.appendChild(sentinel);
-    }
-    
-    feedObserver = new IntersectionObserver(async (entries) => {
-      if (entries[0].isIntersecting && currentFeedLimit === 5) {
-        feedObserver.disconnect();
-        feedObserver = null;
-        sentinel.remove();
-        await loadMoreFeed(50);
+  if (displayedFeedCount === 5) {
+    if (cachedArticles.length > 5) {
+      // Sentinel 5. kortin alle
+      let sentinel = document.getElementById('feed-sentinel');
+      if (!sentinel) {
+        sentinel = document.createElement('div');
+        sentinel.id = 'feed-sentinel';
+        sentinel.style.height = '10px';
+        sentinel.style.gridColumn = '1 / -1';
+        grid.appendChild(sentinel);
       }
-    }, { threshold: 0.1 });
-    
-    feedObserver.observe(sentinel);
-  } else if (currentFeedLimit === 50) {
-    // Tarkkaillaan 30. artikkelikorttia (indeksi 29)
-    if (cards.length >= 30) {
-      const targetCard = cards[29];
-      feedObserver = new IntersectionObserver(async (entries) => {
-        if (entries[0].isIntersecting && currentFeedLimit === 50) {
+      
+      feedObserver = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && displayedFeedCount === 5) {
           feedObserver.disconnect();
           feedObserver = null;
-          await loadMoreFeed(500);
+          sentinel.remove();
+          displayedFeedCount = 50;
+          const nextItems = cachedArticles.slice(5, 50);
+          renderFeed(nextItems, true);
+          setupScrollPagination();
         }
       }, { threshold: 0.1 });
-      feedObserver.observe(targetCard);
+      
+      feedObserver.observe(sentinel);
     } else {
-      // Jos palvelin palautti vähemmän kuin 30 artikkelia, ollaan uutisten lopussa
-      currentFeedLimit = 500;
-      renderTagCloud(cachedArticles);
-      const tagCloudContainer = document.getElementById('tag-cloud');
-      if (tagCloudContainer) {
-        tagCloudContainer.style.display = 'flex';
+      finishFeedSet();
+    }
+  } else if (displayedFeedCount === 50) {
+    if (cachedArticles.length > 50) {
+      // Tarkkaillaan 30. korttia
+      if (cards.length >= 30) {
+        const targetCard = cards[29];
+        feedObserver = new IntersectionObserver((entries) => {
+          if (entries[0].isIntersecting && displayedFeedCount === 50) {
+            feedObserver.disconnect();
+            feedObserver = null;
+            displayedFeedCount = 500;
+            const nextItems = cachedArticles.slice(50, 500);
+            renderFeed(nextItems, true);
+            finishFeedSet();
+          }
+        }, { threshold: 0.1 });
+        feedObserver.observe(targetCard);
+      } else {
+        finishFeedSet();
       }
+    } else {
+      finishFeedSet();
     }
-  } else if (currentFeedLimit === 500) {
-    // Kun 500 artikkelia on haettu, piirretään ja näytetään tagipilvi niiden alla
-    renderTagCloud(cachedArticles);
-    const tagCloudContainer = document.getElementById('tag-cloud');
-    if (tagCloudContainer) {
-      tagCloudContainer.style.display = 'flex';
-    }
-  }
-}
-
-async function loadMoreFeed(newLimit) {
-  if (pendingSeenSync.size > 0 && auth.currentUser) {
-    await syncPendingSeen();
-  }
-
-  const grid = document.getElementById('feed-grid');
-  if (!grid) return;
-
-  // Luodaan latausilmoitus
-  let loader = document.getElementById('feed-loader');
-  if (!loader) {
-    loader = document.createElement('div');
-    loader.id = 'feed-loader';
-    loader.style.gridColumn = '1 / -1';
-    loader.style.textAlign = 'center';
-    loader.style.padding = 'var(--space-4)';
-    loader.style.color = 'var(--color-text-faint)';
-    loader.style.fontSize = 'var(--text-sm)';
-    loader.innerHTML = '<span class="loading-spinner"></span> Ladataan lisää uutisia...';
-    grid.appendChild(loader);
-  }
-
-  currentFeedLimit = newLimit;
-
-  try {
-    const articles = await fetchOutbox(currentTagFilter, currentFeedLimit);
-    
-    // Suodatetaan vain uudet uutiset, joita ei vielä ole välimuistissa
-    const existingIds = new Set(cachedArticles.map(a => a.id));
-    const newItems = articles.filter(a => !existingIds.has(a.id));
-    cachedArticles = [...cachedArticles, ...newItems];
-    
-    if (loader) loader.remove();
-    
-    renderFeed(newItems, true);
-    setupScrollPagination();
-  } catch (err) {
-    console.error("Load more failed:", err.stack || err);
-    if (loader) {
-      loader.remove();
-    }
-    
-    // Piirretään rikas virheilmoitus suoraan gridiin
-    grid.innerHTML = `
-      <div class="error-boundary error-boundary-styled">
-        <div class="error-boundary-icon">⚠️</div>
-        <h3 class="error-boundary-title">Uutisten lataus epäonnistui</h3>
-        <p class="error-boundary-desc">${sanitize(err.message || 'Yhteysongelma rajapintaan.')}</p>
-        <div style="font-family: monospace; font-size: 0.8rem; margin: 12px auto; padding: 12px; background: rgba(0,0,0,0.05); border-radius: 4px; text-align: left; max-width: 500px; word-break: break-all; color: var(--color-text, #333);">
-          <strong>Debug-tiedot:</strong><br>
-          Virhe: ${sanitize(err.name || 'Error')}: ${sanitize(err.message || 'Tuntematon virhe')}<br>
-          Pyydetty raja (limit): ${currentFeedLimit}<br>
-          Konteksti: loadMoreFeed
-        </div>
-        <div class="error-boundary-actions">
-          <button class="btn btn--primary btn-error-retry-styled" id="btn-error-retry">Yritä uudelleen</button>
-        </div>
-      </div>
-    `;
-
-    const retryBtn = document.getElementById('btn-error-retry');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => {
-        loadMoreFeed(currentFeedLimit);
-      });
-    }
-
-    // Jos 500 uutisen haku epäonnistuu, mutta meillä on aiemmin ladattu uutiserä,
-    // piirretään ja näytetään tagipilvi sen avulla.
-    if (cachedArticles && cachedArticles.length > 0) {
-      renderTagCloud(cachedArticles);
-      const tagCloudContainer = document.getElementById('tag-cloud');
-      if (tagCloudContainer) {
-        tagCloudContainer.style.display = 'flex';
-      }
-    }
+  } else if (displayedFeedCount === 500) {
+    finishFeedSet();
   }
 }
 
@@ -1286,24 +1249,22 @@ function migrateOldSeenKeys() {
 // ---- SPA ROUTER CLICK HANDLERS ----
 const initSPARouter = () => {
   const homeLink = document.getElementById('nav-link-home');
-  const newsLink = document.getElementById('nav-link-news');
   const featuresLink = document.getElementById('nav-link-features');
   const logoLink = document.querySelector('.nav__logo');
   
   const setView = (view, e) => {
     if (e) e.preventDefault();
-    updatePrefs({ currentView: view });
+    const currentPrefs = getPrefs();
+    if (currentPrefs.currentView === view && view === 'news') {
+      refreshFeed();
+    } else {
+      updatePrefs({ currentView: view });
+    }
   };
 
   if (logoLink) logoLink.addEventListener('click', (e) => setView('home', e));
   if (homeLink) homeLink.addEventListener('click', (e) => setView('home', e));
-  if (newsLink) newsLink.addEventListener('click', (e) => setView('news', e));
-  
-  if (featuresLink) {
-    featuresLink.addEventListener('click', () => {
-      updatePrefs({ currentView: 'home' });
-    });
-  }
+  if (featuresLink) featuresLink.addEventListener('click', () => setView('home'));
   
   document.querySelectorAll('a[href="#uutiset"]').forEach(link => {
     link.addEventListener('click', (e) => setView('news', e));

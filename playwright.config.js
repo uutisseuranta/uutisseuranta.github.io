@@ -8,8 +8,13 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: 'html',
+  webServer: process.env.EFFECTIVE_URL ? undefined : {
+    command: 'npx vite --port 5173',
+    port: 5173,
+    reuseExistingServer: !process.env.CI,
+  },
   use: {
-    baseURL: process.env.EFFECTIVE_URL || 'https://uutisseuranta.net',
+    baseURL: process.env.EFFECTIVE_URL || 'http://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
