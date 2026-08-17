@@ -13,6 +13,7 @@ test-results/
 # Local scratch and tooling
 scratch/
 *.log
+.agents/mcp_config.json
 
 # Separate subprojects in workspace
 bq-activitystreams/
