@@ -16,12 +16,12 @@ scratch/
 .agents/mcp_config.json
 
 # Separate subprojects in workspace
-bq-activitystreams/
-jira-github-integration/
-Oura-MCP/
-weekly-cycle-oura-web/
-patterns/
-ops/
-skills/
-uutisseuranta.github.io/
+/bq-activitystreams/
+/jira-github-integration/
+/Oura-MCP/
+/weekly-cycle-oura-web/
+/patterns/
+/ops/
+/skills/
+/uutisseuranta.github.io/
 
