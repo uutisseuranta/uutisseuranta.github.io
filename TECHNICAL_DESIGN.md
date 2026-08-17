@@ -245,7 +245,24 @@ Seuraavat edge caset on käsitelty eksplisiittisesti `prefs.js`:ssä:
 | Firebase SDK:n lataus epäonnistuu (CDN-häiriö) | Sivusto latautuu ilman Firebase-toimintoja; kirjautuminen ei onnistu mutta staattinen sisältö toimii normaalisti |
 | `followedTags` on väärää tyyppiä (esim. merkkijono JSON-korruption vuoksi) | `_migrate()` normalisoi arvon taulukoksi — `followTag()` / `unfollowTag()` eivät hajoa |
 
-Kaikki muu toiminnallisuus (uutisten haku, tallennus, hosting jne.) toteutetaan muilla teknologioilla. Firebase-SDK:n laajentaminen uusiin palveluihin vaatii eksplisiittisen arkkitehtuuripäätöksen ennen toteutusta.
+---
+
+## Uutisvirran progressiivinen lataus ja luettujen kuittaus (L-025)
+
+Uutisvirran lataus ja esittäminen noudattavat yhden tilannekuvan progressiivista laajennusmallia (Single Snapshot Progressive Expansion) päätöksen L-025 mukaisesti.
+
+### 1. Perusjoukon haku ja progressiivinen renderöinti (1–5 -> 1–50 -> 1–500)
+- **Ensilataus:** Käyttöliittymä hakee kerralla muistiin enintään 500 lukematonta uutista (`POST /ap/outbox`, `n=500`).
+- **Ensimmäinen vaihe (1–5):** Käyttäjälle näytetään aluksi vain ensimmäiset 5 artikkelia (`cachedArticles.slice(0, 5)`).
+- **Toinen vaihe (1–50):** Kun käyttäjä vierittää 5. uutiskortin alitse (`feed-sentinel`), näkymää laajennetaan liittämällä DOMiin artikkelit 6–50 (`append = true`). Alkuosan 5 korttia säilyvät muuttumattomina paikoillaan huipulla.
+- **Kolmas vaihe (1–500):** Kun käyttäjä vierittää 30. uutiskortin kohdalle, näkymää laajennetaan liittämällä DOMiin artikkelit 51–500 (`append = true`). Alkuosan 50 korttia säilyvät muuttumattomina paikoillaan.
+- **Ei välihakuja:** Selauksen aikana ei tehdä uusia hakuja palvelimelta. Tämä takaa, etteivät jo näytetyt uutiset katoa tai vaihdu kesken selaussession.
+
+### 2. Luettujen artikkeleiden eräkuittaus (Batch Seen Upload)
+- **Kuittaus setin päätteeksi:** Kun käyttäjä on selannut koko uutissetin tai 500. kortin ohi, funktio `finishFeedSet()` piirtää tagipilven ja kuittaa kaikki näytetyt artikkelit luetuiksi (`markArticlesAsReadBatch(cachedArticles)`).
+- **Paikallinen FIFO-tallennus:** Luettujen artikkeleiden tunnisteet ja aikaleimat tallennetaan selaimen `localStorage`-jonoon (`seen_list_${uid}`).
+- **Palvelinsynkronointi:** Kirjautuneella käyttäjällä luetut lähetetään palvelimelle (`POST /ap/inbox`). Palvelimen BigQuery-kysely suodattaa nämä artikkelit pois seuraavalla hakukerralla.
+- **Päivitettyjen uutisten uudelleennäyttö:** Jos aiemmin luetulle artikkelille ilmestyy uusi päivitysaikaleima (`o.updated > s.max_received_at`), artikkeli nousee uudelleen lukemattomien joukkoon.
 
 ---
 
