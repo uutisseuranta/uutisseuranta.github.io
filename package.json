@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "playwright test",
+    "lint": "python3 .agents/skills/repo-hygiene-linter/scripts/lint_repo_files.py",
+    "validate:decisions": "python3 .agents/skills/decision-log-validator/scripts/validate_decision_log.py"
   },
   "repository": {
     "type": "git",
