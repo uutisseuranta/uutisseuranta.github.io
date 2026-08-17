@@ -712,7 +712,7 @@ function renderFeed(articles, append = false) {
     card.setAttribute('data-fingerprint', fingerprint);
 
     card.innerHTML = `
-      ${imageUrl ? `<a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link article-link-image-wrap" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow"><img src="${imageUrl}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
+      ${imageUrl ? `<a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link article-link-image-wrap" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow"><img src="${sanitizeUrl(imageUrl)}" alt="${sanitize(item.name)}" loading="lazy" referrerpolicy="no-referrer" class="feed-item__image"></a>` : ''}
       <h3 class="feed-item__title"><a href="${sanitizeUrl(targetUrl)}" target="_blank" class="article-link" data-archive="${sanitizeUrl(archiveUrl)}" rel="noopener noreferrer nofollow">${sanitize(item.name)}</a></h3>
       ${item.summary ? `<p class="feed-item__excerpt">${sanitize(item.summary)}</p>` : ''}
       

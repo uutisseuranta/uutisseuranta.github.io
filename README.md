@@ -12,24 +12,20 @@ Uutisseuranta on moderni ja saavutettava suomalainen uutiskoostepalvelu, joka yh
 
 ## Testaus
 
-Projektissa on käytössä automaattinen testaus regression estämiseksi:
+Nykytila (ks. [TESTING.md](./TESTING.md) tarkempi kuvaus ja suunnitellut laajennukset):
 
-### 1. Paikallinen integraatiotesti
-Tiedosto `integration-test.sh` käynnistää paikallisen API-mock-palvelimen, kääntää käyttöliittymän Vitellä ja tarkistaa, että käännetty bundle viittaa oikeisiin API-päätepisteisiin.
-*   Ajo: `./integration-test.sh`
+### 1. PR-validointi (`pr-validate.yml`)
+Jokainen pull request kääntää käyttöliittymän Vitellä (`npm run build`) — varmistaa, ettei build ole rikki.
 
-### 2. Automaattinen Headless Chrome -testi (Puppeteer)
-Tiedosto `live-browser-test.js` suorittaa E2E-testit oikealla selaimella heti julkaisun jälkeen (post-deploy stage). Se tarkistaa:
-*   **Uutisvirran latautumisen:** Varmistaa, että artikkelit renderöityvät ja ettei konsoliin tai verkkoliikenteeseen tule CORS- tai CSP-virheitä.
-*   **Teemanvaihdon:** Klikkaa teemanvaihtajaa ja tarkistaa, että `data-theme` -attribuutti muuttuu.
-*   **Kirjautumisen:** Klikkaa Kirjaudu-painiketta ja varmistaa, että kirjautumismodaali avautuu oikein.
+### 2. Playwright-smoke-testi (`tests/e2e/smoke.spec.js`)
+*   Ajo: `npm test`
+*   Tarkistaa mm. artikkelikorttien latautumisen, konsolivirheiden puuttumisen, teemanvaihtajan toiminnan ja kirjautumismodaalin avautumisen.
 
-**Ajo paikallisesti tuotantoa vasten:**
-```bash
-npm install puppeteer
-node live-browser-test.js
-```
- Voit myös asettaa testattavan URL-osoitteen ympäristömuuttujalla:
-```bash
-EFFECTIVE_URL="http://localhost:5173" node live-browser-test.js
-```
+### 2b. Yksikkötestit (`tests/unit/`, Vitest)
+*   Ajo: `npm run test:unit`
+*   Kattaa `prefs.js`- (preferenssien lataus, migraatio, Firestore-synkka) ja `profile.js`-moduulien (profiilimodaalin renderöinti, tagien poisto, teemanvaihto, uloskirjautuminen) logiikan mockatulla Firebase-kirjastolla.
+
+### 3. Post-deploy smoke-testi
+`live-smoke-test.sh` tarkistaa julkaisun jälkeen, että sivusto vastaa (`https://uutisseuranta.net`, `https://uutisseuranta.github.io`), ja `post-deploy-test.yml` laukaisee varsinaiset selainpohjaiset smoke-testit erillisessä [`uutisseuranta/ops`](https://github.com/uutisseuranta/ops)-repositoriossa `repository_dispatch`-tapahtumalla.
+
+Integraatio-, a11y- ja visuaalinen regressiotestaus sekä Lighthouse CI on suunniteltu mutta ei vielä toteutettu tässä repossa — ks. [TESTING.md § 10 Roadmap](./TESTING.md#10-tulevat-testausparannukset-roadmap).

@@ -2,6 +2,8 @@
 
 Tämä dokumentti kuvaa uutisseuranta.github.io -projektin testausstrategian, workflow-rakenteen ja laadunvarmistuksen. Lue myös [STANDARDS.md](STANDARDS.md), [CODE_CONVENTIONS.md](CODE_CONVENTIONS.md) ja [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md).
 
+> **Tila:** Tämä dokumentti kuvaa sekä nykyistä toteutusta että tavoitetilaa. Tällä hetkellä toteutettuna on **E2E smoke -testi** (`tests/e2e/smoke.spec.js`, § 4.3), **yksikkötestit** Vitestillä `prefs.js`- ja `profile.js`-moduuleille (`tests/unit/`, ajetaan komennolla `npm run test:unit`) ja **PR-validointi** (`npm run build` + `npm run test:unit`). Integraatio- (§ 4.1), a11y- (§ 4.2) ja visuaaliset regressiotestit (§ 4.4) sekä Lighthouse CI (§ 5.5) ja lychee-linkkitarkistus (§ 7) ovat suunniteltua tavoitetilaa — niitä ei vielä ajeta CI:ssä, ks. [§ 10 Roadmap](#10-tulevat-testausparannukset-roadmap). Postdeploy-selaintestit ajetaan käytännössä erillisessä [`uutisseuranta/ops`](https://github.com/uutisseuranta/ops)-repositoriossa, jonka `post-deploy-test.yml` laukaisee `repository_dispatch`-tapahtumalla.
+
 ---
 
 ## 1. Teknologiapino ja riippuvuudet
@@ -10,7 +12,7 @@ Projekti käyttää vanilla HTML/CSS/JavaScript + Vite -pinoa. Testaustyökalut 
 
 > **Arkkitehtuuripäätös:** TECHNICAL_DESIGN.md § Testausstrategia hyväksyy Playwright- ja axe-core -testaustyökalut devDependencyinä. Kiellot koskevat sovelluskehyksiä (React, Vue jne.) ja tuotantoriippuvuuksia — eivät testausinfrastruktuuria.
 
-**`package.json` testauksen kanssa:**
+**`package.json` tavoitetilassa** (nykyinen `package.json` sisältää vain `"test": "playwright test"` ja devDependencinä `vite`, `vite-plugin-pwa`, `@playwright/test` — `test:a11y`/`test:integration`/`test:visual`, `@axe-core/playwright` ja `@lhci/cli` ovat vielä lisäämättä):
 
 ```json
 {
@@ -100,7 +102,7 @@ export default defineConfig({
 
 ## 4. Testit
 
-### 4.1 Integraatiotestit — `tests/integration/api-mock.spec.js`
+### 4.1 Integraatiotestit — `tests/integration/api-mock.spec.js` *(suunniteltu, ei vielä toteutettu)*
 
 `page.route` sieppaa `/ap/outbox`-pyynnöt selaintasolla ennen verkkoa. Ei lisäpaketteja, toimii identtisesti paikallisesti ja CI:ssä.
 
@@ -180,7 +182,7 @@ test.describe('Integraatiotestit — API mock', () => {
 });
 ```
 
-### 4.2 A11y — `tests/a11y/accessibility.spec.js`
+### 4.2 A11y — `tests/a11y/accessibility.spec.js` *(suunniteltu, ei vielä toteutettu)*
 
 ```javascript
 import { test, expect } from '@playwright/test';
@@ -262,7 +264,7 @@ test.describe('Uutisseuranta — smoke', () => {
 });
 ```
 
-### 4.4 Visuaalinen regressio — `tests/visual/snapshot.spec.js`
+### 4.4 Visuaalinen regressio — `tests/visual/snapshot.spec.js` *(suunniteltu, ei vielä toteutettu)*
 
 Aja vain merkittävien CSS-muutosten yhteydessä. Baseline päivitetään tietoisesti:
 
@@ -339,7 +341,9 @@ Jos välimuisti otetaan käyttöön (issue #80):
 
 ### 5.3 PR-validointi (`pr-validate.yml`)
 
-Kaikki jobit ajetaan **rinnakkain** — ei `needs:`-riippuvuuksia. Playwright-jobit (`accessibility`, `integration`) jakavat saman rakenteen: `checkout → setup-node → npm ci → install chromium → test`.
+> **Tavoitetila.** Nykyinen `pr-validate.yml` sisältää tällä hetkellä vain yhden `validate`-jobin (`checkout → setup-node → npm ci → npm run build`). `dependency-review`, `link-check`, `accessibility` ja `integration` -jobit alla ovat suunniteltuja lisäyksiä, ei vielä toteutettuja.
+
+Tavoitteena on, että kaikki jobit ajetaan **rinnakkain** — ei `needs:`-riippuvuuksia. Playwright-jobit (`accessibility`, `integration`) jakaisivat saman rakenteen: `checkout → setup-node → npm ci → install chromium → test`.
 
 ```yaml
 name: PR Validate
@@ -425,6 +429,8 @@ jobs:
 
 ### 5.4 Post-deploy Smoke (`post-deploy-test.yml`)
 
+> **Tavoitetila.** Nykyinen `post-deploy-test.yml` ajaa `live-smoke-test.sh`:n (URL:n saatavuustarkistus) ja laukaisee sen jälkeen varsinaiset Playwright-selaintestit erillisessä [`uutisseuranta/ops`](https://github.com/uutisseuranta/ops)-repositoriossa `repository_dispatch`-kutsulla, ei suoraan tässä workflow'ssa kuten alla.
+
 ```yaml
 name: Post-Deploy Smoke Test
 on:
@@ -479,7 +485,7 @@ done
 echo "ERROR: Sivusto ei vastannut $MAX_RETRIES yrityksen jälkeen."; exit 1
 ```
 
-### 5.5 Lighthouse CI (`lighthouse.yml`)
+### 5.5 Lighthouse CI (`lighthouse.yml`) *(suunniteltu, ei vielä toteutettu)*
 
 ```yaml
 name: Lighthouse CI Audit
@@ -547,7 +553,7 @@ jobs:
 
 ---
 
-## 7. Linkkitarkistus: lychee
+## 7. Linkkitarkistus: lychee *(suunniteltu, ei vielä toteutettu — `.lycheeignore`/`lychee.toml` puuttuvat toistaiseksi)*
 
 **`.lycheeignore`:**
 
@@ -570,6 +576,14 @@ exclude = ["localhost", "example\\.com"]
 
 ## 8. Tiedostorakenne
 
+Nykytila:
+```
+tests/
+└── e2e/
+    └── smoke.spec.js
+```
+
+Tavoitetila (ks. § 10 Roadmap):
 ```
 tests/
 ├── a11y/

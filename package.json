@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "playwright test",
+    "test:unit": "vitest run",
     "lint": "python3 .agents/skills/repo-hygiene-linter/scripts/lint_repo_files.py",
     "validate:decisions": "python3 .agents/skills/decision-log-validator/scripts/validate_decision_log.py"
   },
@@ -25,8 +26,10 @@
   "homepage": "https://github.com/uutisseuranta/uutisseuranta.github.io#readme",
   "devDependencies": {
     "@playwright/test": "^1.62.0",
+    "jsdom": "^25.0.1",
     "vite": "^5.2.11",
-    "vite-plugin-pwa": "^0.20.0"
+    "vite-plugin-pwa": "^0.20.0",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "firebase": "^10.12.0",
