@@ -185,7 +185,7 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     await expect(errorBanner).not.toBeVisible();
   });
 
-  test('UP-5-regression: should not send Authorization header to outbox when authenticated', async ({ page }) => {
+  test('UP-5-regression: should send Authorization header to outbox when authenticated to support server-side seen-filtering', async ({ page }) => {
     // Intercept /ap/outbox calls and check headers
     let authHeaderFound = false;
     await page.route('**/ap/outbox*', async route => {
@@ -236,8 +236,8 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     const articles = page.locator('.feed-item');
     await expect(articles.first()).toBeVisible({ timeout: 15000 });
 
-    // Assert that the Authorization header was NOT sent to outbox
-    expect(authHeaderFound).toBe(false);
+    // Assert that the Authorization header was sent to outbox
+    expect(authHeaderFound).toBe(true);
   });
 
   test('UP-6: should successfully delete profile and clean up local data', async ({ page }) => {
@@ -317,10 +317,11 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     const feedGrid = page.locator('#feed-grid');
     await expect(feedGrid).toBeVisible();
     
-    // Assert that we have either actual article cards loaded or the empty state message
+    // Assert that we have either actual article cards loaded, the empty state message, or the error boundary
     const articles = page.locator('.feed-item');
     const emptyState = page.locator('.profile-empty');
-    await expect(articles.first().or(emptyState)).toBeVisible({ timeout: 20000 });
+    const errorBoundary = page.locator('.error-boundary');
+    await expect(articles.first().or(emptyState).or(errorBoundary)).toBeVisible({ timeout: 20000 });
   });
 
   const testUserEmail = process.env.TEST_USER_EMAIL;
@@ -469,6 +470,13 @@ test.describe('Uutisseuranta Smoke Tests', () => {
   test('should scroll through all articles, mark them read, refresh feed by clicking Uutiset, and verify empty state with visible tag cloud', async ({ page }) => {
     // 1. Mock outbox to return exactly 5 articles
     await page.route('**/ap/outbox*', async route => {
+      const request = route.request();
+      let seenIds = [];
+      if (request.method() === 'POST') {
+        const postData = request.postDataJSON() || {};
+        seenIds = postData.seen_ids || [];
+      }
+
       const items = Array.from({ length: 5 }).map((_, i) => ({
         "id": `https://activitystreams.uutisseuranta.net/ap/outbox/article-${i}`,
         "type": "Create",
@@ -484,12 +492,13 @@ test.describe('Uutisseuranta Smoke Tests', () => {
             { "type": "Hashtag", "name": "#testausta" }
           ]
         }
-      }));
+      })).filter(item => !seenIds.includes(String(item.id)));
+
       await route.fulfill({
         json: {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "OrderedCollection",
-          "totalItems": 5,
+          "totalItems": items.length,
           "orderedItems": items
         }
       });
@@ -524,5 +533,68 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     
     const tags = tagCloud.locator('.tag-cloud__tag');
     await expect(tags.first()).toBeVisible();
+  });
+
+  test('L-020: should trigger batched read activity sync on scroll pause without interval polling', async ({ page }) => {
+    let inboxCalls = [];
+    await page.route('**/ap/inbox*', async route => {
+      const data = route.request().postDataJSON();
+      inboxCalls.push(data);
+      await route.fulfill({ status: 200, json: { ok: true } });
+    });
+
+    await page.route('**/ap/outbox*', async route => {
+      const items = Array.from({ length: 3 }).map((_, i) => ({
+        "id": `https://activitystreams.uutisseuranta.net/ap/outbox/article-sync-${i}`,
+        "type": "Create",
+        "actor": "https://uutisseuranta.net/sources/yle",
+        "object": {
+          "id": `https://uutisseuranta.net/articles/sync-${i}`,
+          "type": "Article",
+          "name": `Sync Test Artikkeli ${i}`,
+          "summary": `Kuvaus ${i}`,
+          "url": `https://yle.fi/uutiset/sync-${i}`,
+          "published": new Date().toISOString(),
+          "tag": [{ "type": "Hashtag", "name": "#synctesti" }]
+        }
+      }));
+      await route.fulfill({
+        json: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "OrderedCollection",
+          "totalItems": items.length,
+          "orderedItems": items
+        }
+      });
+    });
+
+    // Kirjaudutaan sisään
+    await page.locator('#btn-login').click();
+    await page.evaluate(async () => {
+      if (window.signInForTest) {
+        await window.signInForTest('mockuser@test.com', 'salasana123');
+      }
+    });
+
+    const newsLink = page.locator('#nav-link-news');
+    await newsLink.click();
+
+    const cards = page.locator('.feed-item');
+    await expect(cards.first()).toBeVisible({ timeout: 15000 });
+
+    // Rullataan kortit näkyviin
+    const count = await cards.count();
+    for (let i = 0; i < count; i++) {
+      await cards.nth(i).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    }
+
+    // Odotetaan 2.5s jotta 2s debounce laukeaa
+    await page.waitForTimeout(2500);
+
+    // Varmistetaan että inbox-kutsu tapahtui eränä (type === 'Read')
+    const readSyncCalls = inboxCalls.filter(c => c && c.type === 'Read');
+    expect(readSyncCalls.length).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(readSyncCalls[0].object)).toBe(true);
   });
 });

@@ -63,40 +63,43 @@ const analytics = (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID && localStorage.
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-// Rekisteröidään auth-callbackit testejä ja mockausta varten
-window.__authCallbacks = [];
-const myOnAuthStateChanged = (authInstance, callback) => {
-  window.__authCallbacks.push(callback);
-  return onAuthStateChanged(authInstance, callback);
-};
-
-// Eksportoidaan testikirjautumisen apufunktio Playwright-integraatiotesteille (QA)
-window.signInForTest = async (email, password) => {
-  if (email === 'mockuser@test.com') {
-    console.log("Using E2E mock user login bypass");
-    const mockUser = {
-      uid: 'mock-uid-123',
-      email: email,
-      displayName: 'Mock Test User',
-      photoURL: '',
-      getIdToken: async () => 'mock-token-xyz'
-    };
-    Object.defineProperty(auth, 'currentUser', {
-      get: () => mockUser,
-      configurable: true
-    });
-    if (window.__authCallbacks) {
-      for (const cb of window.__authCallbacks) {
-        await cb(mockUser);
+// Rekisteröidään auth-callbackit ja testiapufunktiot vain kehitys- ja testiympäristössä (Päätös G-014)
+if (import.meta.env.DEV || (typeof window !== 'undefined' && window.__TESTING__)) {
+  window.__authCallbacks = [];
+  window.signInForTest = async (email, password) => {
+    if (email === 'mockuser@test.com') {
+      console.log("Using E2E mock user login bypass");
+      const mockUser = {
+        uid: 'mock-uid-123',
+        email: email,
+        displayName: 'Mock Test User',
+        photoURL: '',
+        getIdToken: async () => 'mock-token-xyz'
+      };
+      Object.defineProperty(auth, 'currentUser', {
+        get: () => mockUser,
+        configurable: true
+      });
+      if (window.__authCallbacks) {
+        for (const cb of window.__authCallbacks) {
+          await cb(mockUser);
+        }
       }
+      return mockUser;
     }
-    return mockUser;
-  }
-  return signInWithEmailAndPassword(auth, email, password);
-};
+    return signInWithEmailAndPassword(auth, email, password);
+  };
 
-window.registerForTest = async (email, password) => {
-  return createUserWithEmailAndPassword(auth, email, password);
+  window.registerForTest = async (email, password) => {
+    return createUserWithEmailAndPassword(auth, email, password);
+  };
+}
+
+const myOnAuthStateChanged = (authInstance, callback) => {
+  if (window.__authCallbacks) {
+    window.__authCallbacks.push(callback);
+  }
+  return onAuthStateChanged(authInstance, callback);
 };
 
 const btnLogin = document.getElementById('btn-login');
@@ -154,6 +157,18 @@ myOnAuthStateChanged(auth, async (user) => {
     await loadPrefs();
     migrateOldSeenKeys();
     updateNotificationsBadge();
+
+    try {
+      const saved = localStorage.getItem(`unsynced_reads_${user.uid}`);
+      if (saved) {
+        const ids = JSON.parse(saved) || [];
+        ids.forEach(id => pendingSeenSync.add(id));
+        localStorage.removeItem(`unsynced_reads_${user.uid}`);
+        setTimeout(syncPendingSeen, 1000);
+      }
+    } catch (e) {
+      console.warn("Failed to load unsynced reads:", e);
+    }
 
     // Check for pending comment (Issue #11)
     const pendingArticleId = localStorage.getItem('pending_comment_article_id');
@@ -272,15 +287,72 @@ const readObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
+let pendingSeenSync = new Set();
+let seenSyncDebounceTimer = null;
+
+async function syncPendingSeen(options = {}) {
+  if (seenSyncDebounceTimer) {
+    clearTimeout(seenSyncDebounceTimer);
+    seenSyncDebounceTimer = null;
+  }
+  
+  if (pendingSeenSync.size === 0 || !auth.currentUser) {
+    return;
+  }
+  
+  const batch = Array.from(pendingSeenSync);
+  pendingSeenSync.clear();
+  
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch(`${WRITE_API_URL}/ap/inbox`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      keepalive: options.keepalive || false,
+      body: JSON.stringify({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Read",
+        "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
+        "object": batch
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Sync failed with HTTP ${response.status}`);
+    }
+  } catch (err) {
+    console.warn("Failed to sync read activities, restoring to queue:", err);
+    batch.forEach(id => pendingSeenSync.add(id));
+  }
+}
+
+// Tapahtumapohjainen synkronointi: välilehden vaihto ja taustalle siirtyminen (Päätös L-020)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && pendingSeenSync.size > 0 && auth.currentUser) {
+    syncPendingSeen({ keepalive: true });
+  }
+});
+
+// Flushataan ja tallennetaan synkronoimattomat luetut ennen sivulta poistumista
+window.addEventListener('beforeunload', () => {
+  if (pendingSeenSync.size > 0 && auth.currentUser) {
+    try {
+      const uid = auth.currentUser.uid;
+      localStorage.setItem(`unsynced_reads_${uid}`, JSON.stringify(Array.from(pendingSeenSync)));
+    } catch (e) {
+      console.warn("Failed to save unsynced reads on beforeunload:", e);
+    }
+  }
+});
+
 async function markArticleAsRead(articleId, card) {
   const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
   const fingerprint = card.getAttribute('data-fingerprint') || 'true';
   const listKey = `seen_list_${uid}`;
   
-  // Huom: Jos useampi IntersectionObserver-kutsu laukeaa samanaikaisesti nopean
-  // vierityksen aikana, taulukko luetaan ja kirjoitetaan ilman lukitusta, mikä voi
-  // johtaa ylikirjoittamiseen (race condition). Käytännössä riski ja seuraukset
-  // (yksittäisen luetun merkin katoaminen) ovat erittäin vähäisiä.
   let seen = [];
   try {
     seen = JSON.parse(localStorage.getItem(listKey)) || [];
@@ -291,14 +363,13 @@ async function markArticleAsRead(articleId, card) {
   const existingIndex = seen.findIndex(p => p[0] === String(articleId));
   if (existingIndex !== -1) {
     if (seen[existingIndex][1] === fingerprint) {
-      return; // Jo luettu samalla sormenjäljellä
+      return;
     }
     seen.splice(existingIndex, 1);
   }
   
   seen.push([String(articleId), fingerprint]);
   
-  // Kevyt FIFO-raja 10 000 artikkelille
   if (seen.length > 10000) {
     seen.shift();
   }
@@ -309,28 +380,17 @@ async function markArticleAsRead(articleId, card) {
     console.warn("FIFO write failed:", e);
   }
   
-  // Päivitetään luetun tyyli uutiskortille
   card.classList.add('feed-item--read');
   
-  // Lähetetään standardi AS2 Read-aktiviteetti jos kirjautunut käyttäjä
   if (auth.currentUser) {
-    try {
-      const token = await auth.currentUser.getIdToken();
-      await fetch(`${WRITE_API_URL}/ap/inbox`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "type": "Read",
-          "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-          "object": articleId
-        })
-      });
-    } catch (err) {
-      console.warn("Failed to send AS2 Read activity:", err);
+    pendingSeenSync.add(articleId);
+    if (pendingSeenSync.size >= 500) {
+      syncPendingSeen();
+    } else {
+      if (seenSyncDebounceTimer) clearTimeout(seenSyncDebounceTimer);
+      seenSyncDebounceTimer = setTimeout(() => {
+        syncPendingSeen();
+      }, 2000);
     }
   }
 }
@@ -443,19 +503,49 @@ function showNotification(message, isError = false) {
 // ---- FETCH OUTBOX WITH RATE-LIMIT HANDLING (Issue #60 / L-011) ----
 async function fetchOutbox(tag = null, limit = 50, retryCount = 0) {
   let url = `${QUERY_API_URL}/ap/outbox`;
-  let params = [];
   
-  if (tag) {
-    params.push(`tag=${encodeURIComponent(tag)}`);
-  }
-  
-  params.push(`n=${limit}`);
-  url += `?${params.join('&')}`;
+  const headers = {
+    'Content-Type': 'application/json'
+  };
 
-  const headers = {};
+  if (auth.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } catch (err) {
+      console.warn("Failed to get idToken for outbox query:", err);
+    }
+  }
+
+  let seenIds = [];
+  const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
+  if (uid === 'anonymous') {
+    try {
+      const raw = localStorage.getItem(`seen_list_${uid}`);
+      if (raw) {
+        const seenList = JSON.parse(raw) || [];
+        seenIds = seenList.map(p => p[0]).reverse();
+      }
+    } catch (e) {
+      console.warn("Failed to read seen list for outbox POST:", e);
+    }
+  }
+
+  const bodyData = {
+    tag: tag ? [tag] : null,
+    n: limit
+  };
+
+  if (uid === 'anonymous') {
+    bodyData.seen_ids = seenIds;
+  }
 
   try {
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(bodyData)
+    });
 
     if (response.status === 429) {
       if (retryCount < 3) {
@@ -531,8 +621,6 @@ function renderFeed(articles) {
   grid.innerHTML = '';
   grid.setAttribute('aria-busy', 'false');
 
-  const prefs = getPrefs();
-  const hideRead = !prefs.showReadArticles;
   const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
 
   // Luetaan luetut uutiset kerralla Map-rakenteeseen tehokkuuden takia
@@ -547,10 +635,6 @@ function renderFeed(articles) {
   }
 
   let displayedArticles = articles;
-  if (hideRead && !currentTagFilter) {
-    // tagi-haku ohittaa piilotuksen (tämä on tietoinen UX-suunnittelupäätös, jotta haut ovat aina kattavia)
-    displayedArticles = articles.filter(item => !seenMap.has(String(item.id)));
-  }
 
   if (displayedArticles.length === 0) {
     // Jos kaikki ladatut uutiset on jo luettu, ladataan automaattisesti suurempi erä.
@@ -610,15 +694,7 @@ function renderFeed(articles) {
     // Jos kyseessä on maksumuuriartikkeli ja sille on arkistolinkki, päälinkki ohjaa suoraan toimivaan arkistoon
     const targetUrl = (isPaywalled && archiveUrl) ? archiveUrl : originalUrl;
 
-    // Reactions counts (Issue #20 & #21)
-    const likesCount = item.likes && typeof item.likes.totalItems === 'number' ? item.likes.totalItems : 0;
-    const dislikesCount = item.dislikes && typeof item.dislikes.totalItems === 'number' ? item.dislikes.totalItems : 0;
-    const hasReactions = likesCount + dislikesCount > 0;
-    
-    const agreePct = hasReactions ? Math.round(likesCount / (likesCount + dislikesCount) * 100) : 0;
-    const disagreePct = hasReactions ? 100 - agreePct : 0;
-
-    // Comments count (Issue #11)
+    // Comments count (Issue #11 / D-CENT)
     const commentCount = item.replies && typeof item.replies.totalItems === 'number' ? item.replies.totalItems : 0;
 
     // Luodaan sormenjälki artikkelin nykyisestä tilasta (kommenttien määrä ja tägit)
@@ -886,46 +962,6 @@ function renderFeed(articles) {
   updateActiveSourcesWidget(articles);
 }
 
-// ---- SEND ACTIONS TO WRITE API (Issue #20) ----
-async function postReaction(articleId, type) {
-  const token = await auth.currentUser.getIdToken();
-  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": type,
-      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-      "object": articleId
-    })
-  });
-  if (!res.ok) throw new Error("Reaction failed");
-}
-
-async function deleteReaction(articleId, type) {
-  const token = await auth.currentUser.getIdToken();
-  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Undo",
-      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-      "object": {
-        "type": type,
-        "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-        "object": articleId
-      }
-    })
-  });
-  if (!res.ok) throw new Error("Undo reaction failed");
-}
 
 // ---- TAG CLOUD LOGIC (Issue #16) ----
 function renderTagCloud(articles) {
@@ -977,6 +1013,10 @@ function renderTagCloud(articles) {
 }
 
 async function refreshFeed() {
+  if (pendingSeenSync.size > 0 && auth.currentUser) {
+    await syncPendingSeen();
+  }
+
   currentFeedLimit = 5;
   if (feedObserver) {
     feedObserver.disconnect();
@@ -1128,6 +1168,10 @@ function setupScrollPagination() {
 }
 
 async function loadMoreFeed(newLimit) {
+  if (pendingSeenSync.size > 0 && auth.currentUser) {
+    await syncPendingSeen();
+  }
+
   const grid = document.getElementById('feed-grid');
   if (!grid) return;
 
@@ -1600,10 +1644,12 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
 }
 
 
-// Altistetaan preferenssifunktiot globaalisti smoke-testiä varten / Expose preference functions globally for smoke tests
-window.updatePrefs = updatePrefs;
-window.exportPrefsAsJson = exportPrefsAsJson;
-window.deleteUserPrefs = deleteUserPrefs;
+// Altistetaan preferenssifunktiot globaalisti vain testejä varten
+if (import.meta.env.DEV || (typeof window !== 'undefined' && window.__TESTING__)) {
+  window.updatePrefs = updatePrefs;
+  window.exportPrefsAsJson = exportPrefsAsJson;
+  window.deleteUserPrefs = deleteUserPrefs;
+}
 
 
 
