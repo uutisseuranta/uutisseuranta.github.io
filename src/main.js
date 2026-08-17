@@ -23,7 +23,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
 import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs, exportPrefsAsJson, deleteUserPrefs } from './prefs.js';
-import { initProfileModal, openProfileModal } from './profile.js';
 import { Workbox } from 'workbox-window';
 
 // ---- SCROLL OBSERVER ----
@@ -140,7 +139,9 @@ myOnAuthStateChanged(auth, async (user) => {
   if (user) {
     // Alustetaan preferenssit ja profiilimodaali kirjautuneelle käyttäjälle
     initPrefs(app, user.uid);
-    initProfileModal(user);
+    import('./profile.js').then(({ initProfileModal }) => {
+      initProfileModal(user);
+    });
 
     btnLogin.style.display = 'none';
     userProfile.style.display = 'flex';
@@ -208,7 +209,11 @@ myOnAuthStateChanged(auth, async (user) => {
 });
 
 // Kytketään navbarin avatar-nappi avaamaan profiilimodaali
-btnProfile.addEventListener('click', () => {
+btnProfile.addEventListener('click', async () => {
+  const { initProfileModal, openProfileModal } = await import('./profile.js');
+  if (auth.currentUser) {
+    initProfileModal(auth.currentUser);
+  }
   openProfileModal();
 });
 
