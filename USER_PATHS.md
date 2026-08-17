@@ -1,465 +1,279 @@
-# Uutisseuranta – Käyttäjäpolut ja käyttötapaukset
+# Uutisseuranta - Käyttäjäpolut ja käyttäjätarinat
 
-Tämä dokumentti kuvaa uutisseuranta.net-sivuston käyttäjäpolut ja käyttötapaukset. Se kattaa sekä nykyisin toteutetut perustoiminnot (UP-1–8) että tulevat ehdotetut laajennukset (UP-9–15).
+Tämä dokumentti kuvaa uutisseuranta.net-sivuston käyttäjäpolut, käyttäjätarinat ja niiden teknisen toteutuksen. Dokumentti erittelee koodissa toteutetut toiminnallisuudet ja tulevaisuudelle suunnitellut laajennukset.
 
-Dokumentti pohjautuu `index.html`-toteutukseen, `TECHNICAL_DESIGN.md`-linjauksiin ja kuviointikirjaston suunnittelumalleihin ([d-cent.github.io/patterns](https://d-cent.github.io/patterns/)). Koodaustyyliä ja käytäntöjä varten katso [CODE_CONVENTIONS.md](file:///Users/jaakkokorhonen/uutisseuranta/CODE_CONVENTIONS.md), ja visuaalista asettelua varten [DESIGN_GUIDELINES.md](file:///Users/jaakkokorhonen/uutisseuranta/DESIGN_GUIDELINES.md).
+Kaikki kuvaukset pohjautuvat suoraan lähdekoodiin:
+- [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Sovelluksen päälogiikka, uutisvirran renderöinti, ActivityStreams 2.0 -syöte, kommentointi ja PWA-tuki.
+- [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js): Käyttäjäpreferenssien hybrid-persistointi (`localStorage` + Firestore).
+- [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js): Profiilimodaali, asetusten hallinta, JSON-vienti ja GDPR-tilinpoisto.
+- [src/theme.js](file:///Users/jaakkokorhonen/uutisseuranta/src/theme.js): Teeman alustus ennen first-paint-vaihetta.
+- [bq-activitystreams/query_api.py](file:///Users/jaakkokorhonen/uutisseuranta/bq-activitystreams/query_api.py): Uutisvirran haku ja backend-suodatus (`/ap/outbox`).
+- [TECHNICAL_DESIGN.md](file:///Users/jaakkokorhonen/uutisseuranta/TECHNICAL_DESIGN.md): Arkkitehtuurilinjaukset ja teknologiarajaukset.
+- [STANDARDS.md](file:///Users/jaakkokorhonen/uutisseuranta/STANDARDS.md): WCAG- ja GDPR-standardivaatimukset.
 
 ---
 
-## Käyttäjäprofiilit
+## Käyttäjätarinan rakenne
 
-Sivustolla on kaksi käyttäjäroolia:
+Jokainen käyttötapaus on kuvattu käyttäjätarinana (User Story), joka noudattaa ketterän kehityksen vakiomuotoa:
+> **Roolina [kuka]** haluan **[mitä / toiminto]**, jotta **[miksi / saavutettava arvo tai hyöty]**.
 
-| Rooli | Kuvaus | Autentikointi |
+Käyttäjätarinoiden yhteydessä määritellään:
+1. **Käyttäjätarina:** Käyttäjälähtöinen tavoite ja arvo.
+2. **Hyväksymiskriteerit (Acceptance Criteria):** Tarkistuslista vaatimuksista, joiden perusteella toiminnallisuus todetaan valmiiksi.
+3. **Konkreettinen toteutus koodissa:** Tekninen toteutustapa, kutsuttavat funktiot, rajapinnat ja tietorakenteet.
+
+---
+
+## Käyttäjäprofiilit ja roolit
+
+| Rooli | Kuvaus | Autentikointi ja tallennus |
 |---|---|---|
-| **Anonyymi käyttäjä** | Vierailee sivustolla ilman kirjautumista | Ei vaadi |
-| **Kirjautunut käyttäjä** | Tunnistautunut Google-tunnuksella | Firebase Auth / Google Sign-In |
+| **Anonyymi käyttäjä** | Selaa uutisia ilman kirjautumista. | Ei vaadi tunnistautumista. Luettujen artikkelien tunnisteet lähetetään backendille `seen_ids`-listana (`POST /ap/outbox`). Asetukset tallennetaan paikallisesti selaimen `localStorage`-muistiin (`prefs_anonymous`). |
+| **Kirjautunut käyttäjä** | Tunnistautuu Google-tilillä. | Firebase Authentication (`GoogleAuthProvider`). Luetut artikkelit synkronoidaan taustalle AS2 `Read` -aktiviteetteina ja backend suodattaa luetut pois automaattisesti käyttäjätunnisteen perusteella. Asetukset synkronoidaan Firestoreen (`/users/{uid}/preferences/main`). |
 
 ---
 
-## Nykyiset käyttäjäpolut (UP-1 – UP-8)
+## Käyttötapausten tila ja yhteenveto
 
-### UP-1 · Ensivierailu (anonyymi)
-
-**Lähtötilanne:** Käyttäjä saapuu sivustolle ensimmäistä kertaa suoraan URL:n tai haun kautta.
-
-```
-Saapuu uutisseuranta.net
-  └─ Näkee hero-osion
-       ├─ Lukee arvolupauksen ("Seuraa uutisia älykkäästi")
-       ├─ Näkee tilastot: 150+ lähdettä, 10k+ artikkelia/pv, reaaliajassa
-       ├─ [CTA] "Aloita seuranta" → vie GitHubiin (ulkoinen linkki)
-       └─ [CTA] "Katso esimerkkejä" → ankkuroi #uutiset-osioon
-```
-
-**Lopputulos:** Käyttäjä ymmärtää palvelun tarkoituksen ja voi jatkaa tutustumaan sivuston sisältöön.
-
----
-
-### UP-2 · Uutisvirran selaaminen (anonyymi tai kirjautunut)
-
-**Lähtötilanne:** Käyttäjä haluaa selata päivän uutisia.
-
-```
-Klikkaa navigaation "Uutiset" tai "Katso esimerkkejä" -linkkiä
-  └─ Scrollaa #uutiset-osioon
-       ├─ Näkee pääuutisen (feed-item--lead, 2-sarake-leveys)
-       │    ├─ Kuva, kategoriamerkki (esim. Politiikka)
-       │    ├─ Otsikko ja kappale
-       │    └─ Lähde + aikaleima
-       └─ Näkee 2 sivuuutista (feed-item--small)
-            ├─ Teknologia-artikkeli
-            └─ Talous-artikkeli
-```
-
-**Kategoriat:** Politiikka (punainen), Teknologia (sininen), Talous (vihreä).
-
-**Lopputulos:** Käyttäjä saa yleiskuvan päivän uutisista ja voi klikata artikkelia lukeakseen alkuperäisen jutun ulkoisessa lähteessä.
+| Tunnus | Käyttötapaus | Tila | Keskeiset kooditiedostot |
+|---|---|---|---|
+| **UP-1** | Ensivierailu ja arvolupauksen tarkastelu | ✅ Toteutettu | [index.html](file:///Users/jaakkokorhonen/uutisseuranta/index.html), [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) |
+| **UP-2** | Uutisvirran selaaminen ja backend-suodatettu sivutus | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js), [bq-activitystreams/query_api.py](file:///Users/jaakkokorhonen/uutisseuranta/bq-activitystreams/query_api.py) |
+| **UP-3** | Teeman vaihto (vaalea / tumma / järjestelmä) | ✅ Toteutettu | [src/theme.js](file:///Users/jaakkokorhonen/uutisseuranta/src/theme.js), [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js), [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) |
+| **UP-4** | Kirjautuminen Google-tunnuksella | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) (`signInWithPopup`) |
+| **UP-5** | Uloskirjautuminen | ✅ Toteutettu | [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js) (`signOut`) |
+| **UP-6** | Lähteiden aktiivisuuden tarkastelu | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) (`loadHomepageStats`, `updateActiveSourcesWidget`) |
+| **UP-7** | Avoin lähdekoodi ja kehitykseen osallistuminen | ✅ Toteutettu | [index.html](file:///Users/jaakkokorhonen/uutisseuranta/index.html) |
+| **UP-8** | Responsiivinen mobiiliselaus ja PWA-offline-tuki | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) (`Workbox`), [src/style.css](file:///Users/jaakkokorhonen/uutisseuranta/src/style.css) |
+| **UP-9** | Tagipohjainen uutisvirtanäkymä ja tagipilvi | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) (`renderTagCloud`, tagisuodatus) |
+| **UP-10** | Käyttäjäasetusten hybrid-hallinta | ✅ Toteutettu | [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js), [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js) |
+| **UP-11** | "Uutta seuraamissasi aiheissa" -ilmoitukset | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) (`updateNotificationsBadge`) |
+| **UP-12** | Käyttäjäprofiili ja seurantatiedot | ✅ Toteutettu | [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js) |
+| **UP-13** | Artikkelin kontekstuaalinen vertailu ("Sama aihe muualla") | 🔲 Suunniteltu | Suunniteltu Jaccard-samankaltaisuudella muistissa |
+| **UP-14** | Vapaatekstihaku ja URL-hash-tila | 🔲 Suunniteltu | Suunniteltu asiakaspuolen hakuna (`#haku=...`) |
+| **UP-15** | Kirjautumisen valinnaisuus ja matala käyttökynnys | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js), [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js) |
+| **UP-16** | 2-tasoinen kommentointi ja vastausketjut (D-CENT) | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) (`fetchReplies`, `postComment`, autocomplete) |
+| **UP-17** | Maksumuuritunnistus ja Wayback Machine -arkistolinkki | ✅ Toteutettu | [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js) (`/ap/check-status`, `url_archive`) |
+| **UP-18** | GDPR-tietojen vienti (JSON) ja tilin poisto | ✅ Toteutettu | [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js) (`exportPrefsAsJson`), [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js) (`deleteUserPrefs`) |
 
 ---
 
-### UP-3 · Teeman vaihto (anonyymi tai kirjautunut)
+## Toteutetut käyttäjätarinat (konkreettinen toteutus koodissa)
 
-**Lähtötilanne:** Käyttäjä haluaa vaihtaa vaalean ja tumman teeman välillä.
+### UP-1 · Ensivierailu ja dynaamiset tilastot
+* **Käyttäjätarina:**
+  > **Uutistenlukijana** haluan nähdä heti etusivulta palvelun arvolupauksen, reaaliaikaiset julkaisutilastot ja selkeät toimintanapit, jotta ymmärrän mistä palvelussa on kyse ja voin siirtyä lukemaan uutisia yhdellä klikkauksella.
+* **Hyväksymiskriteerit:**
+  1. Hero-osio latautuu välittömästi esittäen palvelun pääotsikon ja kuvauksen.
+  2. Tilastoluvut (lähteiden määrä, 24h artikkelimäärä ja päivitysväli) haetaan asynkronisesti taustapalvelusta.
+  3. "Katso esimerkkejä" ja "Uutiset" siirtävät käyttäjän uutisnäkymään ilman sivulatausta.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Funktio `loadHomepageStats()` hakee BigQuery-tilastot endpointista `GET /ap/stats` ja päivittää DOM-elementit `stat-sources`, `stat-articles` ja `stat-interval`.
+  * SPA-reititin ohjaa uutisnäkymään kutsumalla `updatePrefs({ currentView: 'news' })`.
 
-```
-Klikkaa navigaation aurinko/kuu-ikonipainike (btn-theme)
-  └─ JavaScript vaihtaa data-theme-attribuuttia dokumentin juuressa
-       ├─ "light" → CSS-muuttujat vaaleat sävyt
-       └─ "dark"  → CSS-muuttujat tummat sävyt
-```
+---
 
-**Huomio:** Teema-asetus ei tallennu istuntojen välillä ilman kirjautumista tai asetusten tallennusta — sivulatauksen jälkeen tunnistetaan `prefers-color-scheme` selaimen asetuksesta (ks. UP-10 laajempia asetuksia varten).
+### UP-2 · Uutisvirran selaaminen ja backend-suodatettu sivutus
+* **Käyttäjätarina:**
+  > **Aktiivisena uutisseuraajana** haluan selata uutisvirtaa keskeytyksettä siten, että uusia artikkeleita ladataan taustalla vieritykseni mukaan ja backend suodattaa jo lukemani uutiset pois suoraan tietokantakyselyssä, jotta uutisvirta palauttaa aina täyden erän tuoreita, lukemattomia uutisia.
+* **Hyväksymiskriteerit:**
+  1. Alussa ladataan 5 artikkelia nopean ensilatauksen takaamiseksi.
+  2. Vierityksen saavuttaessa virran pään pyydetään 50 artikkelia ja sen jälkeen 500 artikkelia.
+  3. Backend suodattaa luetut artikkelit pois tietokantatasolla (BigQuery):
+     * Kirjautuneelle: tokenin `actor`-historian perusteella (`activities`-taulun `Read`-tapahtumat). Päivittyneet uutiset (`updated > max_received_at`) palautetaan uudelleen.
+     * Anonyymille: pyynnön `seen_ids`-listan perusteella (`NOT IN UNNEST(@seen_ids)`).
+  4. Käyttäjälle ei koskaan näytetä tyhjiä korttipaikkoja, koska suodatus tapahtuu ennen tulosten palauttamista selaimeen.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `fetchOutbox(tag, limit)` tekee `POST /ap/outbox` -pyynnön. Anonyymillä se lähettää `seen_ids`-listan selaimen `seen_list_anonymous`-muistista; kirjautuneella `Authorization: Bearer <idToken>`.
+  * [bq-activitystreams/query_api.py](file:///Users/jaakkokorhonen/uutisseuranta/bq-activitystreams/query_api.py):
+    * Kirjautunut: `LEFT JOIN activities s ON o.id = s.object_id AND s.actor = @actor_id AND s.type = 'Read' WHERE (s.object_id IS NULL OR o.updated > s.max_received_at)`.
+    * Anonyymi: `WHERE o.id NOT IN UNNEST(@seen_ids)`.
+  * `readObserver` tarkkailee näytölle tulevia artikkeleita ja lähettää AS2 `Read` -aktiviteetit taustalle tapahtumapohjaisesti (2s pysähtymis-debounce, sivutuksen eränvaihto, näkymänvaihto ja `visibilitychange`, Päätös L-020).
+
+---
+
+### UP-3 · Teeman vaihto ja synkronointi
+* **Käyttäjätarina:**
+  > **Käyttäjänä** haluan vaihtaa käyttöliittymän tumman ja vaalean teeman välillä milloin tahansa ja säilyttää valintani seuraavilla vierailukerroilla, jotta sivuston lukeminen on miellyttävää eri valaistuksissa.
+* **Hyväksymiskriteerit:**
+  1. Teemanvaihtopainike vaihtaa heti `data-theme`-attribuutin arvon (`light`/`dark`).
+  2. Valittu teema tallentuu pysyvästi eikä sivu välkähdy sivulatauksen yhteydessä.
+  3. Kirjautuneen käyttäjän teemavalinta synkronoituu kaikille laitteille.
+* **Konkreettinen toteutus koodissa:**
+  * [src/theme.js](file:///Users/jaakkokorhonen/uutisseuranta/src/theme.js): Lukee tallennetun teeman heti `<head>`-osiossa ennen renderöintiä.
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Navigaation aurinko/kuu-painike kutsuu `updatePrefs({ theme })`.
+  * [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js): Tallentaa teeman välittömästi `localStorage`-muistiin ja Firestoreen.
 
 ---
 
 ### UP-4 · Kirjautuminen Google-tunnuksella
-
-**Lähtötilanne:** Anonyymi käyttäjä haluaa kirjautua sisään.
-
-```
-Klikkaa "Kirjaudu"-painiketta navigaatiossa (btn-login)
-  └─ Firebase Auth käynnistää signInWithPopup(GoogleAuthProvider)
-       ├─ [Onnistuu] → Google-kirjautumispopup aukeaa
-       │    └─ Käyttäjä valitsee Google-tilin
-       │         └─ onAuthStateChanged laukeaa, user ≠ null
-       │              ├─ "Kirjaudu"-painike piilotetaan
-       │              ├─ Avatarkuva (Google-profiili) näytetään
-       │              └─ "Ulos"-painike tulee näkyviin
-       └─ [Epäonnistuu: auth/unauthorized-domain]
-            └─ Alert: "Tämä verkkotunnus ei ole sallittu..."
-```
-
-**Hyväksytyt domainit (Firebase Authorized Domains):**
-- `uutisseuranta.net`
-- `jaakkokorhonen.github.io`
+* **Käyttäjätarina:**
+  > **Käyttäjänä** haluan kirjautua palveluun olemassa olevalla Google-tililläni ilman erillistä salasanaa tai rekisteröitymislomaketta, jotta saan personoidut asetukseni ja seuratut aiheet käyttöön vaivattomasti.
+* **Hyväksymiskriteerit:**
+  1. "Kirjaudu"-painike avaa modaalin, josta voi käynnistää Google-kirjautumisen.
+  2. Onnistuneen kirjautumisen jälkeen profiilikuva tulee näkyviin ja asetukset ladataan pilvestä.
+  3. Ennen kirjautumista aloitettu kommenttiluonnos palautuu automaattisesti kenttään.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Kutsutaan `signInWithPopup(auth, provider)`.
+  * `myOnAuthStateChanged` alustaa `initPrefs(app, user.uid)` ja `initProfileModal(user)`.
 
 ---
 
 ### UP-5 · Uloskirjautuminen
-
-**Lähtötilanne:** Kirjautunut käyttäjä haluaa kirjautua ulos.
-
-```
-Klikkaa avatarin vieressä olevaa "Ulos"-painiketta (btn-logout)
-  └─ signOut(auth) kutsutaan
-       └─ onAuthStateChanged laukeaa, user = null
-            ├─ Avatarkuva piilotetaan
-            └─ "Kirjaudu"-painike palaa näkyviin
-```
+* **Käyttäjätarina:**
+  > **Kirjautuneena käyttäjänä** haluan kirjautua ulos tililtäni, jotta voin lopettaa istunnon jaettavalla laitteella turvallisesti.
+* **Hyväksymiskriteerit:**
+  1. Profiilimodaalissa on selkeä "Kirjaudu ulos" -painike.
+  2. Uloskirjautumisen jälkeen tila palaa anonyymiin tilaan ja käyttäjän profiilikuva piilotetaan.
+* **Konkreettinen toteutus koodissa:**
+  * [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js): Kutsuu `signOut(getAuth())`.
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Palauttaa `initPrefs(app, null)` ja näyttää "Kirjaudu"-painikkeen.
 
 ---
 
 ### UP-6 · Lähteiden aktiivisuuden tarkastelu
-
-**Lähtötilanne:** Käyttäjä haluaa nähdä, mitkä lähteet julkaisevat eniten.
-
-```
-Scrollaa #ominaisuudet-osioon
-  └─ Näkee features-visual -widgetin "Aktiivisimmat lähteet tänään"
-       ├─ Yle Uutiset        → 312 artikkelia (88% palkki)
-       ├─ Helsingin Sanomat  → 255 artikkelia (72%)
-       ├─ Kauppalehti        → 204 artikkelia (58%)
-       ├─ MTV Uutiset        → 161 artikkelia (45%)
-       ├─ Iltalehti          → 136 artikkelia (38%)
-       └─ Taloussanomat      →  99 artikkelia (28%)
-```
-
-**Huomio:** Tämä on tällä hetkellä staattinen esittelykomponentti (`aria-hidden="true"`). Reaaliaikainen data integroidaan myöhemmin.
+* **Käyttäjätarina:**
+  > **Käyttäjänä** haluan nähdä mitkä suomalaiset mediat julkaisevat aktiivisimmin uutisia, jotta tiedän mistä lähteistä uutisvirta muodostuu.
+* **Hyväksymiskriteerit:**
+  1. Etusivun widget näyttää aktiivisimmat lähteet ja julkaisumäärät.
+  2. Uutissivulla widget päivittyy dynaamisesti kulloinkin valittujen suodatinten mukaisesti.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `loadHomepageStats()` lataa globaalit tilastot ja `updateActiveSourcesWidget(articles)` päivittää visualisointipalkit näytettävän uutisjoukon perusteella.
 
 ---
 
-### UP-7 · Avoin lähdekoodi – osallistuminen
-
-**Lähtötilanne:** Kehittäjä tai muu kiinnostunut haluaa osallistua projektin kehitykseen.
-
-```
-Klikkaa CTA-osion "Katso GitHubissa" -painiketta
-     tai navigaation "GitHub"-painiketta
-     tai footerin "GitHub"- tai "Ilmoita virhe" -linkkejä
-  └─ Uusi välilehti: github.com/jaakkokorhonen/uutisseuranta
-       ├─ Voi forkata repositorion
-       ├─ Voi avata issuen (ominaisuuspyyntö tai bugi)
-       └─ Voi tehdä pull requestin
-```
+### UP-7 · Avoin lähdekoodi ja kehitykseen osallistuminen
+* **Käyttäjätarina:**
+  > **Kehittäjänä ja avoimen datan harrastajana** haluan löytää linkit projektin lähdekoodiin ja virheilmoituksiin, jotta voin osallistua palvelun kehitykseen tai raportoida havaitsemani bugin.
+* **Hyväksymiskriteerit:**
+  1. GitHub- ja virheraportointilinkit ovat saavutettavissa hero-osiosta, CTA-lohkosta ja footerista (Päätös L-005).
+* **Konkreettinen toteutus koodissa:**
+  * [index.html](file:///Users/jaakkokorhonen/uutisseuranta/index.html): Semanttiset linkit GitHub-repositorioon ja issue-seurantaan.
 
 ---
 
-### UP-8 · Mobiiliselaus
-
-**Lähtötilanne:** Käyttäjä avaa sivuston mobiililaitteella (leveys ≤ 768px).
-
-```
-Mobiiliselain lataa sivuston
-  └─ Responsiiviset mediakyselyt aktivoituvat
-       ├─ Navigaation linkit (.nav__links) piilotetaan
-       ├─ feed-grid muuttuu yksisarakkeiseksi
-       ├─ features-visual -widget piilotetaan
-       └─ hero__heading skaalautuu pienemmäksi (clamp)
-```
-
-**Toimivat ominaisuudet mobiilissa:** logo, teeman vaihto, kirjautumispainike, hero-teksti, uutisvirtakortit, CTA-osio, footer.
+### UP-8 · Responsiivinen mobiiliselaus ja PWA-offline-tuki
+* **Käyttäjätarina:**
+  > **Mobiilikäyttäjänä** haluan asentaa palvelun sovelluksena puhelimeeni ja pystyä lukemaan ladattuja uutisia myös huonon tai katkeilevan verkkoyhteyden aikana.
+* **Hyväksymiskriteerit:**
+  1. Sivusto skaalautuu mobiilinäytöille ilman vaakavieritystä.
+  2. Service Worker tallentaa uutisdatan ja kuvat välimuistiin.
+  3. Uuden version julkaisusta ilmoitetaan ei-blokkaavalla toast-viestillä.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Workbox Service Worker (`/sw.js`), `NetworkFirst` uutisdatalle, `StaleWhileRevalidate` kuville.
+  * [src/style.css](file:///Users/jaakkokorhonen/uutisseuranta/src/style.css): Responsiiviset mediamäärittelyt.
 
 ---
 
-## Tulevat käyttötapaukset ja laajennukset (UP-9 – UP-15)
-
-Nämä käyttötapaukset perustuvat kuviointikirjaston vuorovaikutusmalleihin (streams, notifications-list, profile, settings, discussion, argumenting, registration) ja niiden avulla toteutetaan uutisseuranta.netin puuttuvat toiminnallisuudet.
-
-**Arkkitehtuuriperiaate:** `TECHNICAL_DESIGN.md` rajaa Firebase-käytön vain Authenticationiin ja Analyticsiin. Kaikki persistointi, joka edellyttäisi Firestorea tai muuta Firebase-palvelua, vaatii eksplisiittisen arkkitehtuuripäätöksen ennen pilvisynkronoinnin toteuttamista.
-
----
-
-### UP-9 · Henkilökohtainen uutisvirtanäkymä
-
-**kuviointikirjastomalli:** `streams` (suodatettu sisältövirta)
-
-**Kuvaus:** Käyttäjä haluaa seurata vain tiettyjä aiheita. Aiheet valitaan klikkaamalla uutiskorteissa näkyviä tageja (ei erillisellä aihevalintasivulla tai -osiolla).
-
-```
-Käyttäjä näkee uutiskortissa tagin (esim. "Teknologia", "Politiikka")
-  └─ Klikkaa tagia
-       ├─ [Anonyymi] Tag lisätään istuntokohtaiseen suodatinlistaan (JS-muistissa)
-       │    └─ Uutisvirtaan jää vain valitun tagin artikkelit
-       │         └─ Tagipallo syttyy aktiiviseksi navigaatiopalkissa
-       └─ [Kirjautunut] Sama + tag tallennetaan localStorage:iin UID:lla avainparina
-            └─ Seuraavan sivulatauksen yhteydessä tagi palautetaan automaattisesti
-```
-
-**Tekniset valinnat (ei Firestorea aluksi):**
-- Istuntokohtainen tila: JS-objekti muistissa (`selectedTags = new Set()`)
-- Kirjautuneelle persistointi: `localStorage.setItem('prefs_' + uid, JSON.stringify([...selectedTags]))`
-- Lukeminen: `onAuthStateChanged` → `localStorage.getItem('prefs_' + uid)` → suodatin käyttöön
-- localStorage on tuettava arkkitehtuuripäätös (ei Firestore); sisältö on vain käyttöliittymäpreferenssi, ei sensitiivistä dataa
-
-**Hyväksymiskriteerit:**
-- Tagiklikki suodattaa virran välittömästi ilman sivulatausta (client-side filter)
-- Anonyymi käyttäjä menettää valinnat istunnon päättyessä
-- Kirjautunut käyttäjä näkee samat valinnat seuraavalla vierailulla (localStorage)
-- Useampi tagi on valittavissa samanaikaisesti (OR-logiikka)
-- "Nollaa suodattimet" -linkki palauttaa oletusvirran
+### UP-9 · Tagipohjainen uutisvirtanäkymä ja tagipilvi
+* **Käyttäjätarina:**
+  > **Lukijana** haluan suodattaa uutisia aihetunnisteiden (tagien) mukaan ja lisätä artikkeleille uusia aihetta kuvaavia tageja, jotta löydän minua kiinnostavat teemat nopeasti.
+* **Hyväksymiskriteerit:**
+  1. Uutiskortin tagia klikkaamalla uutisvirta rajautuu välittömästi kyseiseen tagiin.
+  2. 500 uutisen latauduttua sivun alareunaan piirtyy 42 suosituimman tagin tagipilvi.
+  3. Käyttäjä voi lisätä uutiselle uuden tagin `+`-painikkeella.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `renderTagCloud()`, tagiklikkikuuntelijat ja `POST /ap/inbox` AS2 `Add Hashtag` -pyyntö.
 
 ---
 
-### UP-10 · Käyttäjäasetusten hallinta
-
-**kuviointikirjastomalli:** `settings` (käyttäjän preferenssinäkymä)
-
-**Kuvaus:** Kirjautunut käyttäjä haluaa hallita seurattavia tageja ja teema-asetusta pysyvästi.
-
-> ⚠️ **Arkkitehtuurihuomio:** Alkuperäinen ehdotus vaati Firestorea (`TECHNICAL_DESIGN.md` kieltää ilman erillistä päätöstä). Tässä versiossa peruspersistointi toteutetaan **localStorage:lla** samoin kuin UP-9:ssä. Firestore otetaan käyttöön myöhemmin synkronointilaajennuksena.
-
-```
-Kirjautunut käyttäjä avaa asetukset (avatarklikkaus → "Asetukset")
-  └─ Asetuspaneeli (modal tai sivu) aukeaa
-       ├─ Seuratut tagit – aktiiviset tagit näkyvät listana, poistettavissa
-       ├─ Näkymä – teemavalinta (vaalea/tumma/järjestelmä)
-       │    └─ Korvaa nykyisen istuntokohtaisen vaihdon
-       └─ "Tyhjennä kaikki asetukset" – poistaa localStorage-avaimen
-  └─ Tallennetaan välittömästi (ei erillistä Tallenna-painiketta)
-       └─ Pieni animoitu checkmark-vahvistus muutoksen kohdalla
-```
-
-**Tekniset valinnat:**
-- Kaikki asetukset tallennetaan yhteen JSON-objektiin: `localStorage.setItem('prefs_' + uid, JSON.stringify({tags, theme}))`
-- Synkronointi laitteiden välillä: **ei toteuteta** heti; vaatii Firestoren/taustapalvelun käyttöönoton (ks. arkkitehtuurilaajennus alla)
-- Teemavalinta: `data-theme`-attribuutti `<html>`-elementissä, luetaan käynnistyksessä ennen renderöintiä (välähdyksen estämiseksi)
-
-**Hyväksymiskriteerit:**
-- Asetukset säilyvät saman laitteen istuntojen välillä (localStorage)
-- Teema aktivoituu ennen first-paintia (skripti `<head>`:ssä, inline tai deferoitu)
-- Kirjautumattoman käyttäjän asetukset tallennetaan ilman UID-etuliitettä (`prefs_anon`)
+### UP-10 · Käyttäjäasetusten hybrid-hallinta
+* **Käyttäjätarina:**
+  > **Käyttäjänä** haluan, että tekemäni asetukset tallentuvat heti ilman erillistä Tallenna-painiketta ja ovat käytettävissä myös offline-tilassa.
+* **Hyväksymiskriteerit:**
+  1. Asetusmuutokset tallentuvat välittömästi paikalliseen `localStorage`-muistiin.
+  2. Kirjautuneella käyttäjällä muutokset synkronoituvat 500 ms viiveellä Firestoreen.
+  3. Firestore `persistentLocalCache` varmistaa offline-kirjoitusten jonoutumisen.
+* **Konkreettinen toteutus koodissa:**
+  * [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js): `updatePrefs()`, `_scheduleFirestore()`, `initializeFirestore` `persistentLocalCache`-tuella.
 
 ---
 
-### UP-11 · "Uutta seuraamissasi aiheissa" -ilmoitus
-
-**kuviointikirjastomalli:** `notifications-list`
-
-**Kuvaus:** Käyttäjä haluaa tietää, onko hänen valitsemiinsa tageihin ilmestynyt uusia artikkeleita sivulatauksen jälkeen.
-
-> **Tekninen rajaus:** Kyseessä on **in-app-ilmoitus**, ei push-ilmoitus. Web Push API vaatii palvelinpuolen push-endpointin, mikä ei sovi nykyiseen palvelimettomaan arkkitehtuuriin. Tässä toteutetaan kevyempi malli: sivuston sisäinen uusien artikkelien merkintä.
-
-```
-Käyttäjällä on tageja valittuna (UP-9/UP-10)
-  └─ Käyttäjä palaa sivulle (uusi istunto tai sivulataus)
-       └─ Sovellus vertaa: nykyinen uutissyöte vs. edellisen käynnin "viimeisin artikkeli" per tagi
-            ├─ Uusia artikkeleita löytyy → navigaatiopalkin kellokuvakkeessa numero
-            │    └─ Klikkaus avaa "Uudet artikkelit" -paneelin
-            │         ├─ Ryhmitelty tageittain
-            │         └─ "Merkitse kaikki luetuksi" nollaa laskurin
-            └─ Ei uusia → kelloa ei näytetä
-```
-
-**Tekniset valinnat:**
-- Viimeisin nähty artikkeli per tagi: `localStorage.setItem('seen_' + tag, latestArticleId)`
-- Vertailu tapahtuu `onAuthStateChanged`-callbackin jälkeen, kun uutissyöte on ladattu
-- Uutissyöte haetaan RSS/JSON-feedistä (sama mekanismi kuin nykyisin) — ei erillistä backendiä
-- Artikkelin tunniste: URL tai otsikon hash (deterministinen, ilman tietokantaa)
-
-**Hyväksymiskriteerit:**
-- Laskuri näkyy vain, jos käyttäjällä on tageja valittuna
-- Toimii ilman kirjautumista (localStorage-pohjainen)
-- Ei vaadi push-lupaa eikä palvelinpuolta
+### UP-11 · "Uutta seuraamissasi aiheissa" -ilmoitukset
+* **Käyttäjätarina:**
+  > **Seuraajatahona** haluan nähdä heti sivulle palatessani merkin, jos seuraamissani aiheissa on julkaistu uusia artikkeleita edellisen käyntini jälkeen.
+* **Hyväksymiskriteerit:**
+  1. Navigaatiopalkin ilmoituskellossa näkyy lukemattomien aiheiden määrä.
+  2. Laskuri päivittyy vertaamalla syötteen uusimpia tunnisteita edelliseen käyntiin.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `updateNotificationsBadge()` vertaa tagien uusimpia artikkeleita avaimeen `seen_${uid}_${tag}`.
 
 ---
 
-### UP-12 · Käyttäjäprofiilisivu
-
-**kuviointikirjastomalli:** `profile`
-
-**Kuvaus:** Kirjautunut käyttäjä haluaa nähdä omat tietonsa ja hallita tiliään.
-
-> ⚠️ **Arkkitehtuurihuomio:** Alkuperäinen ehdotus luki tilastoja Firestoresta. Alla oleva versio laskee kaiken localStorage-datasta ja Firebase Authin tiedoista.
-
-```
-Klikkaa avatarikuvaa → "Profiili"
-  └─ Profiilipaneeli aukeaa
-       ├─ Google-profiilikuva ja nimi (Firebase Auth currentUser.displayName / photoURL)
-       ├─ Seurantatilastot (lasketaan localStorage-datasta):
-       │    ├─ Seurattujen tagien määrä
-       │    └─ "Seuranta aloitettu" (Firebase Auth currentUser.metadata.creationTime)
-       └─ "Kirjaudu ulos" ja "Poista tili" (Firebase Auth deleteUser + localStorage-siivous)
-```
-
-**Hyväksymiskriteerit:**
-- Profiilitiedot haetaan Firebase Auth `currentUser`-objektista — ei Firestorea
-- Tilin poisto siivoaa myös kaikki `prefs_` ja `seen_`-avaimet localStorage:sta
-- Paneeli ei lataa mitään ulkoista dataa
+### UP-12 · Käyttäjäprofiilimodaali
+* **Käyttäjätarina:**
+  > **Kirjautuneena käyttäjänä** haluan hallita omaa profiiliani, tarkastella tilitietojani ja poistaa seurattuja tageja yhdestä keskitetystä näkymästä.
+* **Hyväksymiskriteerit:**
+  1. Avatar-painike avaa saavutettavan dialogin (`role="dialog"`).
+  2. Näyttää nimen, sähköpostin, liittymisajan ja listan seuratuista tageista poistonapeilla.
+* **Konkreettinen toteutus koodissa:**
+  * [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js): `initProfileModal()`, `openProfileModal()`, `unfollowTag()`.
 
 ---
 
-### UP-13 · Artikkelin kontekstuaalinen vertailu
-
-**kuviointikirjastomalli:** `discussion` + `argumenting`
-
-**Kuvaus:** Käyttäjä haluaa nähdä, mitkä muut mediat käsittelevät samaa aihetta kuin valittu artikkeli.
-
-```
-Käyttäjä klikkaa uutiskorttia
-  └─ Artikkelimodal aukeaa
-       ├─ Pääartikkeli: otsikko, lähde, aikaleima, katkelma + "Lue alkuperäinen" -linkki
-       └─ "Sama aihe muualla" -osio
-            ├─ Suodatetaan jo ladatusta uutissyötteestä: otsikon avainsanat → muut kortit
-            │    └─ Algoritmi: tokenisoi otsikot, laske Jaccard-samankaltaisuus, kynnys (threshold) > 0.2
-            ├─ Näytetään 2–5 artikkelia eri lähteistä
-            └─ Jos alle 2 lähdettä löytyy → osio piilotetaan
-```
-
-**Tekniset valinnat:**
-- Kaikki suodatus asiakaspuolella, jo ladatusta datasta (ei lisäpyyntöjä)
-- Jaccard-samankaltaisuus tokenisoiduille otsikoille (~10 rivin JS-funktio)
-- Ei NLP-kirjastoa eikä backendiä
-
-**Hyväksymiskriteerit:**
-- Vertailu perustuu yksinomaan jo ladattuun syötteeseen (ei uusia verkkopyyntöjä)
-- Toimii molemmille käyttäjärooleille
+### UP-15 · Kirjautumisen valinnaisuus ja matala käyttökynnys
+* **Käyttäjätarina:**
+  > **Uudelta käyttäjältä** haluan päästä kokeilemaan ja käyttämään palvelua täysipainoisesti ilman pakollista rekisteröitymispakkoa tai henkilötietojen luovuttamista.
+* **Hyväksymiskriteerit:**
+  1. Kaikki uutiset, teemanvaihdot ja suodatukset toimivat anonyymisti.
+  2. Kirjautumisikkunassa on selkeä "Jatka ilman kirjautumista" -toiminto.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js), [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js): Anonyymi tila käyttää `prefs_anonymous`-avainta.
 
 ---
 
-### UP-14 · Hakutoiminto
-
-**kuviointikirjastomalli:** `streams` (hakusuodatin sisältövirran päälle)
-
-**Kuvaus:** Käyttäjä haluaa löytää tiettyä aihetta koskevat artikkelit avainsanalla.
-
-```
-Hakuikoni navigaatiossa → hakukenttä laajenee
-  └─ Käyttäjä kirjoittaa
-       └─ Debounce 200ms → client-side suodatus
-            ├─ Suodatuskohde: artikkelin otsikko + lähteen nimi + tagit
-            ├─ Hakusana korostetaan otsikoissa (<mark>-elementti)
-            ├─ Tyhjä tulos: "Ei tuloksia haulle '[x]'"
-            └─ ESC tai tyhjennys → palaa alkuperäiseen virtaan
-```
-
-**Tekniset valinnat:**
-- Haku kohdistuu **muistissa olevaan** artikkelilistaan (sama JS-array, josta virta renderöidään)
-- Ei erillistä hakuindeksiä eikä verkkopyyntöjä hakuhetkellä
-- `String.prototype.toLowerCase().includes()` riittää MVP-vaiheessa
-- Hakutila tallennetaan URL-hashiin: `#haku=ukraina` → jaettava linkki toimii
-
-**Hyväksymiskriteerit:**
-- Hakuaika < 50ms (client-side, muistissa)
-- Mobiilissa hakukenttä vie koko navigaatiopalkin leveyden
-- Hash-parametri (`#haku=...`) luetaan sivulatauksen yhteydessä
+### UP-16 · 2-tasoinen kommentointi ja vastausketjut (D-CENT)
+* **Käyttäjätarina:**
+  > **Keskustelijana** haluan kirjoittaa uutisille kommentteja, vastata muiden viesteihin 2-tasoisessa ketjussa, mainita muita käyttäjiä `@`-merkillä ja ilmaista kantani kommentteihin Samaa mieltä / Eri mieltä -reaktioilla (Päätös L-017).
+* **Hyväksymiskriteerit:**
+  1. Uutiskortissa on suora pikakommenttikenttä sekä avattava kommenttiosio.
+  2. Kommentit tukevat 2-tasoista hierarkiaa (pääkommentti ja vastaus).
+  3. Tekstikenttä tarjoaa `@`-autocompleten ketjun keskustelijoille ja `#`-autocompleten tageille.
+  4. Kommenteille voi antaa 👍 Samaa mieltä / 👎 Eri mieltä -reaktioita.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `fetchReplies()`, `postComment()`, `bindAutocompleteToTextarea()`, `postCommentReaction()`.
 
 ---
 
-### UP-15 · Kirjautuminen ja anonyymiys (suunnitteluperiaatteet)
-
-Kirjautuminen on valinnaista eikä toimi porttina sisällölle. Palvelun käyttökynnys pidetään nollassa: kirjautuminen ei avaa uusia sisältöjä, vaan ainoastaan tallentaa asetukset ja preferenssit istuntojen välillä.
-
-```
-Uutisvirtaan pääsee aina kirjautumatta
-  ├─ Anonyymi → täysi lukunäkymä, tagivalinnat vain tässä istunnossa
-  └─ Kirjautunut Google-tilillä → samat toiminnot + tagivalinnat muistetaan
-```
-
-#### Kirjautumisen rajaus Google-tunnuksiin:
-- **Ei salasanahallintaa** — Firebase Auth Google Sign-In on projektin ainoa auth-mekanismi; sähköposti+salasana toisi salasanavaatimukset, vahvistussähköpostit ja unohtuneen salasanan palautuksen ilman merkittävää hyötyä.
-- **Ei rekisteröitymisvaihetta** — käyttäjä joko kirjautuu Google-tilillä tai käyttää palvelua anonyymisti.
-- **Yhdenmukaisuus** — kaikki kirjautumiseen liittyvä koodi käsittelee vain yhtä auth-provideria.
-
-#### UI-käytännöt:
-
-| Tilanne | Toiminto |
-|---|---|
-| Anonyymi avaa etusivun | Ei pakotusta kirjautua; diskreetti "Kirjaudu tallentaaksesi valinnat" -linkki headerissa |
-| Anonyymi klikkaa tallennusta vaativaa toimintoa | Laukaisee kirjautumismodalin selityksellä: "Kirjaudu Google-tilillä, niin valinnat muistetaan" |
-| Kirjautunut käyttäjä | Avatar headerissa; ei kirjautumiskehotteita |
-| Kirjautuminen epäonnistuu (popup suljettu) | Virheilmoitus: "Kirjautuminen peruutettiin" — ei uudelleenohjausta |
-| Uloskirjautuminen | Asetukset säilyvät localStorage:ssa → palautuvat, jos sama käyttäjä kirjautuu uudelleen samalla laitteella |
+### UP-17 · Maksumuuritunnistus ja Wayback Machine -arkistolinkki
+* **Käyttäjätarina:**
+  > **Uutistenlukijana** haluan päästä lukemaan artikkelin toimivaa arkistoversiota suoraan, jos alkuperäinen sivu on muuttunut tai maksumuurin takana.
+* **Hyväksymiskriteerit:**
+  1. Maksumuurilliset artikkelit (`#tilaajille`, `isAccessibleForFree: false`) ohjaavat automaattisesti arkistolinkkiin.
+  2. Artikkelia klikattaessa taustalla tarkistetaan alkuperäisen linkin saatavuus ja ohjataan tarvittaessa arkistoon.
+* **Konkreettinen toteutus koodissa:**
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Kutsutaan `GET /ap/check-status?url=...` (2s timeout) ja käytetään `url_archive`-osoitetta.
 
 ---
 
-## Käyttötapausten yhteenveto (UP-1 – UP-15)
-
-| Tunnus | Käyttötapaus | Autentikointi | Nykyinen tila |
-|---|---|---|---|
-| UP-1 | Ensivierailu ja arvolupauksen ymmärtäminen | Ei vaadi | ✅ Toteutettu |
-| UP-2 | Uutisvirran selaaminen | Ei vaadi | ✅ Staattinen demo |
-| UP-3 | Teeman vaihto (vaalea/tumma) | Ei vaadi | ✅ Toteutettu |
-| UP-4 | Kirjautuminen Google-tunnuksella | Vaatii | ✅ Toteutettu |
-| UP-5 | Uloskirjautuminen | Vaatii | ✅ Toteutettu |
-| UP-6 | Lähteiden aktiivisuuden tarkastelu | Ei vaadi | 🔲 Staattinen demo |
-| UP-7 | Osallistuminen avoimeen lähdekoodiin | Ei vaadi | ✅ Toteutettu (GitHub-linkit) |
-| UP-8 | Mobiiliselaus | Ei vaadi | ✅ Toteutettu |
-| UP-9 | Henkilökohtainen uutisvirtanäkymä | Ei vaadi | 🔲 Ehdotettu (localStorage / muisti) |
-| UP-10 | Käyttäjäasetusten hallinta | Ei vaadi | 🔲 Ehdotettu (localStorage) |
-| UP-11 | "Uutta seuraamissasi aiheissa" -ilmoitus | Ei vaadi | 🔲 Ehdotettu (localStorage) |
-| UP-12 | Käyttäjäprofiilisivu | Vaatii | 🔲 Ehdotettu (Firebase Auth) |
-| UP-13 | Artikkelin kontekstuaalinen vertailu | Ei vaadi | 🔲 Ehdotettu (Jaccard client-side) |
-| UP-14 | Hakutoiminto | Ei vaadi | 🔲 Ehdotettu (client-side haku) |
-| UP-15 | Kirjautuminen ja anonyymiys | Ei vaadi | 🔲 Ehdotettu (suunnittelulinjaus) |
-
-**Legenda:** ✅ = toiminnallinen · 🔲 = placeholder / tuleva ominaisuus
+### UP-18 · GDPR-tietojen vienti (JSON) ja tilin poisto (Right to Erasure)
+* **Käyttäjätarina:**
+  > **Tietosuojastaan huolehtivana käyttäjänä** haluan ladata kaikki minusta tallennetut tiedot koneluettavana JSON-tiedostona tai poistaa tilini ja kaikki tietoni pysyvästi yhdellä toiminnolla.
+* **Hyväksymiskriteerit:**
+  1. Profiilista voi ladata `uutisseuranta-asetukset-YYYY-MM-DD.json` -tiedoston.
+  2. "Poista tili" poistaa Firestore-dokumentin, Firebase Auth -tilin ja kaikki selaimen paikalliset tiedot.
+  3. Mikäli kirjautumissessio on vanhentunut, käyttäjältä pyydetään automaattinen uudelleentunnistautuminen.
+* **Konkreettinen toteutus koodissa:**
+  * [src/prefs.js](file:///Users/jaakkokorhonen/uutisseuranta/src/prefs.js): `exportPrefsAsJson()`.
+  * [src/profile.js](file:///Users/jaakkokorhonen/uutisseuranta/src/profile.js): `deleteUserPrefs()`, `deleteUser()`, `reauthenticateWithPopup()`.
 
 ---
 
-## Teknologiavaihtoehdot laitteiden väliseen synkronointiin
+## Suunnitellut käyttäjätarinat (tulevat laajennukset)
 
-Laitteiden välinen synkronointi tarkoittaa, että käyttäjän tagit ja teema eivät ole enää pelkkä paikallinen selainasetus, vaan käyttäjäkohtainen pilvidata. Tähän on useita vaihtoehtoja, mikäli arkkitehtuurilinjausta (`TECHNICAL_DESIGN.md`) muutetaan:
-
-| Vaihtoehto | Miten toimisi | Hyödyt | Haitat | Sopivuus |
-|---|---|---|---|---|
-| **Firestore** | Firebase Auth UID → `/users/{uid}/preferences/main` | Luonteva integraatio nykyiseen Google-kirjautumiseen, reaaliaikainen SDK, helppo clientiltä | Rikkoo nykyistä arkkitehtuurilinjaa, vaatii Security Rulesit | **Paras jos hyväksytään Firebase-laajennus** |
-| **Supabase Postgres** | Google/OIDC tai oma auth-linkitys → `user_preferences`-taulu | Selkeä relaatiomalli, SQL, hyvä vendor neutrality | Uusi palvelu ja auth-integraatio, enemmän liikkuvia osia | Hyvä jos halutaan pienentää Firebase-riippuvuutta |
-| **Cloudflare Workers + KV / D1** | Selain kutsuu omaa edge-API:a, joka lukee/kirjoittaa käyttäjän asetukset | Pieni, nopea, sopii staattiselle sivulle | Vaatii oman backend-kerroksen ja token-validoinnin | Hyvä jos halutaan edge-arkkitehtuuri |
-| **Tiedostovienti (JSON export)** | Käyttäjä vie ja tuo asetukset itse tiedostona | Hyvin yksinkertainen, ei jatkuvaa backendia | Ei oikea automaattinen synkronointi | Sopii varmuuskopiointiin, ei ensisijaiseksi ratkaisuksi |
-
-### Firestore-synkronointilaajennuksen ehdotettu tietomalli ja arkkitehtuuri
-
-Jos tavoitteeksi asetetaan automaattinen synkronointi Firestorella:
-
-#### 1. Tietomalli
-```
-/users/{uid}/preferences/main
-  {
-    followedTags: ["teknologia", "ukraina", "tekoäly"],
-    theme: "dark",
-    updatedAt: <server timestamp>,
-    schemaVersion: 1
-  }
-```
-
-#### 2. Synkronointivirta
-```
-Sovellus käynnistyy
-  └─ Firebase Auth ratkaisee kirjautumistilan
-       ├─ [Ei kirjautunut] käytä vain muistia + localStoragea
-       └─ [Kirjautunut]
-            ├─ Lue localStorage-välimuisti heti → UI renderöityy nopeasti
-            ├─ Hae Firestore-dokumentti taustalla
-            ├─ Vertaa updatedAt-arvoja
-            │    ├─ Firestore uudempi → korvaa localStorage + päivitä UI
-            │    └─ localStorage uudempi → kirjoita Firestoreen
-            └─ Kaikki myöhemmät muutokset:
-                 ├─ päivitä localStorage heti
-                 └─ debouncattu write Firestoreen (esim. 500 ms)
-```
-
-#### 3. Firestore Security Rules
-```
-match /users/{userId}/preferences/{docId} {
-  allow read, write: if request.auth != null && request.auth.uid == userId;
-}
-```
+### UP-13 · Artikkelin kontekstuaalinen vertailu ("Sama aihe muualla")
+* **Käyttäjätarina:**
+  > **Kriittisenä medianseuraajana** haluan nähdä uutisen yhteydessä miten muut kotimaiset mediat uutisoivat samasta aiheesta, jotta saan monipuolisemman kokonaiskuvan aiheesta.
+* **Hyväksymiskriteerit:**
+  1. Artikkelin avauksessa näytetään 2-5 vaihtoehtoista uutista muista lähteistä.
+  2. Vertailu lasketaan kevyesti asiakaspuolella Jaccard-samankaltaisuudella ladatuista uutisista.
 
 ---
 
-## Toteutusjärjestys (priorisoitu)
-
-| Prioriteetti | Käyttötapaus | Tekninen riippuvuus | Firebase? |
-|---|---|---|---|
-| 1 | UP-9 Tagipohjainen suodatus | JS-muisti + localStorage | Ei |
-| 2 | UP-14 Hakutoiminto | Client-side, muistissa oleva lista | Ei |
-| 3 | UP-10 Asetuspaneeli | localStorage | Ei |
-| 4 | UP-11 Uusien artikkelien merkki | localStorage + syötteen vertailu | Ei |
-| 5 | UP-13 Kontekstuaalinen vertailu | Client-side Jaccard | Ei |
-| 6 | UP-12 Profiilipaneeli | Firebase Auth `currentUser` | Auth (jo käytössä) |
-| 7 | UP-10 laajennus: pilvisynkronointi | Firestore tai vaihtoehtoinen backend | Vaatii erillisen päätöksen |
-
----
-
-*Viite: [uutisseurannan kuviot](https://d-cent.github.io/patterns/) · [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)*
+### UP-14 · Vapaatekstihaku ja URL-hash-tila
+* **Käyttäjätarina:**
+  > **Tiedonhakijana** haluan hakea uutisvirrasta artikkeleita vapaalla sanahaulla ja jakaa hakutuloksen suoralla linkillä ystävilleni.
+* **Hyväksymiskriteerit:**
+  1. Hakukenttä suodattaa uutisotsikoita, tiivistelmiä ja tageja reaaliaikaisesti.
+  2. Hakusana tallentuu URL-osoitteen hashiin (`#haku=termi`).

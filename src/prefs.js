@@ -53,7 +53,6 @@ const DEFAULT_PREFS = {
   followedTags: [],
   theme: 'system',
   currentView: 'home',
-  showReadArticles: false,
   updatedAt: null,
   schemaVersion: SCHEMA_VERSION,
 };

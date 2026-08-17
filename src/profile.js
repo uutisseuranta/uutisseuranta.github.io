@@ -160,16 +160,6 @@ function _renderContent() {
     </section>
 
     <section class="profile-section">
-      <h3 class="profile-section-title">Uutisvirta</h3>
-      <div class="profile-checkbox-option">
-        <label class="profile-checkbox-label">
-          <input type="checkbox" id="profile-show-read" ${prefs.showReadArticles ? 'checked' : ''}>
-          <span>Älä piilota jo luettuja artikkeleita aloitussivulta</span>
-        </label>
-      </div>
-    </section>
-
-    <section class="profile-section">
       <h3 class="profile-section-title">Omat tiedot</h3>
       <p class="profile-help profile-info-desc">
         Lataa kaikki tallennetut asetuksesi JSON-tiedostona.
@@ -223,11 +213,6 @@ function _renderContent() {
   // Teeman valinta
   body.querySelector('#profile-theme')?.addEventListener('change', e => {
     updatePrefs({ theme: e.target.value });
-  });
-
-  // Luettujen artikkeleiden näyttäminen
-  body.querySelector('#profile-show-read')?.addEventListener('change', e => {
-    updatePrefs({ showReadArticles: e.target.checked });
   });
 
   // JSON-vienti

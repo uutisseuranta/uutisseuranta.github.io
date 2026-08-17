@@ -63,40 +63,43 @@ const analytics = (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID && localStorage.
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-// Rekisteröidään auth-callbackit testejä ja mockausta varten
-window.__authCallbacks = [];
-const myOnAuthStateChanged = (authInstance, callback) => {
-  window.__authCallbacks.push(callback);
-  return onAuthStateChanged(authInstance, callback);
-};
-
-// Eksportoidaan testikirjautumisen apufunktio Playwright-integraatiotesteille (QA)
-window.signInForTest = async (email, password) => {
-  if (email === 'mockuser@test.com') {
-    console.log("Using E2E mock user login bypass");
-    const mockUser = {
-      uid: 'mock-uid-123',
-      email: email,
-      displayName: 'Mock Test User',
-      photoURL: '',
-      getIdToken: async () => 'mock-token-xyz'
-    };
-    Object.defineProperty(auth, 'currentUser', {
-      get: () => mockUser,
-      configurable: true
-    });
-    if (window.__authCallbacks) {
-      for (const cb of window.__authCallbacks) {
-        await cb(mockUser);
+// Rekisteröidään auth-callbackit ja testiapufunktiot vain kehitys- ja testiympäristössä (Päätös G-014)
+if (import.meta.env.DEV || (typeof window !== 'undefined' && window.__TESTING__)) {
+  window.__authCallbacks = [];
+  window.signInForTest = async (email, password) => {
+    if (email === 'mockuser@test.com') {
+      console.log("Using E2E mock user login bypass");
+      const mockUser = {
+        uid: 'mock-uid-123',
+        email: email,
+        displayName: 'Mock Test User',
+        photoURL: '',
+        getIdToken: async () => 'mock-token-xyz'
+      };
+      Object.defineProperty(auth, 'currentUser', {
+        get: () => mockUser,
+        configurable: true
+      });
+      if (window.__authCallbacks) {
+        for (const cb of window.__authCallbacks) {
+          await cb(mockUser);
+        }
       }
+      return mockUser;
     }
-    return mockUser;
-  }
-  return signInWithEmailAndPassword(auth, email, password);
-};
+    return signInWithEmailAndPassword(auth, email, password);
+  };
 
-window.registerForTest = async (email, password) => {
-  return createUserWithEmailAndPassword(auth, email, password);
+  window.registerForTest = async (email, password) => {
+    return createUserWithEmailAndPassword(auth, email, password);
+  };
+}
+
+const myOnAuthStateChanged = (authInstance, callback) => {
+  if (window.__authCallbacks) {
+    window.__authCallbacks.push(callback);
+  }
+  return onAuthStateChanged(authInstance, callback);
 };
 
 const btnLogin = document.getElementById('btn-login');
@@ -285,8 +288,14 @@ const readObserver = new IntersectionObserver((entries) => {
 }, { threshold: 0.1 });
 
 let pendingSeenSync = new Set();
+let seenSyncDebounceTimer = null;
 
-async function syncPendingSeen() {
+async function syncPendingSeen(options = {}) {
+  if (seenSyncDebounceTimer) {
+    clearTimeout(seenSyncDebounceTimer);
+    seenSyncDebounceTimer = null;
+  }
+  
   if (pendingSeenSync.size === 0 || !auth.currentUser) {
     return;
   }
@@ -302,6 +311,7 @@ async function syncPendingSeen() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
+      keepalive: options.keepalive || false,
       body: JSON.stringify({
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Read",
@@ -319,8 +329,12 @@ async function syncPendingSeen() {
   }
 }
 
-// Suoritetaan luettujen synkronointi 5 sekunnin välein
-setInterval(syncPendingSeen, 5000);
+// Tapahtumapohjainen synkronointi: välilehden vaihto ja taustalle siirtyminen (Päätös L-020)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && pendingSeenSync.size > 0 && auth.currentUser) {
+    syncPendingSeen({ keepalive: true });
+  }
+});
 
 // Flushataan ja tallennetaan synkronoimattomat luetut ennen sivulta poistumista
 window.addEventListener('beforeunload', () => {
@@ -372,6 +386,11 @@ async function markArticleAsRead(articleId, card) {
     pendingSeenSync.add(articleId);
     if (pendingSeenSync.size >= 500) {
       syncPendingSeen();
+    } else {
+      if (seenSyncDebounceTimer) clearTimeout(seenSyncDebounceTimer);
+      seenSyncDebounceTimer = setTimeout(() => {
+        syncPendingSeen();
+      }, 2000);
     }
   }
 }
@@ -602,8 +621,6 @@ function renderFeed(articles) {
   grid.innerHTML = '';
   grid.setAttribute('aria-busy', 'false');
 
-  const prefs = getPrefs();
-  const hideRead = !prefs.showReadArticles;
   const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
 
   // Luetaan luetut uutiset kerralla Map-rakenteeseen tehokkuuden takia
@@ -677,15 +694,7 @@ function renderFeed(articles) {
     // Jos kyseessä on maksumuuriartikkeli ja sille on arkistolinkki, päälinkki ohjaa suoraan toimivaan arkistoon
     const targetUrl = (isPaywalled && archiveUrl) ? archiveUrl : originalUrl;
 
-    // Reactions counts (Issue #20 & #21)
-    const likesCount = item.likes && typeof item.likes.totalItems === 'number' ? item.likes.totalItems : 0;
-    const dislikesCount = item.dislikes && typeof item.dislikes.totalItems === 'number' ? item.dislikes.totalItems : 0;
-    const hasReactions = likesCount + dislikesCount > 0;
-    
-    const agreePct = hasReactions ? Math.round(likesCount / (likesCount + dislikesCount) * 100) : 0;
-    const disagreePct = hasReactions ? 100 - agreePct : 0;
-
-    // Comments count (Issue #11)
+    // Comments count (Issue #11 / D-CENT)
     const commentCount = item.replies && typeof item.replies.totalItems === 'number' ? item.replies.totalItems : 0;
 
     // Luodaan sormenjälki artikkelin nykyisestä tilasta (kommenttien määrä ja tägit)
@@ -953,46 +962,6 @@ function renderFeed(articles) {
   updateActiveSourcesWidget(articles);
 }
 
-// ---- SEND ACTIONS TO WRITE API (Issue #20) ----
-async function postReaction(articleId, type) {
-  const token = await auth.currentUser.getIdToken();
-  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": type,
-      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-      "object": articleId
-    })
-  });
-  if (!res.ok) throw new Error("Reaction failed");
-}
-
-async function deleteReaction(articleId, type) {
-  const token = await auth.currentUser.getIdToken();
-  const res = await fetch(`${WRITE_API_URL}/ap/inbox`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Undo",
-      "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-      "object": {
-        "type": type,
-        "actor": `https://uutisseuranta.net/users/${auth.currentUser.uid}`,
-        "object": articleId
-      }
-    })
-  });
-  if (!res.ok) throw new Error("Undo reaction failed");
-}
 
 // ---- TAG CLOUD LOGIC (Issue #16) ----
 function renderTagCloud(articles) {
@@ -1044,6 +1013,10 @@ function renderTagCloud(articles) {
 }
 
 async function refreshFeed() {
+  if (pendingSeenSync.size > 0 && auth.currentUser) {
+    await syncPendingSeen();
+  }
+
   currentFeedLimit = 5;
   if (feedObserver) {
     feedObserver.disconnect();
@@ -1195,6 +1168,10 @@ function setupScrollPagination() {
 }
 
 async function loadMoreFeed(newLimit) {
+  if (pendingSeenSync.size > 0 && auth.currentUser) {
+    await syncPendingSeen();
+  }
+
   const grid = document.getElementById('feed-grid');
   if (!grid) return;
 
@@ -1667,10 +1644,12 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
 }
 
 
-// Altistetaan preferenssifunktiot globaalisti smoke-testiä varten / Expose preference functions globally for smoke tests
-window.updatePrefs = updatePrefs;
-window.exportPrefsAsJson = exportPrefsAsJson;
-window.deleteUserPrefs = deleteUserPrefs;
+// Altistetaan preferenssifunktiot globaalisti vain testejä varten
+if (import.meta.env.DEV || (typeof window !== 'undefined' && window.__TESTING__)) {
+  window.updatePrefs = updatePrefs;
+  window.exportPrefsAsJson = exportPrefsAsJson;
+  window.deleteUserPrefs = deleteUserPrefs;
+}
 
 
 
