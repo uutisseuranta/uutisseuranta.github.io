@@ -618,13 +618,15 @@ function sanitizeUrl(urlStr) {
   return '#';
 }
 
-// ---- RENDERING LOGIC (Issue #12, #20, #21, #24) ----
-function renderFeed(articles) {
+// ---- RENDERING LOGIC (Issue #12, #20, #21, #24, #170 / L-024) ----
+function renderFeed(articles, append = false) {
   const grid = document.getElementById('feed-grid');
   if (!grid) return;
 
-  grid.innerHTML = '';
-  grid.setAttribute('aria-busy', 'false');
+  if (!append) {
+    grid.innerHTML = '';
+    grid.setAttribute('aria-busy', 'false');
+  }
 
   const uid = auth.currentUser ? auth.currentUser.uid : 'anonymous';
 
@@ -642,7 +644,19 @@ function renderFeed(articles) {
   let displayedArticles = articles;
 
   if (displayedArticles.length === 0) {
-    // Jos kaikki ladatut uutiset on jo luettu, ladataan automaattisesti suurempi erä.
+    if (append) {
+      // Jos lisäyslatauksessa ei tullut uusia uutisia, ollaan uutisvirran lopussa
+      if (cachedArticles && cachedArticles.length > 0) {
+        renderTagCloud(cachedArticles);
+        const tagCloudContainer = document.getElementById('tag-cloud');
+        if (tagCloudContainer) {
+          tagCloudContainer.style.display = 'flex';
+        }
+      }
+      return;
+    }
+
+    // Jos kaikki ladatut uutiset on jo luettu ensilatauksella, ladataan automaattisesti suurempi erä.
     // Pääte-ehtona toimii currentFeedLimit < 500, joka estää ikuisen lataussilmukan.
     if (currentFeedLimit < 500) {
       const nextLimit = currentFeedLimit === 5 ? 50 : 500;
@@ -665,7 +679,12 @@ function renderFeed(articles) {
 
   // Luodaan uutiskortit
   displayedArticles.forEach((item, index) => {
-    const isLead = index === 0 && !currentTagFilter;
+    // Estetään duplikaattikorttien luominen DOMiin
+    if (grid.querySelector(`.feed-item[data-id="${item.id}"]`)) {
+      return;
+    }
+
+    const isLead = !append && index === 0 && !currentTagFilter;
     const card = document.createElement('div');
     
     // AS2 metadata attributes for D-CENT patterns
@@ -1153,11 +1172,15 @@ async function loadMoreFeed(newLimit) {
 
   try {
     const articles = await fetchOutbox(currentTagFilter, currentFeedLimit);
-    cachedArticles = articles;
+    
+    // Suodatetaan vain uudet uutiset, joita ei vielä ole välimuistissa
+    const existingIds = new Set(cachedArticles.map(a => a.id));
+    const newItems = articles.filter(a => !existingIds.has(a.id));
+    cachedArticles = [...cachedArticles, ...newItems];
     
     if (loader) loader.remove();
     
-    renderFeed(articles);
+    renderFeed(newItems, true);
     setupScrollPagination();
   } catch (err) {
     console.error("Load more failed:", err.stack || err);
