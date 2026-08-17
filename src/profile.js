@@ -241,11 +241,13 @@ function _renderContent() {
         // 3. Paikallinen siivous kolmanneksi (GDPR / selective clean to avoid wiping unrelated keys)
         localStorage.removeItem(`prefs_${uid}`);
         localStorage.removeItem(`seen_${uid}`);
+        localStorage.removeItem(`seen_list_${uid}`);
+        localStorage.removeItem(`unsynced_reads_${uid}`);
         
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && (key.startsWith(`reaction_${uid}_`) || key.startsWith(`prefs_${uid}`) || key.startsWith(`seen_${uid}`))) {
+          if (key && (key.startsWith(`reaction_${uid}_`) || key.startsWith(`prefs_${uid}`) || key.startsWith(`seen_${uid}`) || key.startsWith(`seen_list_${uid}`) || key.startsWith(`unsynced_reads_${uid}`))) {
             keysToRemove.push(key);
           }
         }

@@ -25,7 +25,7 @@ import { getAnalytics } from 'firebase/analytics';
 import { initPrefs, loadPrefs, followTag, unfollowTag, isFollowing, onPrefsChange, getPrefs, updatePrefs, exportPrefsAsJson, deleteUserPrefs } from './prefs.js';
 import { Workbox } from 'workbox-window';
 
-// ---- SCROLL OBSERVER ----
+// ---- STATIC SCROLL OBSERVER ----
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => {
     if (e.isIntersecting) {
@@ -35,7 +35,7 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.feed-item, .feature-item').forEach(el => {
+document.querySelectorAll('.feature-item').forEach(el => {
   el.style.opacity = '0';
   el.style.transform = 'translateY(16px)';
   el.style.transition = 'opacity 0.45s ease, transform 0.45s ease';
@@ -672,7 +672,7 @@ function renderFeed(articles) {
     card.setAttribute('data-id', item.id);
     card.setAttribute('data-type', item.type);
 
-    const imageUrl = item.image && item.image.url ? item.image.url : 'https://picsum.photos/seed/news/800/450';
+    const imageUrl = item.image && item.image.url ? item.image.url : null;
     const category = item.tag && item.tag.find(t => !t.name.startsWith('likes:') && !t.name.startsWith('dislikes:'))?.name || 'Yleinen';
     const displayTags = (item.tag || []).filter(t => t.name && !t.name.startsWith('likes:') && !t.name.startsWith('dislikes:'));
     const sourceName = item.attributedTo && item.attributedTo.name ? item.attributedTo.name : 'Uutislähde';
@@ -798,7 +798,7 @@ function renderFeed(articles) {
             renderCommentsSection(card, item.id, freshReplies);
           }
         } catch (err) {
-          alert("Kommentin lähetys epäonnistui: " + err.message);
+          showNotification("Kommentin lähetys epäonnistui: " + err.message, true);
         }
       });
     }
@@ -814,51 +814,6 @@ function renderFeed(articles) {
         }
       });
     });
-
-    // Intercept clicks on article links to check connectivity via Query API (Issue #24 / backend proxy check)
-    card.querySelectorAll('.article-link').forEach(link => {
-      link.addEventListener('click', async (e) => {
-        e.preventDefault();
-        
-        // Show visual processing state
-        const originalOpacity = link.style.opacity;
-        const originalCursor = link.style.cursor;
-        link.style.opacity = '0.6';
-        link.style.cursor = 'wait';
-        
-        const checkUrl = `${QUERY_API_URL}/ap/check-status?url=${encodeURIComponent(originalUrl)}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2.0s timeout
-        
-        let alive = true;
-        try {
-          const res = await fetch(checkUrl, {
-            signal: controller.signal
-          });
-          if (res.ok) {
-            const data = await res.json();
-            alive = data.alive;
-          } else {
-            alive = false;
-          }
-        } catch (err) {
-          console.warn("Backend check failed, fallback to archive:", err);
-          alive = false;
-        } finally {
-          clearTimeout(timeoutId);
-          link.style.opacity = originalOpacity;
-          link.style.cursor = originalCursor;
-        }
-
-        if (alive) {
-          window.open(originalUrl, '_blank', 'noopener,noreferrer');
-        } else {
-          console.warn("Original link unreachable, redirecting to archive:", archiveUrl);
-          window.open(archiveUrl, '_blank', 'noopener,noreferrer');
-        }
-      });
-    });
-
 
     // User can add tag (Issue #13) - Inline form implementation (No prompt() / Security pattern)
     const tagFormContainer = card.querySelector('.add-tag-form-container');
@@ -1555,7 +1510,7 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
       const freshReplies = await fetchReplies(articleId);
       renderCommentsSection(card, articleId, freshReplies);
     } catch (err) {
-      alert("Kommentin lähetys epäonnistui: " + err.message);
+      showNotification("Kommentin lähetys epäonnistui: " + err.message, true);
     }
   });
 
@@ -1618,7 +1573,7 @@ function renderCommentsSection(card, articleId, replies, errorMessage = null) {
           const freshReplies = await fetchReplies(articleId);
           renderCommentsSection(card, articleId, freshReplies);
         } catch (err) {
-          alert("Vastauksen lähetys epäonnistui: " + err.message);
+          showNotification("Vastauksen lähetys epäonnistui: " + err.message, true);
         }
       });
 
@@ -1832,7 +1787,7 @@ async function updateNotificationsBadge() {
   
   let unreadCount = 0;
   try {
-    const articles = cachedArticles || await fetchOutbox(null, 50);
+    const articles = (cachedArticles && cachedArticles.length > 0) ? cachedArticles : await fetchOutbox(null, 50);
     followedTags.forEach(tag => {
       const tagArticles = articles.filter(item => item.tag && item.tag.some(t => t.name.toLowerCase() === tag.toLowerCase()));
       if (tagArticles.length > 0) {
