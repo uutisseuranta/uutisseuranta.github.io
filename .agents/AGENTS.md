@@ -18,3 +18,8 @@ You must adhere to the following workspace rules in all interactions:
 - **Single Comprehensive Plan**: Create one holistic implementation plan covering all related changes (code, documentation updates, tests, and deployment). Do not split a single task into fragmented micro-plans or request intermediate approvals for obvious follow-up steps (e.g. updating decision logs).
 - **Autonomous End-to-End Execution**: Once the user approves the implementation plan, execute the entire pipeline autonomously to completion (code edits -> tests -> commit -> push -> PR/merge -> deployment verification) without asking for intermediate permissions.
 - **Pure Text for Conceptual Questions**: Answer conceptual and explanatory questions strictly in visible text without invoking file modification tools.
+
+## 5. Zero-Friction Execution & Terminal Best Practices
+- **Never Use Ad-Hoc Inline Scripts with BypassSandbox**: Do NOT run `python3 -c "..."` or arbitrary one-line scripts with `BypassSandbox: true`. This breaks the IDE's "Always allow" command prefix cache and spams the user with approval prompts.
+- **Prefer Native MCP Tools**: Perform GitHub operations (PR creation, merging, issue updates, status checking) directly via `github-mcp-local` MCP tools, which run silently in the background without terminal prompts.
+- **Standard Sandboxed Execution**: Run build, test, lint, and file operations inside the default sandbox (`BypassSandbox: false`), which executes instantly without user confirmation dialogs.
