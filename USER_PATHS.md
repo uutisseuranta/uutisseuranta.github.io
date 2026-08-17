@@ -74,22 +74,23 @@ Käyttäjätarinoiden yhteydessä määritellään:
 
 ---
 
-### UP-2 · Uutisvirran selaaminen ja backend-suodatettu sivutus
+### UP-2 · Uutisvirran selaaminen ja saumaton append-sivutus
 * **Käyttäjätarina:**
-  > **Aktiivisena uutisseuraajana** haluan selata uutisvirtaa keskeytyksettä siten, että uusia artikkeleita ladataan taustalla vieritykseni mukaan ja backend suodattaa jo lukemani uutiset pois suoraan tietokantakyselyssä, jotta uutisvirta palauttaa aina täyden erän tuoreita, lukemattomia uutisia.
+  > **Aktiivisena uutisseuraajana** haluan selata uutisvirtaa keskeytyksettä ilman sivun räpsähtelyä tai vierityskohdan hyppimistä siten, että uusia artikkeleita lisätään suoraan aiemmin luettujen korttien alle ja backend suodattaa luetut uutiset pois tietokantatasolla.
 * **Hyväksymiskriteerit:**
   1. Alussa ladataan 5 artikkelia nopean ensilatauksen takaamiseksi.
-  2. Vierityksen saavuttaessa virran pään pyydetään 50 artikkelia ja sen jälkeen 500 artikkelia.
-  3. Backend suodattaa luetut artikkelit pois tietokantatasolla (BigQuery):
+  2. Kun käyttäjä vierittää ensimmäisten 5 uutisen loppuun (sentinel), haetaan seuraavat 50 artikkelia.
+  3. Uudet uutiset lisätään portaattomasti edellisten perään (`renderFeed(newItems, true)` / `grid.appendChild`) ilman olemassa olevan näkymän tyhjentämistä (`grid.innerHTML = ''`).
+  4. Käyttäjän vierityskohta ja aiemmat kortit säilyvät täsmälleen paikoillaan.
+  5. Luetut uutiset merkitään taustalla luetuiksi (`readObserver`) ja suodatetaan pois tietokantakyselyssä (BigQuery):
      * Kirjautuneelle: tokenin `actor`-historian perusteella (`activities`-taulun `Read`-tapahtumat). Päivittyneet uutiset (`updated > max_received_at`) palautetaan uudelleen.
      * Anonyymille: pyynnön `seen_ids`-listan perusteella (`NOT IN UNNEST(@seen_ids)`).
-  4. Käyttäjälle ei koskaan näytetä tyhjiä korttipaikkoja, koska suodatus tapahtuu ennen tulosten palauttamista selaimeen.
-* **Konkreettinen toteutus koodissa:**
-  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `fetchOutbox(tag, limit)` tekee `POST /ap/outbox` -pyynnön. Anonyymillä se lähettää `seen_ids`-listan selaimen `seen_list_anonymous`-muistista; kirjautuneella `Authorization: Bearer <idToken>`.
-  * [bq-activitystreams/query_api.py](file:///Users/jaakkokorhonen/uutisseuranta/bq-activitystreams/query_api.py):
-    * Kirjautunut: `LEFT JOIN activities s ON o.id = s.object_id AND s.actor = @actor_id AND s.type = 'Read' WHERE (s.object_id IS NULL OR o.updated > s.max_received_at)`.
-    * Anonyymi: `WHERE o.id NOT IN UNNEST(@seen_ids)`.
-  * `readObserver` tarkkailee näytölle tulevia artikkeleita ja lähettää AS2 `Read` -aktiviteetit taustalle tapahtumapohjaisesti (2s pysähtymis-debounce, sivutuksen eränvaihto, näkymänvaihto ja `visibilitychange`, Päätös L-020).
+* **Uutisvirran toiminta-algoritmi (Miten jokainen klikkaus ja vieritys toimii):**
+  1. **Ensilataus (Initial Paint):** Sivu lataa ensimmäiset 5 uutista (`refreshFeed`). Uutisruudukko alustetaan ja jokaiselle kortille asetetaan `readObserver`-näkymätarkkailija.
+  2. **Lukemisen tunnistus (Read Observer):** Kun uutiskortti liukuu näyttöruudulle (10 % näkyvyys), `readObserver` merkitsee uutisen luetuksi paikalliseen `seen_list_${uid}`-lokiin (enintään 10 000 uusinta artikkelia).
+  3. **Eräsynkronointi (Batch Sync):** Luetut uutiset kerätään muistijonoon (`pendingSeenSync`) ja lähetetään taustalle (`POST /ap/inbox`) ilman ylimääräisiä viiveitä kun käyttäjä pysähtyy (2s debounce), vaihtaa näkymää tai siirtyy välilehdeltä toiselle (Päätös L-020).
+  4. **Jatkuva lisäyssivutus (Infinite Append):** Kun käyttäjä saavuttaa 5. uutisen alareunan, sivu hakee seuraavat 50 uutista. Uudet uutisoliot lisätään suoraan ruudukon pohjalle (`append = true`). Aiemmin nähdyt 5 uutista pysyvät muuttumattomina yläpuolella, joten sivu ei räpsähdä eikä hypi.
+  5. **Artikkelin avaaminen (Direct Click):** Uutislinkin klikkaus avaa suoraan joko alkuperäisen uutisartikkelin tai maksumuurillisen uutisen Wayback Machine -arkistokopion uuteen välilehteen ilman asynkronisia viiveitä tai popup-estoja.
 
 ---
 
