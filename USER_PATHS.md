@@ -74,23 +74,20 @@ Käyttäjätarinoiden yhteydessä määritellään:
 
 ---
 
-### UP-2 · Uutisvirran selaaminen ja saumaton append-sivutus
+### UP-2 · Uutisvirran selaaminen ja progressiivinen laajennus (5 -> 50 -> 500)
 * **Käyttäjätarina:**
-  > **Aktiivisena uutisseuraajana** haluan selata uutisvirtaa keskeytyksettä ilman sivun räpsähtelyä tai vierityskohdan hyppimistä siten, että uusia artikkeleita lisätään suoraan aiemmin luettujen korttien alle ja backend suodattaa luetut uutiset pois tietokantatasolla.
+  > **Aktiivisena uutisseuraajana** haluan selata lukemattomia uutisia asteittain (1–5 -> 1–50 -> 1–500) siten, että uutiset laajenevat saumattomasti samasta lukemattomien artikkeleiden joukosta eivätkä aiemmat uutiset koskaan katoa tai vaihdu kesken selaussession, ja luetut uutiset kuitataan palvelimelle vasta setin lukemisen jälkeen (Päätös L-025).
 * **Hyväksymiskriteerit:**
-  1. Alussa ladataan 5 artikkelia nopean ensilatauksen takaamiseksi.
-  2. Kun käyttäjä vierittää ensimmäisten 5 uutisen loppuun (sentinel), haetaan seuraavat 50 artikkelia.
-  3. Uudet uutiset lisätään portaattomasti edellisten perään (`renderFeed(newItems, true)` / `grid.appendChild`) ilman olemassa olevan näkymän tyhjentämistä (`grid.innerHTML = ''`).
-  4. Käyttäjän vierityskohta ja aiemmat kortit säilyvät täsmälleen paikoillaan.
-  5. Luetut uutiset merkitään taustalla luetuiksi (`readObserver`) ja suodatetaan pois tietokantakyselyssä (BigQuery):
-     * Kirjautuneelle: tokenin `actor`-historian perusteella (`activities`-taulun `Read`-tapahtumat). Päivittyneet uutiset (`updated > max_received_at`) palautetaan uudelleen.
-     * Anonyymille: pyynnön `seen_ids`-listan perusteella (`NOT IN UNNEST(@seen_ids)`).
-* **Uutisvirran toiminta-algoritmi (Miten jokainen klikkaus ja vieritys toimii):**
-  1. **Ensilataus (Initial Paint):** Sivu lataa ensimmäiset 5 uutista (`refreshFeed`). Uutisruudukko alustetaan ja jokaiselle kortille asetetaan `readObserver`-näkymätarkkailija.
-  2. **Lukemisen tunnistus (Read Observer):** Kun uutiskortti liukuu näyttöruudulle (10 % näkyvyys), `readObserver` merkitsee uutisen luetuksi paikalliseen `seen_list_${uid}`-lokiin (enintään 10 000 uusinta artikkelia).
-  3. **Eräsynkronointi (Batch Sync):** Luetut uutiset kerätään muistijonoon (`pendingSeenSync`) ja lähetetään taustalle (`POST /ap/inbox`) ilman ylimääräisiä viiveitä kun käyttäjä pysähtyy (2s debounce), vaihtaa näkymää tai siirtyy välilehdeltä toiselle (Päätös L-020).
-  4. **Jatkuva lisäyssivutus (Infinite Append):** Kun käyttäjä saavuttaa 5. uutisen alareunan, sivu hakee seuraavat 50 uutista. Uudet uutisoliot lisätään suoraan ruudukon pohjalle (`append = true`). Aiemmin nähdyt 5 uutista pysyvät muuttumattomina yläpuolella, joten sivu ei räpsähdä eikä hypi.
-  5. **Artikkelin avaaminen (Direct Click):** Uutislinkin klikkaus avaa suoraan joko alkuperäisen uutisartikkelin tai maksumuurillisen uutisen Wayback Machine -arkistokopion uuteen välilehteen ilman asynkronisia viiveitä tai popup-estoja.
+  1. Alussa ladataan käyttäjän lukemattomien artikkeleiden joukko (enintään 500 kpl) ja näytetään heti ensimmäiset 5 artikkelia (1–5).
+  2. Kun käyttäjä vierittää 5. uutisen ohi, näkymään liitetään uutiset 6–50 (näkymässä yhteensä ensimmäiset 50 uutista, sisältäen samat ensimmäiset 5 kpl).
+  3. Kun käyttäjä vierittää 30. uutisen kohdalle, näkymään liitetään uutiset 51–500 (näkymässä yhteensä ensimmäiset 500 uutista, sisältäen samat ensimmäiset 50 kpl).
+  4. Selaussession aikana aiemmin nähdyt kortit pysyvät täsmälleen paikoillaan eikä sivu räpsähdä tai hypi.
+  5. Uutisvirran lopussa piirretään tagipilvi ja luettujen artikkeleiden tunnisteet kuitataan palvelimelle (`POST /ap/inbox` ja selaimen `seen_list_${uid}`), jolloin seuraavalla kerralla palvelin suodattaa luetut pois (paitsi jos artikkelille on tullut uudempi aikaleima).
+* **Uutisvirran toiminta-algoritmi:**
+  1. **Ensilataus:** Sivu hakee lukemattomat uutiset (`POST /ap/outbox`, n=500) ja näyttää uutiset 1–5.
+  2. **Progressiivinen laajennus:** Skrollattaessa näytetään uutiset 1–50 ja edelleen 1–500 samasta lukemattomien artikkeleiden perusjoukosta.
+  3. **Luettujen kuittaus setin lopussa:** Kun setti on selattu, kuitataan kaikki näytetyt artikkelit luetuiksi (`markArticlesAsReadBatch` -> `POST /ap/inbox`), ennen kuin seuraavia uusia uutisia kysytään.
+  4. **Artikkelin avaaminen:** Linkin klikkaus avaa uutisen tai sen arkistoversion suoraan uuteen välilehteen ilman asynkronisia viiveitä.
 
 ---
 
@@ -239,12 +236,12 @@ Käyttäjätarinoiden yhteydessä määritellään:
 
 ### UP-17 · Maksumuuritunnistus ja Wayback Machine -arkistolinkki
 * **Käyttäjätarina:**
-  > **Uutistenlukijana** haluan päästä lukemaan artikkelin toimivaa arkistoversiota suoraan, jos alkuperäinen sivu on muuttunut tai maksumuurin takana.
+  > **Uutistenlukijana** haluan päästä lukemaan artikkelin toimivaa arkistoversiota suoraan, jos alkuperäinen uutinen on maksumuurin takana, ilman häiritseviä viiveitä tai ponnahdusikkunoiden estoja.
 * **Hyväksymiskriteerit:**
-  1. Maksumuurilliset artikkelit (`#tilaajille`, `isAccessibleForFree: false`) ohjaavat automaattisesti arkistolinkkiin.
-  2. Artikkelia klikattaessa taustalla tarkistetaan alkuperäisen linkin saatavuus ja ohjataan tarvittaessa arkistoon.
+  1. Maksumuurilliset artikkelit (`#tilaajille`, `isAccessibleForFree: false`) ohjaavat automaattisesti toimivaan Wayback Machine -arkistolinkkiin (`targetUrl = (isPaywalled && archiveUrl) ? archiveUrl : originalUrl`).
+  2. Artikkelilinkit toimivat selaimen natiiveina linkkeinä välittömästi ilman asynkronista klikinsieppausta (Päätökset L-019 ja L-022).
 * **Konkreettinen toteutus koodissa:**
-  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Kutsutaan `GET /ap/check-status?url=...` (2s timeout) ja käytetään `url_archive`-osoitetta.
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): Linkin kohdeosoite määritetään korttia luotaessa. Jos artikkeli on tilaajasisältöä ja sille on arkistolinkki, `href` osoittaa suoraan `url_archive`-osoitteeseen.
 
 ---
 

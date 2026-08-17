@@ -22,7 +22,7 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     });
 
     // Navigate to establishing the correct origin
-    const targetUrl = process.env.EFFECTIVE_URL || 'https://uutisseuranta.net';
+    const targetUrl = process.env.EFFECTIVE_URL || 'http://localhost:5173';
     console.log(`Establishing origin on ${targetUrl}...`);
     await page.goto('/');
 
@@ -51,9 +51,7 @@ test.describe('Uutisseuranta Smoke Tests', () => {
 
     // Log console errors to detect CORS or CSP violations
     page.on('console', msg => {
-      if (msg.type() === 'error') {
-        console.error(`CONSOLE ERROR: ${msg.text()}`);
-      }
+      console.log(`[BROWSER ${msg.type()}]: ${msg.text()}`);
     });
   });
 
@@ -482,7 +480,7 @@ test.describe('Uutisseuranta Smoke Tests', () => {
         "type": "Create",
         "actor": "https://uutisseuranta.net/sources/yle",
         "object": {
-          "id": `https://uutisseuranta.net/articles/${i}`,
+          "id": `https://activitystreams.uutisseuranta.net/ap/outbox/article-${i}`,
           "type": "Article",
           "name": `Testiuutinen ${i}`,
           "summary": `Tämä on uutisen ${i} kuvaus.`,
@@ -520,8 +518,11 @@ test.describe('Uutisseuranta Smoke Tests', () => {
       await page.waitForTimeout(600); // Wait for IntersectionObserver read logging
     }
 
-    // Click on Uutiset navigation link to trigger refreshFeed()
-    await newsLink.click();
+    // Click on Uutiset navigation link to trigger refreshFeed() and wait for outbox response
+    await Promise.all([
+      page.waitForResponse(resp => resp.url().includes('/ap/outbox')),
+      newsLink.click()
+    ]);
 
     // Verify empty state message is shown
     const emptyState = page.locator('text=Ei uutisia valituilla kriteereillä');
@@ -569,7 +570,6 @@ test.describe('Uutisseuranta Smoke Tests', () => {
     });
 
     // Kirjaudutaan sisään
-    await page.locator('#btn-login').click();
     await page.evaluate(async () => {
       if (window.signInForTest) {
         await window.signInForTest('mockuser@test.com', 'salasana123');
