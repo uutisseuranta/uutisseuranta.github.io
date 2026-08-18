@@ -170,9 +170,9 @@ Käyttäjätarinoiden yhteydessä määritellään:
 * **Hyväksymiskriteerit:**
   1. Uutiskortin tagia klikkaamalla uutisvirta rajautuu välittömästi kyseiseen tagiin.
   2. 500 uutisen latauduttua sivun alareunaan piirtyy 42 suosituimman tagin tagipilvi.
-  3. Käyttäjä voi lisätä uutiselle uuden tagin `+`-painikkeella.
+  3. Käyttäjä voi lisätä uutiselle uuden tagin `+`-painikkeella, jolloin uusi tagi lisätään suoraan kyseisen kortin näkymään ilman uutisvirran uudelleenlatausta (Päätös L-026).
 * **Konkreettinen toteutus koodissa:**
-  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `renderTagCloud()`, tagiklikkikuuntelijat ja `POST /ap/inbox` AS2 `Add Hashtag` -pyyntö.
+  * [src/main.js](file:///Users/jaakkokorhonen/uutisseuranta/src/main.js): `renderTagCloud()`, tagiklikkikuuntelijat, in-place DOM-lisäys ja `POST /ap/inbox` AS2 `Add Hashtag` -pyyntö.
 
 ---
 
