@@ -876,7 +876,23 @@ function renderFeed(articles, append = false) {
             showNotification(`Tagi ${formatted} lisätty uutiselle!`);
             if (!item.tag) item.tag = [];
             item.tag.push({ type: "Hashtag", name: formatted });
-            refreshFeed();
+
+            // L-026: Päivitetään tagi suoraan kortin DOMiin ilman uutisvirran uudelleenlatausta
+            const tagsList = card.querySelector('.feed-item__tags-list');
+            if (tagsList && addTagToggle) {
+              const newTagEl = document.createElement('span');
+              newTagEl.className = 'feed-item__tag feed-item__tag-styled';
+              newTagEl.setAttribute('data-tag', formatted);
+              newTagEl.textContent = formatted;
+              newTagEl.addEventListener('click', (e) => {
+                e.preventDefault();
+                currentTagFilter = currentTagFilter === formatted ? null : formatted;
+                refreshFeed();
+              });
+              tagsList.insertBefore(newTagEl, addTagToggle);
+            }
+            tagFormContainer.style.display = 'none';
+            addTagInput.value = '';
           } else {
             showNotification("Tagin lisääminen epäonnistui", true);
           }
